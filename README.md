@@ -92,6 +92,19 @@ npm run cf:secret           # = wrangler secret put JKT48CONNECT_API_KEY
 
 Uji Worker hasil build secara lokal: `npm run cf:dev`.
 
+### Workers Builds (hubungkan repo dari dashboard Cloudflare)
+
+Nama Worker di dashboard harus sama dengan `name` di `wrangler.jsonc` (sekarang `jkt48connet-revamp`). Pengaturan
+build:
+
+| Field | Isi |
+| --- | --- |
+| Build command | kosongkan (wrangler menjalankan `npm run build` sendiri lewat `build.command`) |
+| Deploy command | `npx wrangler deploy` |
+| Non-production branch deploy command | `npx wrangler versions upload` |
+
+Lalu tambahkan secret `JKT48CONNECT_API_KEY` di **Worker → Settings → Variables and Secrets**.
+
 ### Cloudflare Pages
 
 Folder [`functions/api/[[path]].ts`](functions/api/%5B%5Bpath%5D%5D.ts) memakai proxy yang sama.

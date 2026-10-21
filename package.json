@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.worker.json",
     "cf:setup": "node scripts/cf-setup.mjs",
     "cf:secret": "wrangler secret put JKT48CONNECT_API_KEY",
-    "cf:dev": "vite build && wrangler dev",
-    "deploy": "vite build && wrangler deploy",
+    "cf:dev": "wrangler dev",
+    "deploy": "wrangler deploy",
     "deploy:pages": "vite build && wrangler pages deploy dist --project-name jkt48connect"
   },
   "dependencies": {
