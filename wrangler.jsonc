@@ -1,0 +1,22 @@
+{
+  // Cloudflare Workers + Static Assets.
+  // Deploy: `npm run deploy`  ·  Setup awal: `npm run cf:setup`
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jkt48connect",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Semua route SPA (/member/xxx, /theater/xxx, ...) dilayani index.html.
+    "not_found_handling": "single-page-application",
+    // /api/* selalu masuk Worker dulu (proxy ber-API key), bukan ke fallback SPA.
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "API_UPSTREAM": "https://api.jkt48connect.app"
+  },
+  "observability": { "enabled": true }
+  // Secret JKT48CONNECT_API_KEY TIDAK ditulis di sini:
+  //   npx wrangler secret put JKT48CONNECT_API_KEY
+}

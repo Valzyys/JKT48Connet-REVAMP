@@ -1,0 +1,251 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+
+  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-led: "Doto Variable", ui-monospace, monospace;
+}
+
+:root {
+  /* Terang: kertas tiket theater */
+  --bg: #f2ede3;
+  --surface: #e6dfd2;
+  --card: #fbf8f2;
+  --ink: #17120f;
+  --ink-soft: #6f665c;
+  --line: rgb(23 18 15 / 0.13);
+  --brand: #d7192b;
+  --brand-strong: #a80f1e;
+  --glow: rgb(215 25 43 / 0.35);
+  color-scheme: light;
+}
+
+.dark {
+  /* Gelap: ruang theater saat lampu dimatikan */
+  --bg: #0d0a0a;
+  --surface: #1a1414;
+  --card: #141010;
+  --ink: #f0ebe4;
+  --ink-soft: #988d84;
+  --line: rgb(255 240 230 / 0.1);
+  --brand: #ff2e43;
+  --brand-strong: #ff5c6c;
+  --glow: rgb(255 46 67 / 0.55);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--brand);
+  color: #fff;
+}
+
+body.is-locked {
+  overflow: hidden;
+}
+
+@layer components {
+  /* Papan LED dot-matrix (ON AIR, jam, kode tiket). */
+  .led {
+    font-family: var(--font-led);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: var(--brand);
+    text-shadow:
+      0 0 4px var(--glow),
+      0 0 14px var(--glow);
+  }
+  .led-off {
+    color: var(--ink-soft);
+    opacity: 0.45;
+    text-shadow: none;
+  }
+
+  /* Tekstur tirai beludru: lipatan vertikal + bayangan atas/bawah. */
+  .velvet {
+    background:
+      linear-gradient(180deg, rgb(0 0 0 / 0.55), transparent 22%, transparent 70%, rgb(0 0 0 / 0.6)),
+      repeating-linear-gradient(90deg, #3b060c 0, #7a0f1b 2.2%, #a3172a 3.4%, #6b0c17 5%, #3b060c 7%);
+  }
+
+  /* Tiket: takik setengah lingkaran di atas & bawah garis sobek (posisi --cut). */
+  .ticket {
+    --cut: 70%;
+    --r: 14px;
+    -webkit-mask:
+      radial-gradient(circle var(--r) at var(--cut) 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--r) at var(--cut) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+    mask:
+      radial-gradient(circle var(--r) at var(--cut) 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--r) at var(--cut) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+  }
+  @media (max-width: 767px) {
+    /* Di HP sobekan horizontal: takik di kiri & kanan. */
+    .ticket {
+      --cut: calc(100% - var(--stub, 128px));
+      -webkit-mask:
+        radial-gradient(circle var(--r) at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle var(--r) at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat;
+      mask:
+        radial-gradient(circle var(--r) at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle var(--r) at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat;
+    }
+  }
+
+  /* Cincin penlight di avatar member yang sedang live. */
+  .penlight {
+    box-shadow:
+      0 0 0 2px var(--bg),
+      0 0 0 4px var(--brand),
+      0 0 18px 2px var(--glow);
+  }
+
+  .container-x {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 1320px;
+    padding-inline: 1rem;
+  }
+  @media (min-width: 640px) {
+    .container-x {
+      padding-inline: 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .container-x {
+      padding-inline: 2rem;
+    }
+  }
+
+  /* Judul condensed ala papan jadwal. */
+  .condensed {
+    font-stretch: 72%;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tag {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 3px;
+    padding: 0.1rem 0.35rem;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    font-size: 14px;
+    font-weight: 600;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--bg);
+  }
+  .btn-primary:hover {
+    background: var(--brand);
+    color: #fff;
+  }
+  .btn-ghost {
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .btn-ghost:hover {
+    border-color: var(--ink);
+  }
+
+  .link-arrow {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    transition: color 0.15s;
+  }
+  .link-arrow:hover {
+    color: var(--ink);
+  }
+
+  .prose-body h2 {
+    margin-top: 2rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .prose-body p,
+  .prose-body li {
+    color: var(--ink-soft);
+    line-height: 1.75;
+  }
+  .prose-body p + p {
+    margin-top: 0.85rem;
+  }
+  .prose-body ul {
+    margin-top: 0.6rem;
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+  .prose-body strong {
+    color: var(--ink);
+  }
+  .prose-body a {
+    color: var(--brand);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Elemen yang dianimasikan GSAP disembunyikan dulu agar tidak berkedip,
+   tapi tetap terlihat bila JS mati atau pengguna memilih reduced motion. */
+.js [data-reveal] {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js [data-reveal] {
+    opacity: 1 !important;
+  }
+}

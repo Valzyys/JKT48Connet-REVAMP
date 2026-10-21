@@ -1,0 +1,2 @@
+# Salin ke .dev.vars (tidak ikut di-commit). Dipakai `npm run dev` dan `wrangler dev`.
+JKT48CONNECT_API_KEY=jkc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

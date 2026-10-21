@@ -1,0 +1,37 @@
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { RecentHead, RecentRow } from "@/components/cards";
+import { Page } from "@/components/page";
+import { Empty, ErrorState, PageHeader, Pagination, SkeletonList } from "@/components/ui";
+import { q } from "@/lib/queries";
+
+const PER = 20;
+
+export function RecentPage() {
+  const { page = 1 } = useSearch({ strict: false }) as { page?: number };
+  const navigate = useNavigate();
+  const recent = useQuery(q.recentList(page, PER));
+
+  return (
+    <Page deps={[recent.data]}>
+      <PageHeader title="Recent live" desc="Live Showroom dan IDN yang sudah selesai: durasi, penonton, gift, dan replay bila ada." />
+      <section className="container-x pt-6">
+        {recent.isError ? (
+          <ErrorState error={recent.error} onRetry={() => recent.refetch()} />
+        ) : recent.isLoading ? (
+          <SkeletonList rows={10} className="h-11" />
+        ) : recent.data?.items.length ? (
+          <>
+            <RecentHead />
+            {recent.data.items.map((r) => (
+              <RecentRow key={r.id} r={r} />
+            ))}
+            <Pagination page={page} perpage={PER} total={recent.data.total} onChange={(p) => navigate({ to: "/recent", search: p > 1 ? { page: p } : {} })} />
+          </>
+        ) : (
+          <Empty>Belum ada rekap live.</Empty>
+        )}
+      </section>
+    </Page>
+  );
+}
