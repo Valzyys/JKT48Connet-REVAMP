@@ -2,6 +2,7 @@ import { Lock, Play } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Countdown, useNow } from "@/components/countdown";
 import { cx } from "@/components/ui";
+import { VideoPlayer } from "@/components/video-player";
 import { fmtDate, fmtDuration, fmtTime } from "@/lib/format";
 import { gsap } from "@/lib/gsap";
 import { REPLAY_LOCK_HOURS, type Recording } from "@/lib/jkt48";
@@ -28,8 +29,6 @@ export function Replay({
   const unlock = Date.parse(unlockAt);
   const open = Number.isFinite(unlock) && now >= unlock;
   const [part, setPart] = useState(0);
-  // Rasio asli video (IDN 3:4, Showroom 16:9) diambil dari metadata; tebakan awal dari platform.
-  const [ratio, setRatio] = useState(vertical ? 3 / 4 : 16 / 9);
   const root = useRef<HTMLElement>(null);
   const bar = useRef<HTMLSpanElement>(null);
   const progress = Number.isFinite(unlock) ? Math.min(1, Math.max(0, 1 - (unlock - now) / LOCK_MS)) : 0;
@@ -106,21 +105,8 @@ export function Replay({
           </div>
         )}
       </div>
-      <div data-rp className="grid place-items-center overflow-hidden rounded-2xl bg-black">
-        <video
-          key={rec.url}
-          src={rec.url}
-          poster={poster}
-          controls
-          playsInline
-          preload="metadata"
-          onLoadedMetadata={(e) => {
-            const v = e.currentTarget;
-            if (v.videoWidth && v.videoHeight) setRatio(v.videoWidth / v.videoHeight);
-          }}
-          style={{ aspectRatio: ratio }}
-          className={cx("block max-h-[78vh] max-w-full bg-black", ratio < 1 ? "h-[78vh] w-auto" : "w-full")}
-        />
+      <div data-rp>
+        <VideoPlayer key={rec.url} src={rec.url} poster={poster} initialRatio={vertical ? 3 / 4 : 16 / 9} />
       </div>
       {rec.partial && <p className="px-2 pt-3 text-[12px] text-white/50">Sebagian rekaman tidak tercatat, jadi ada bagian live yang terlewat.</p>}
     </section>

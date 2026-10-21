@@ -47,7 +47,7 @@ Beberapa hal yang ditangani di sana:
 - Lineup di daftar tidak membawa foto, jadi foto dicocokkan dari `/api/member`.
 - `now_live` bisa memuat sesi yang sama dua kali, jadi daftarnya dideduplikasi.
 - Item exclusive/event dari `next_schedule` tidak punya halaman detail (API membalas 502), jadi tampil tanpa link.
-- Replay di `/recent/:id` diputar langsung dengan `<video>` dari `recordings[].url` (MP4 H.264, CORS terbuka). Pemutar baru muncul 72 jam setelah `live_info.date.end` (`REPLAY_LOCK_HOURS` di `src/lib/jkt48.ts`); sebelum itu tampil panel terkunci dengan hitung mundur, dan berubah jadi pemutar dengan sendirinya saat waktunya tiba. Rekaman yang terdiri dari beberapa bagian bisa dipilih per bagian.
+- Replay di `/recent/:id` diputar langsung dari `recordings[].url` (MP4 H.264, CORS terbuka) dengan pemutar custom ([`video-player.tsx`](src/components/video-player.tsx)): bar seek dengan buffer dan pratinjau waktu, lompat ±10 detik, volume (diingat), kecepatan 0.5–2×, picture-in-picture, layar penuh, kontrol yang menghilang sendiri, pintasan keyboard (spasi/K, J/L, ←/→, ↑/↓, M, F, 0–9), dan ketuk dua kali kiri/kanan di HP. Pemutar baru muncul 72 jam setelah `live_info.date.end` (`REPLAY_LOCK_HOURS` di `src/lib/jkt48.ts`); sebelum itu tampil panel terkunci dengan hitung mundur, dan berubah jadi pemutar dengan sendirinya saat waktunya tiba. Rekaman yang terdiri dari beberapa bagian bisa dipilih per bagian.
 - Gambar di isi berita jkt48.com menolak hotlink (403 bila Referer dari domain lain, plus `Cross-Origin-Resource-Policy: same-site`), jadi dilewatkan `/api/media?url=…`.
 
 ## API key tetap di server
@@ -172,7 +172,7 @@ Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 | ![Jadwal](docs/screenshots/07-schedule.jpg) | ![Member](docs/screenshots/08-members.jpg) |
 | ![Profil member](docs/screenshots/09-member-detail.jpg) | ![Birthday](docs/screenshots/10-birthday.jpg) |
 | ![Recent](docs/screenshots/11-recent.jpg) | ![Detail recent](docs/screenshots/12-recent-detail.jpg) |
-| ![Replay terkunci 72 jam](docs/screenshots/22-replay-locked.jpg) | |
+| ![Replay terkunci 72 jam](docs/screenshots/22-replay-locked.jpg) | ![Pemutar replay custom](docs/screenshots/22b-replay-player.jpg) |
 | ![Berita](docs/screenshots/13-news.jpg) | ![Detail berita](docs/screenshots/14-news-detail.jpg) |
 | ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu layar penuh mobile](docs/screenshots/19-mobile-menu.jpg) |
 | ![Footer mobile](docs/screenshots/20-footer-mobile.jpg) | ![Sidebar desktop diciutkan](docs/screenshots/21-sidebar-collapsed.jpg) |
