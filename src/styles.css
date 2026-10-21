@@ -11,47 +11,67 @@
   --color-line: var(--line);
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
+  --color-blush: var(--blush);
+  --color-butter: var(--butter);
 
   --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-led: "Doto Variable", ui-monospace, monospace;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
+/*
+ * Palet "Fan Signal" mengikuti desain gambar jkt48connect dari API:
+ * kertas krem, merah JKT48Connect, blush pink, dan kuning mentega untuk aksen.
+ */
 :root {
-  /* Terang: kertas tiket theater */
-  --bg: #f2ede3;
-  --surface: #e6dfd2;
-  --card: #fbf8f2;
-  --ink: #17120f;
-  --ink-soft: #6f665c;
-  --line: rgb(23 18 15 / 0.13);
-  --brand: #d7192b;
-  --brand-strong: #a80f1e;
-  --glow: rgb(215 25 43 / 0.35);
+  --bg: #f3eee6;
+  --surface: #e9e2d7;
+  --card: #fbf8f3;
+  --ink: #1d1517;
+  --ink-soft: #776b66;
+  --line: rgb(29 21 23 / 0.11);
+  --brand: #e1243a;
+  --brand-strong: #b9172b;
+  --blush: #f6dcdc;
+  --butter: #fde6b0;
+  --plus: rgb(225 36 58 / 0.13);
   color-scheme: light;
 }
 
 .dark {
-  /* Gelap: ruang theater saat lampu dimatikan */
-  --bg: #0d0a0a;
-  --surface: #1a1414;
-  --card: #141010;
-  --ink: #f0ebe4;
-  --ink-soft: #988d84;
-  --line: rgb(255 240 230 / 0.1);
-  --brand: #ff2e43;
-  --brand-strong: #ff5c6c;
-  --glow: rgb(255 46 67 / 0.55);
+  --bg: #141012;
+  --surface: #211a1d;
+  --card: #1a1518;
+  --ink: #f3ece6;
+  --ink-soft: #9f918c;
+  --line: rgb(255 235 230 / 0.09);
+  --brand: #ff3b52;
+  --brand-strong: #ff6476;
+  --blush: #3a1d23;
+  --butter: #fde6b0;
+  --plus: rgb(255 59 82 / 0.12);
   color-scheme: dark;
 }
 
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--ink);
+  background-color: var(--bg);
   font-family: var(--font-sans);
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+}
+
+/* Pola tanda "+" setiap 56px, seperti latar desain jkt48connect. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--plus);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cpath d='M28 23.5v9M23.5 28h9' stroke='%23000' stroke-width='1.2'/%3E%3C/svg%3E") 0 0 / 56px 56px repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cpath d='M28 23.5v9M23.5 28h9' stroke='%23000' stroke-width='1.2'/%3E%3C/svg%3E") 0 0 / 56px 56px repeat;
 }
 
 ::selection {
@@ -64,65 +84,10 @@ body.is-locked {
 }
 
 @layer components {
-  /* Papan LED dot-matrix (ON AIR, jam, kode tiket). */
-  .led {
-    font-family: var(--font-led);
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    color: var(--brand);
-    text-shadow:
-      0 0 4px var(--glow),
-      0 0 14px var(--glow);
-  }
-  .led-off {
-    color: var(--ink-soft);
-    opacity: 0.45;
-    text-shadow: none;
-  }
-
-  /* Tekstur tirai beludru: lipatan vertikal + bayangan atas/bawah. */
-  .velvet {
-    background:
-      linear-gradient(180deg, rgb(0 0 0 / 0.55), transparent 22%, transparent 70%, rgb(0 0 0 / 0.6)),
-      repeating-linear-gradient(90deg, #3b060c 0, #7a0f1b 2.2%, #a3172a 3.4%, #6b0c17 5%, #3b060c 7%);
-  }
-
-  /* Tiket: takik setengah lingkaran di atas & bawah garis sobek (posisi --cut). */
-  .ticket {
-    --cut: 70%;
-    --r: 14px;
-    -webkit-mask:
-      radial-gradient(circle var(--r) at var(--cut) 0, #0000 98%, #000) top / 100% 51% no-repeat,
-      radial-gradient(circle var(--r) at var(--cut) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
-    mask:
-      radial-gradient(circle var(--r) at var(--cut) 0, #0000 98%, #000) top / 100% 51% no-repeat,
-      radial-gradient(circle var(--r) at var(--cut) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
-  }
-  @media (max-width: 767px) {
-    /* Di HP sobekan horizontal: takik di kiri & kanan. */
-    .ticket {
-      --cut: calc(100% - var(--stub, 128px));
-      -webkit-mask:
-        radial-gradient(circle var(--r) at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat,
-        radial-gradient(circle var(--r) at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat;
-      mask:
-        radial-gradient(circle var(--r) at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat,
-        radial-gradient(circle var(--r) at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat;
-    }
-  }
-
-  /* Cincin penlight di avatar member yang sedang live. */
-  .penlight {
-    box-shadow:
-      0 0 0 2px var(--bg),
-      0 0 0 4px var(--brand),
-      0 0 18px 2px var(--glow);
-  }
-
   .container-x {
     margin-inline: auto;
     width: 100%;
-    max-width: 1320px;
+    max-width: 1180px;
     padding-inline: 1rem;
   }
   @media (min-width: 640px) {
@@ -130,34 +95,44 @@ body.is-locked {
       padding-inline: 1.5rem;
     }
   }
-  @media (min-width: 1024px) {
-    .container-x {
-      padding-inline: 2rem;
-    }
-  }
 
-  /* Judul condensed ala papan jadwal. */
+  /* Judul condensed tebal, seperti "THE LINEUP" pada desain brand. */
   .condensed {
-    font-stretch: 72%;
+    font-stretch: 75%;
     font-weight: 800;
     letter-spacing: -0.01em;
+  }
+
+  /* Label mono kecil, seperti "YOUR NEXT THEATER DATE". */
+  .micro {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 
   .num {
     font-variant-numeric: tabular-nums;
   }
 
-  .tag {
+  .panel {
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--card);
+  }
+
+  .pill {
     display: inline-flex;
     flex-shrink: 0;
     align-items: center;
     gap: 0.3rem;
-    border-radius: 3px;
-    padding: 0.1rem 0.35rem;
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    line-height: 1.4;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     white-space: nowrap;
   }
@@ -167,39 +142,42 @@ body.is-locked {
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    border-radius: 6px;
-    padding: 0.6rem 1rem;
+    border-radius: 999px;
+    padding: 0.6rem 1.1rem;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     transition:
       background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      border-color 0.15s;
   }
   .btn-primary {
-    background: var(--ink);
-    color: var(--bg);
-  }
-  .btn-primary:hover {
     background: var(--brand);
     color: #fff;
   }
+  .btn-primary:hover {
+    background: var(--brand-strong);
+  }
   .btn-ghost {
     border: 1px solid var(--line);
-    color: var(--ink);
+    background: var(--card);
   }
   .btn-ghost:hover {
-    border-color: var(--ink);
+    border-color: var(--brand);
+    color: var(--brand);
   }
 
-  .link-arrow {
-    font-size: 14px;
+  .link-more {
+    font-family: var(--font-mono);
+    font-size: 11px;
     font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     color: var(--ink-soft);
     transition: color 0.15s;
   }
-  .link-arrow:hover {
-    color: var(--ink);
+  .link-more:hover {
+    color: var(--brand);
   }
 
   .prose-body h2 {
@@ -236,6 +214,10 @@ body.is-locked {
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
 /* Elemen yang dianimasikan GSAP disembunyikan dulu agar tidak berkedip,

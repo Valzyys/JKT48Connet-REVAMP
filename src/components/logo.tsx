@@ -1,25 +1,39 @@
 import { Link } from "@tanstack/react-router";
 
-/** Logo: potongan tiket theater bertuliskan "48". */
-export function LogoMark({ className = "" }: { className?: string }) {
+/**
+ * Sel-sel piksel logo salib JKT48Connect pada grid 5×5 (x, y).
+ * Diekspor supaya intro bisa menyusun logo yang sama dari piksel-piksel ini.
+ */
+export const PIXELS: [number, number][] = [
+  [2, 0],
+  [1, 1],
+  [2, 1],
+  [3, 1],
+  [0, 2],
+  [1, 2],
+  [3, 2],
+  [4, 2],
+  [1, 3],
+  [2, 3],
+  [3, 3],
+  [2, 4],
+];
+
+export function PixelCross({ className = "h-8 w-8", cellClass = "fill-brand" }: { className?: string; cellClass?: string }) {
   return (
-    <span
-      className={`ticket grid h-8 w-12 place-items-center rounded-[4px] bg-brand text-white ${className}`}
-      style={{ ["--cut" as string]: "68%", ["--r" as string]: "4px" }}
-      aria-hidden
-    >
-      <span className="led text-[17px] leading-none text-white [text-shadow:none]">48</span>
-    </span>
+    <svg viewBox="0 0 50 50" className={className} aria-hidden>
+      {PIXELS.map(([x, y]) => (
+        <rect key={`${x}-${y}`} data-px x={x * 10} y={y * 10} width="10" height="10" rx="1.5" className={cellClass} />
+      ))}
+    </svg>
   );
 }
 
-export function Logo({ onClick }: { onClick?: () => void }) {
+export function Logo({ compact }: { compact?: boolean }) {
   return (
-    <Link to="/" onClick={onClick} className="group flex items-center gap-2.5" aria-label="JKT48Connect, ke beranda">
-      <LogoMark className="transition-transform duration-300 group-hover:-rotate-6" />
-      <span className="condensed text-[20px] uppercase leading-none">
-        JKT48<span className="hidden text-ink-soft sm:inline">Connect</span>
-      </span>
+    <Link to="/" className="group flex items-center gap-2.5" aria-label="JKT48Connect, ke beranda">
+      <PixelCross className="h-8 w-8 transition-transform duration-500 group-hover:rotate-90" />
+      {!compact && <span className="text-[17px] font-extrabold tracking-tight">JKT48Connect</span>}
     </Link>
   );
 }

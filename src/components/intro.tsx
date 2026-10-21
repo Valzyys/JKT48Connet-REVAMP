@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { PIXELS } from "@/components/logo";
 import { gsap, prefersReducedMotion } from "@/lib/gsap";
 
 const SEEN_KEY = "jkt48c:intro-seen";
@@ -37,25 +38,35 @@ export function IntroProvider({ children }: { children: ReactNode }) {
   return (
     <IntroContext.Provider value={done}>
       {children}
-      {play && !done && <Curtain onDone={finish} />}
+      {play && !done && <SignalIntro onDone={finish} />}
     </IntroContext.Provider>
   );
 }
 
-const WORD = "JKT48CONNECT".split("");
+const COLS = 8;
+const ROWS = 5;
+const WORD = "JKT48Connect".split("");
 
 /**
- * Intro "pertunjukan dimulai": tirai tertutup, lampu sorot menyapu panggung lalu
- * berhenti di tengah, papan LED menyala huruf demi huruf, kemudian tirai dibuka.
+ * Intro "mencari sinyal":
+ * 1. piksel beterbangan lalu menyusun logo salib JKT48Connect,
+ * 2. bar sinyal naik satu per satu dan garis lengkung tergambar,
+ * 3. nama muncul huruf demi huruf,
+ * 4. layar pecah menjadi kotak-kotak merah yang menyusut, membuka halaman.
  */
-function Curtain({ onDone }: { onDone: () => void }) {
+function SignalIntro({ onDone }: { onDone: () => void }) {
   const root = useRef<HTMLDivElement>(null);
   const tl = useRef<gsap.core.Timeline | null>(null);
 
   useLayoutEffect(() => {
     document.body.classList.add("is-locked");
     const ctx = gsap.context(() => {
+      const path = root.current?.querySelector<SVGPathElement>("[data-i='loop']");
+      const len = path?.getTotalLength() ?? 0;
+      if (path) gsap.set(path, { strokeDasharray: len, strokeDashoffset: len });
+
       const t = gsap.timeline({
+        defaults: { ease: "power3.out" },
         onComplete: () => {
           document.body.classList.remove("is-locked");
           onDone();
@@ -63,22 +74,26 @@ function Curtain({ onDone }: { onDone: () => void }) {
       });
       tl.current = t;
 
-      t.set("[data-c='char']", { opacity: 0.08 })
-        .set("[data-c='sub']", { y: 8 })
-        // Lampu sorot masuk dari kiri, sedikit melewati tengah, lalu kembali.
-        .fromTo("[data-c='spot']", { xPercent: -160, opacity: 0 }, { xPercent: 18, opacity: 1, duration: 0.9, ease: "power2.inOut" })
-        .to("[data-c='spot']", { xPercent: 0, duration: 0.45, ease: "back.out(2)" })
-        // Huruf LED menyala acak, seperti lampu yang baru dinyalakan.
-        .to("[data-c='char']", { opacity: 1, duration: 0.05, stagger: { each: 0.045, from: "random" } }, "-=0.2")
-        .to("[data-c='sign']", { opacity: 0.35, duration: 0.05, yoyo: true, repeat: 3 }, "+=0.05")
-        .to("[data-c='sub']", { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }, "<")
-        .addLabel("open", "+=0.35")
-        .to("[data-c='sign'], [data-c='sub']", { opacity: 0, duration: 0.25 }, "open")
-        .to("[data-c='spot']", { scale: 4, opacity: 0, duration: 0.6, ease: "power2.in" }, "open")
-        // Tirai dibuka: kedua sisi tertarik ke samping dengan sedikit lengkung.
-        .to("[data-c='left']", { xPercent: -102, skewY: 2, duration: 1, ease: "power3.inOut" }, "open+=0.1")
-        .to("[data-c='right']", { xPercent: 102, skewY: -2, duration: 1, ease: "power3.inOut" }, "open+=0.1")
-        .to("[data-c='valance']", { yPercent: -100, duration: 0.6, ease: "power2.in" }, "open+=0.55");
+      t.from("[data-i='px']", {
+        x: () => gsap.utils.random(-260, 260),
+        y: () => gsap.utils.random(-200, 200),
+        rotate: () => gsap.utils.random(-180, 180),
+        scale: 0,
+        opacity: 0,
+        duration: 0.9,
+        ease: "expo.out",
+        stagger: { each: 0.035, from: "random" },
+      })
+        .to("[data-i='mark']", { rotate: 90, duration: 0.6, ease: "back.inOut(2)" }, "-=0.1")
+        .to(path ?? {}, { strokeDashoffset: 0, duration: 1.1, ease: "power2.inOut" }, "-=0.5")
+        .from("[data-i='bar']", { scaleY: 0, transformOrigin: "50% 100%", duration: 0.35, stagger: 0.08 }, "<")
+        .from("[data-i='char']", { yPercent: 120, opacity: 0, duration: 0.5, stagger: 0.03 }, "<0.15")
+        .from("[data-i='sub']", { opacity: 0, y: 10, duration: 0.4 }, "-=0.2")
+        .addLabel("out", "+=0.35")
+        .to("[data-i='content']", { scale: 0.92, opacity: 0, duration: 0.35, ease: "power2.in" }, "out")
+        .to(path ?? {}, { opacity: 0, duration: 0.3 }, "out")
+        // Layar terbelah jadi kotak-kotak yang menyusut dari tengah ke tepi.
+        .to("[data-i='cell']", { scale: 0, duration: 0.55, ease: "power3.in", stagger: { grid: [ROWS, COLS], from: "center", amount: 0.45 } }, "out+=0.1");
     }, root);
 
     return () => {
@@ -88,42 +103,52 @@ function Curtain({ onDone }: { onDone: () => void }) {
   }, [onDone]);
 
   return (
-    <div ref={root} className="fixed inset-0 z-[100] overflow-hidden" aria-hidden>
-      <div data-c="left" className="velvet absolute inset-y-0 left-0 w-1/2 origin-top-left shadow-[inset_-40px_0_60px_rgb(0_0_0/0.5)]" />
-      <div data-c="right" className="velvet absolute inset-y-0 right-0 w-1/2 origin-top-right shadow-[inset_40px_0_60px_rgb(0_0_0/0.5)]" />
-      <div
-        data-c="valance"
-        className="velvet absolute inset-x-0 top-0 h-16 sm:h-20"
-        style={{
-          WebkitMask: "radial-gradient(28px 18px at 50% 100%, #0000 98%, #000) 0 0 / 56px 100% repeat-x",
-          mask: "radial-gradient(28px 18px at 50% 100%, #0000 98%, #000) 0 0 / 56px 100% repeat-x",
-        }}
-      />
+    <div ref={root} className="fixed inset-0 z-[100]" aria-hidden>
+      <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)`, gridTemplateRows: `repeat(${ROWS}, 1fr)` }}>
+        {Array.from({ length: COLS * ROWS }).map((_, i) => (
+          <div key={i} data-i="cell" className="-m-px bg-[#e1243a]" />
+        ))}
+      </div>
 
-      <div className="absolute inset-0 grid place-items-center">
-        <div
-          data-c="spot"
-          className="absolute h-[70vmin] w-[70vmin] rounded-full"
-          style={{ background: "radial-gradient(circle, rgb(255 236 210 / 0.38), rgb(255 236 210 / 0.1) 45%, transparent 70%)" }}
+      <svg viewBox="0 0 1200 800" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
+        <path
+          data-i="loop"
+          d="M-40 620 C 220 520, 360 760, 560 600 S 760 180, 980 300 S 1180 700, 1260 520"
+          fill="none"
+          stroke="rgb(255 255 255 / 0.35)"
+          strokeWidth="2"
         />
-        <div className="relative text-center">
-          <p data-c="sign" className="led flex justify-center text-[clamp(2rem,8vw,5.5rem)] leading-none text-[#ff3b4c]">
+      </svg>
+
+      <div data-i="content" className="absolute inset-0 flex flex-col items-center justify-center text-white">
+        <svg data-i="mark" viewBox="0 0 50 50" className="h-24 w-24 sm:h-28 sm:w-28">
+          {PIXELS.map(([x, y]) => (
+            <rect key={`${x}-${y}`} data-i="px" x={x * 10} y={y * 10} width="10" height="10" rx="1.5" fill="#fff" />
+          ))}
+        </svg>
+        <div className="mt-8 flex items-end gap-4">
+          <div className="flex h-7 items-end gap-1" aria-hidden>
+            {[0.35, 0.55, 0.75, 1].map((h, i) => (
+              <span key={i} data-i="bar" className="w-1.5 rounded-sm bg-white" style={{ height: `${h * 100}%` }} />
+            ))}
+          </div>
+          <p className="flex overflow-hidden text-[clamp(2rem,6vw,3.75rem)] font-extrabold leading-none tracking-tight">
             {WORD.map((c, i) => (
-              <span key={i} data-c="char" className={i < 5 ? "" : "text-[#ffd9c9]"}>
+              <span key={i} data-i="char" className="inline-block">
                 {c}
               </span>
             ))}
           </p>
-          <p data-c="sub" className="mt-4 text-[13px] font-semibold uppercase tracking-[0.35em] text-[#ffd9c9]/70 opacity-0">
-            Pertunjukan segera dimulai
-          </p>
         </div>
+        <p data-i="sub" className="micro mt-5 text-white/75">
+          Your oshi · your front row feeling
+        </p>
       </div>
 
       <button
         type="button"
         onClick={() => tl.current?.progress(1)}
-        className="absolute bottom-6 right-6 rounded border border-white/25 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wider text-white/70 hover:border-white hover:text-white"
+        className="micro absolute bottom-6 right-6 rounded-full border border-white/40 px-3 py-1.5 text-white/80 hover:bg-white hover:text-[#e1243a]"
       >
         Lewati
       </button>

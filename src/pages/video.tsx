@@ -8,7 +8,7 @@ export function VideoPage() {
   const videos = useQuery(q.videos());
   return (
     <Page deps={[videos.data]}>
-      <PageHeader title="Video" desc="Upload terbaru dari kanal YouTube JKT48 dan JKT48 TV." />
+      <PageHeader label="YouTube" title="Video" count={videos.data?.length} desc="Upload terbaru dari kanal YouTube JKT48 dan JKT48 TV." />
       <section className="container-x pt-8">
         {videos.isError ? (
           <ErrorState error={videos.error} onRetry={() => videos.refetch()} />

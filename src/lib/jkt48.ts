@@ -27,10 +27,13 @@ function num(...vals: unknown[]): number | null {
   return null;
 }
 
-/** Gambar desain (jadwal/leaderboard/notifikasi) yang statusnya sudah `ready`. */
-function readyDesign(designs: Raw | undefined, layout: "banner" | "portrait", theme = "photobook"): string {
+/**
+ * Gambar desain (jadwal/leaderboard/notifikasi) yang statusnya sudah `ready`.
+ * Tema "jkt48connect" (Fan Signal) dipakai lebih dulu; photobook hanya cadangan.
+ */
+function readyDesign(designs: Raw | undefined, layout: "banner" | "portrait"): string {
   if (!designs) return "";
-  for (const t of [theme, "jkt48connect", "photobook"]) {
+  for (const t of ["jkt48connect", "photobook"]) {
     const img = designs[t]?.[layout];
     if (img?.status === "ready" && img.url) return img.url;
   }
@@ -123,6 +126,8 @@ export type LiveSession = {
   startedAt: string;
   title: string;
   link: string;
+  /** Kartu notifikasi live tema jkt48connect (1600×900), bila sudah dirender. */
+  banner: string;
 };
 
 function mapLive(l: Raw): LiveSession {
@@ -145,6 +150,7 @@ function mapLive(l: Raw): LiveSession {
     startedAt: str(l.started_at),
     title: titleParts.join(" — ").trim(),
     link: url.startsWith("http") ? url.trim() : fallbackLink,
+    banner: readyDesign(l.notification_designs, "banner"),
   };
 }
 
@@ -168,6 +174,7 @@ export type TheaterShow = {
   /** "show" | "exclusive" | "general" (dari next_schedule); daftar theater selalu "show". */
   category: string;
   banner: string;
+  poster: string;
   memberCount: number | null;
   members: ShowMember[];
   birthday: ShowMember[];
@@ -177,7 +184,6 @@ export type TheaterShow = {
 export type TheaterDetail = TheaterShow & {
   songs: string[];
   graduation: ShowMember[];
-  poster: string;
   recordings: { title: string; youtubeUrl: string; thumbnail: string }[];
 };
 
@@ -200,6 +206,7 @@ function mapShow(s: Raw): TheaterShow {
     team: str(s.team),
     category: str(s.category, "show"),
     banner: readyDesign(s.schedule_designs, "banner"),
+    poster: readyDesign(s.schedule_designs, "portrait"),
     memberCount: num(s.member_count) ?? (ms.length || null),
     members: ms,
     birthday: members(s.seitansai),
@@ -223,7 +230,6 @@ export async function getTheater(id: string): Promise<TheaterDetail> {
     id: str(s.id, id),
     songs,
     graduation: members(s.graduation),
-    poster: readyDesign(s.schedule_designs, "portrait"),
     recordings: list(s.recordings)
       .filter((r) => r.youtube_url)
       .map((r) => ({

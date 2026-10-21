@@ -32,7 +32,7 @@ export function NewsDetailPage() {
 
   return (
     <Page deps={[n]}>
-      <article className="container-x max-w-3xl pt-20 sm:pt-24">
+      <article className="container-x max-w-3xl pt-6">
         <BackLink to="/news" label="Semua berita" />
         {news.isError ? (
           <div className="pt-8">
@@ -45,7 +45,7 @@ export function NewsDetailPage() {
           </div>
         ) : (
           <>
-            <header data-reveal className="border-b border-ink pb-5 pt-6">
+            <header data-reveal className="border-b-2 border-brand pb-5 pt-6">
               <p className="num text-ink-soft">
                 {n.category} · {fmtDate(n.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
               </p>
@@ -54,7 +54,7 @@ export function NewsDetailPage() {
             {html ? (
               <div
                 data-reveal
-                className="prose-body pt-6 text-[16px] [&_img]:my-5 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-md [&_table]:w-full"
+                className="prose-body pt-6 text-[16px] [&_img]:my-5 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-2xl [&_table]:w-full"
                 dangerouslySetInnerHTML={{ __html: html }}
               />
             ) : (

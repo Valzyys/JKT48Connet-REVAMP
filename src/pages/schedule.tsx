@@ -38,23 +38,25 @@ export function SchedulePage() {
   return (
     <Page deps={[days]}>
       <PageHeader
+        label="Stage file"
         title="Jadwal"
+        count={days.reduce((n, d) => n + d.length, 0)}
         desc="Show theater, event exclusive, dan event JKT48 per hari (WIB)."
         aside={<Segmented value={tab} options={TABS} onChange={setTab} />}
       />
-      <section className="container-x pt-2">
+      <section className="container-x space-y-6 pt-8">
         {source.isError ? (
           <ErrorState error={source.error} onRetry={() => source.refetch()} />
         ) : source.isLoading ? (
           <SkeletonList rows={6} />
         ) : days.length ? (
           days.map((items) => (
-            <div key={items[0].date} className="grid gap-x-8 border-b border-line py-6 md:grid-cols-[200px_1fr]">
-              <div data-reveal className="pb-2 md:sticky md:top-20 md:self-start">
-                <p className="condensed text-[26px] uppercase leading-none">{fmtDate(items[0].date, { weekday: "long" })}</p>
-                <p className="num mt-1 text-[14px] text-ink-soft">{fmtDate(items[0].date)}</p>
+            <div key={items[0].date} className="grid gap-x-6 gap-y-3 md:grid-cols-[180px_1fr]">
+              <div data-reveal className="md:sticky md:top-28 md:self-start">
+                <p className="condensed text-[28px] uppercase leading-none">{fmtDate(items[0].date, { weekday: "long" })}</p>
+                <p className="micro mt-1.5 text-brand">{fmtDate(items[0].date)}</p>
               </div>
-              <div className="[&>*:last-child]:border-b-0">
+              <div className="panel overflow-hidden">
                 {items.map((s) => (
                   <ShowRow key={`${s.id}-${s.title}`} s={s} />
                 ))}

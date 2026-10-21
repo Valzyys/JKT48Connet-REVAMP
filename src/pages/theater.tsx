@@ -14,17 +14,19 @@ export function TheaterPage() {
 
   return (
     <Page deps={[theater.data]}>
-      <PageHeader title="Theater" desc="Pertunjukan di JKT48 Theater: setlist, member yang tampil, dan seitansai." />
-      <section className="container-x pt-4">
+      <PageHeader label="JKT48 Theater" title="Theater" count={theater.data?.total} desc="Pertunjukan di JKT48 Theater: setlist, member yang tampil, dan seitansai." />
+      <section className="container-x pt-8">
         {theater.isError ? (
           <ErrorState error={theater.error} onRetry={() => theater.refetch()} />
         ) : theater.isLoading ? (
           <SkeletonList rows={8} />
         ) : theater.data?.items.length ? (
           <>
-            {theater.data.items.map((s) => (
-              <ShowRow key={s.id} s={s} lineup />
-            ))}
+            <div className="panel overflow-hidden">
+              {theater.data.items.map((s) => (
+                <ShowRow key={s.id} s={s} lineup />
+              ))}
+            </div>
             <Pagination
               page={page}
               perpage={PER}

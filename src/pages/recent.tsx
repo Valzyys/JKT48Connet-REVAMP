@@ -1,6 +1,6 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { RecentHead, RecentRow } from "@/components/cards";
+import { RecentRow } from "@/components/cards";
 import { Page } from "@/components/page";
 import { Empty, ErrorState, PageHeader, Pagination, SkeletonList } from "@/components/ui";
 import { q } from "@/lib/queries";
@@ -14,18 +14,19 @@ export function RecentPage() {
 
   return (
     <Page deps={[recent.data]}>
-      <PageHeader title="Recent live" desc="Live Showroom dan IDN yang sudah selesai: durasi, penonton, gift, dan replay bila ada." />
-      <section className="container-x pt-6">
+      <PageHeader label="Rekap live" title="Recent" count={recent.data?.total} desc="Live Showroom dan IDN yang sudah selesai: durasi, penonton, gift, dan replay bila ada." />
+      <section className="container-x pt-8">
         {recent.isError ? (
           <ErrorState error={recent.error} onRetry={() => recent.refetch()} />
         ) : recent.isLoading ? (
-          <SkeletonList rows={10} className="h-11" />
+          <SkeletonList rows={8} />
         ) : recent.data?.items.length ? (
           <>
-            <RecentHead />
-            {recent.data.items.map((r) => (
-              <RecentRow key={r.id} r={r} />
-            ))}
+            <div className="panel overflow-hidden">
+              {recent.data.items.map((r) => (
+                <RecentRow key={r.id} r={r} />
+              ))}
+            </div>
             <Pagination page={page} perpage={PER} total={recent.data.total} onChange={(p) => navigate({ to: "/recent", search: p > 1 ? { page: p } : {} })} />
           </>
         ) : (
