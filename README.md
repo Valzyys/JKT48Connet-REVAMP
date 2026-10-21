@@ -13,8 +13,8 @@ Remake UI publik JKT48Connect dengan gaya **Fan Signal**, identitas visual yang 
 | Bagian | Wujud |
 | --- | --- |
 | Layout | Desktop 3 kolom: sidebar tinta di kiri, kolom utama, sidebar kanan (cari member, jadwal, birthday). HP: dock mengambang di bawah plus menu layar penuh. |
-| Intro | HUD di empat sudut mengetik diri dan frekuensi naik ke 48.0 MHz. Panel merah naik, judul tersusun huruf demi huruf, dan logo piksel terbentuk. 12 foto member asli membalik masuk dengan nomor 01–12, satu dipilih jadi "your oshi", pita teks miring melintas, lalu semuanya beterbangan dan kotak merah membuka halaman. Diputar setiap situs dibuka, bisa dilewati. |
-| Navigasi | Desktop: panel tinta melayang dengan menu berkelompok (Utama/Arsip/Info) dan nomor 01–10. Pil merah meluncur (elastic) ke menu aktif, sorotan tipis mengikuti kursor, dan kartu "On air" menampilkan member yang live atau hitung mundur show berikutnya. HP: dock tinta, menu aktif melebar jadi pil merah berlabel, tombol kisi membuka menu merah layar penuh yang mekar melingkar. Ticker sinyal di topbar. |
+| Intro | "Oshi Roulette": layar merah, hitung mundur 3-2-1, dua baris teks raksasa bergaris tepi melaju berlawanan. 12 photocard member asli tersusun jadi cincin 3D yang berputar kencang lalu melambat dan berhenti di satu kartu acak: kartu membesar, hati berhamburan, dan nama "oshi hari ini" muncul. Lalu kartu terlempar keluar dan layar merah terbelah atas-bawah. Diputar setiap situs dibuka, bisa dilewati. |
+| Navigasi | Desktop: panel tinta melayang dengan menu berkelompok (Utama/Arsip/Info) dan nomor 01–10, bisa diciutkan jadi rail ikon (tombol di bawah panel atau tombol `[`, pilihan diingat) dengan tooltip label. Pil merah meluncur (elastic) ke menu aktif, sorotan tipis mengikuti kursor, dan kartu "On air" menampilkan member yang live atau hitung mundur show berikutnya. HP: dock tinta, menu aktif melebar jadi pil merah berlabel, tombol kisi membuka menu merah layar penuh yang mekar melingkar. Ticker sinyal di topbar. |
 | Hero | Carousel banner desain **jkt48connect** (kartu notifikasi live + banner jadwal show): wipe, zoom pelan, progress bar per slide, bisa digeser. Show yang desainnya masih *pending* tampil sebagai panel merah. |
 | Isi | Statistik yang menghitung naik, kartu dengan tilt 3D, nomor merah "01" ala lineup, judul "JUDUL / jumlah" yang muncul huruf demi huruf, poster jadwal potret jkt48connect, dan daftar jadwal yang masuk bertahap. |
 | Transisi halaman | Sapuan kotak-kotak merah di kolom utama, lalu konten baru naik. |
@@ -47,6 +47,7 @@ Beberapa hal yang ditangani di sana:
 - Lineup di daftar tidak membawa foto, jadi foto dicocokkan dari `/api/member`.
 - `now_live` bisa memuat sesi yang sama dua kali, jadi daftarnya dideduplikasi.
 - Item exclusive/event dari `next_schedule` tidak punya halaman detail (API membalas 502), jadi tampil tanpa link.
+- Gambar di isi berita jkt48.com menolak hotlink (403 bila Referer dari domain lain, plus `Cross-Origin-Resource-Policy: same-site`), jadi dilewatkan `/api/media?url=…`.
 
 ## API key tetap di server
 
@@ -57,6 +58,8 @@ domain situs sendiri. Proxy di [`worker/proxy.ts`](worker/proxy.ts) lalu:
 - hanya meneruskan endpoint publik yang dipakai UI (allowlist),
 - meng-cache respons di edge (live 20 detik, recent 60 detik, lainnya 5 menit) agar kuota hemat,
 - menyajikan salinan terakhir bila upstream error (5xx/jaringan).
+
+`/api/media?url=…` mengambil gambar berita dari `jkt48.com` (hanya host itu) di server tanpa Referer, lalu menyajikannya dari domain situs sendiri dengan cache edge 7 hari.
 
 Gambar (foto member, desain jadwal, gift, cuplikan) memakai URL media dari respons API dan bisa dibuka tanpa key.
 
@@ -162,7 +165,7 @@ Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 
 | | |
 | --- | --- |
-| ![Intro: lineup dan your oshi](docs/screenshots/01-intro.jpg) | ![Intro: keluar](docs/screenshots/01b-intro-open.jpg) |
+| ![Intro: cincin photocard berputar](docs/screenshots/01-intro.jpg) | ![Intro: oshi hari ini](docs/screenshots/01b-intro-open.jpg) |
 | ![Beranda gelap](docs/screenshots/02b-home-desktop-dark.jpg) | ![Live](docs/screenshots/04-live.jpg) |
 | ![Theater](docs/screenshots/05-theater.jpg) | ![Detail theater](docs/screenshots/06-theater-detail.jpg) |
 | ![Jadwal](docs/screenshots/07-schedule.jpg) | ![Member](docs/screenshots/08-members.jpg) |
@@ -170,7 +173,7 @@ Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 | ![Recent](docs/screenshots/11-recent.jpg) | ![Detail recent](docs/screenshots/12-recent-detail.jpg) |
 | ![Berita](docs/screenshots/13-news.jpg) | ![Detail berita](docs/screenshots/14-news-detail.jpg) |
 | ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu layar penuh mobile](docs/screenshots/19-mobile-menu.jpg) |
-| ![Footer mobile](docs/screenshots/20-footer-mobile.jpg) | |
+| ![Footer mobile](docs/screenshots/20-footer-mobile.jpg) | ![Sidebar desktop diciutkan](docs/screenshots/21-sidebar-collapsed.jpg) |
 
 ---
 

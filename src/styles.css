@@ -53,6 +53,14 @@
   color-scheme: dark;
 }
 
+/* Lebar kolom sidebar kiri desktop (panel 224px / 76px + jarak 12px di kiri-kanan). */
+:root {
+  --side-pad: 236px;
+}
+:root[data-side="collapsed"] {
+  --side-pad: 100px;
+}
+
 body {
   margin: 0;
   color: var(--ink);
@@ -190,6 +198,15 @@ body.is-locked {
   }
   .prose-body strong {
     color: var(--ink);
+  }
+  .prose-body img {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-block: 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
   }
   .prose-body a {
     color: var(--brand);

@@ -14,13 +14,14 @@
     <meta property="og:description" content="Live member, jadwal theater, birthday, dan berita JKT48 real-time." />
     <meta property="og:type" content="website" />
     <script>
-      // Terapkan tema sebelum render pertama supaya tidak berkedip.
+      // Terapkan tema & lebar sidebar sebelum render pertama supaya tidak berkedip.
       document.documentElement.classList.add("js");
       try {
         var t = localStorage.getItem("jkt48c:theme");
         // Default terang (kertas krem brand); mode gelap bila dipilih.
         var dark = t === "dark";
         document.documentElement.classList.toggle("dark", dark);
+        if (localStorage.getItem("jkt48c:side") === "collapsed") document.documentElement.dataset.side = "collapsed";
       } catch (e) {}
     </script>
   </head>

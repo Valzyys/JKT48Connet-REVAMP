@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUp, ArrowUpRight, LayoutGrid, Moon, Search, Sun, X } from "lucide-react";
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { ArrowUp, ArrowUpRight, LayoutGrid, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun, Ticket, X } from "lucide-react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Countdown } from "@/components/countdown";
 import { useIntroDone } from "@/components/intro";
 import { Logo, PIXELS, PixelCross } from "@/components/logo";
@@ -37,9 +37,22 @@ export function ThemeToggle({ className }: { className?: string }) {
 
 const num = (i: number) => String(i + 1).padStart(2, "0");
 
+const SIDE_KEY = "jkt48c:side";
+const SIDE_OPEN = 224;
+const SIDE_MINI = 76;
+
+function readCollapsed() {
+  try {
+    return localStorage.getItem(SIDE_KEY) === "collapsed";
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Panel tinta yang melayang di kiri. Pil merah meluncur (elastic) ke menu aktif,
- * sorotan tipis mengikuti kursor, dan kartu "On air" di bawah menampilkan member yang sedang live.
+ * Panel tinta yang melayang di kiri dan bisa diciutkan jadi rail ikon (tombol di bawah, atau tombol `[`).
+ * Pil merah meluncur (elastic) ke menu aktif, sorotan tipis mengikuti kursor, kartu "On air"
+ * menampilkan member yang sedang live. Saat ciut, label muncul sebagai tooltip di samping ikon.
  */
 export function Sidebar() {
   const path = usePath();
@@ -48,10 +61,62 @@ export function Sidebar() {
   const nav = useRef<HTMLElement>(null);
   const marker = useRef<HTMLSpanElement>(null);
   const ghost = useRef<HTMLSpanElement>(null);
+  const tip = useRef<HTMLSpanElement>(null);
+  const firstToggle = useRef(true);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   const live = useQuery(q.live());
   const next = useQuery(q.nextSchedule());
   const lives = live.data ?? [];
   const show = next.data?.find((s) => s.category === "show");
+
+  const toggle = useCallback(() => {
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(SIDE_KEY, c ? "open" : "collapsed");
+      } catch {
+        /* storage diblokir — pilihan berlaku untuk sesi ini */
+      }
+      return !c;
+    });
+  }, []);
+
+  // Tombol "[" untuk menciutkan/membuka, kecuali saat mengetik.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.key !== "[" || e.metaKey || e.ctrlKey || e.altKey || t.closest("input, textarea, [contenteditable]")) return;
+      toggle();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggle]);
+
+  // Lebar panel + padding kolom utama (lewat atribut di <html>, dibaca CSS --side-pad).
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    document.documentElement.dataset.side = collapsed ? "collapsed" : "open";
+    const instant = firstToggle.current;
+    firstToggle.current = false;
+    const labels = el.querySelectorAll("[data-label]");
+    const tl = gsap.timeline();
+    if (collapsed) {
+      tl.to(labels, { opacity: 0, x: -8, duration: instant ? 0 : 0.18, stagger: instant ? 0 : 0.01, ease: "power2.in" }).to(
+        el,
+        { width: SIDE_MINI, duration: instant ? 0 : 0.55, ease: "expo.inOut" },
+        instant ? 0 : 0.08,
+      );
+    } else {
+      tl.to(el, { width: SIDE_OPEN, duration: instant ? 0 : 0.55, ease: "expo.inOut" }).fromTo(
+        labels,
+        { opacity: 0, x: -8 },
+        { opacity: 1, x: 0, duration: instant ? 0 : 0.35, stagger: instant ? 0 : 0.015, ease: "power3.out" },
+        instant ? 0 : 0.3,
+      );
+    }
+    if (!instant) gsap.fromTo(el.querySelector("[data-toggle-icon]"), { rotate: 0 }, { rotate: 180, duration: 0.5, ease: "back.out(2)" });
+    return () => void tl.kill();
+  }, [collapsed]);
 
   // Masuk bertahap setelah intro selesai.
   useLayoutEffect(() => {
@@ -74,11 +139,13 @@ export function Sidebar() {
     gsap.fromTo(el.querySelector("[data-icon]"), { rotate: -25, scale: 0.5 }, { rotate: 0, scale: 1, duration: 0.6, ease: "back.out(3)" });
   }, [path]);
 
-  // Sorotan hover yang ikut meluncur antar menu.
+  // Sorotan hover yang ikut meluncur antar menu, plus tooltip label saat panel ciut.
   useEffect(() => {
     const n = nav.current;
     const g = ghost.current;
-    if (!n || !g) return;
+    const t = tip.current;
+    if (!n || !g || !t) return;
+    gsap.set(t, { yPercent: -50, x: -6 });
     const y = gsap.quickTo(g, "y", { duration: 0.35, ease: "power3.out" });
     const over = (e: PointerEvent) => {
       const a = (e.target as HTMLElement).closest<HTMLElement>("[data-nav]");
@@ -86,8 +153,16 @@ export function Sidebar() {
       if (Number(gsap.getProperty(g, "opacity")) < 0.05) gsap.set(g, { y: a.offsetTop });
       else y(a.offsetTop);
       gsap.to(g, { opacity: 1, duration: 0.2, overwrite: "auto" });
+      if (document.documentElement.dataset.side === "collapsed") {
+        const r = a.getBoundingClientRect();
+        t.textContent = a.dataset.title ?? "";
+        gsap.to(t, { top: r.top + r.height / 2, opacity: 1, x: 0, duration: 0.25, ease: "power3.out", overwrite: "auto" });
+      }
     };
-    const leave = () => gsap.to(g, { opacity: 0, duration: 0.25, overwrite: "auto" });
+    const leave = () => {
+      gsap.to(g, { opacity: 0, duration: 0.25, overwrite: "auto" });
+      gsap.to(t, { opacity: 0, x: -6, duration: 0.2, overwrite: "auto" });
+    };
     n.addEventListener("pointerover", over);
     n.addEventListener("pointerleave", leave);
     return () => {
@@ -97,84 +172,144 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside
-      ref={root}
-      className="fixed bottom-3 left-3 top-3 z-40 hidden w-[224px] flex-col rounded-[26px] bg-nav p-3 text-white shadow-[0_20px_50px_-20px_rgb(0_0_0/0.5)] lg:flex dark:ring-1 dark:ring-white/[0.06]"
-    >
-      <Link to="/" data-side-item className="group flex items-center gap-3 rounded-[18px] bg-white/[0.06] p-3 transition-colors hover:bg-white/[0.1]" aria-label="JKT48Connect, ke beranda">
-        <PixelCross className="h-9 w-9 shrink-0 transition-transform duration-500 group-hover:rotate-90" />
-        <span className="min-w-0">
-          <span className="block text-[16px] font-extrabold leading-none tracking-tight">JKT48Connect</span>
-          <span className="micro mt-1.5 block text-white/45">Fan Signal</span>
-        </span>
-      </Link>
-
-      <nav ref={nav} className="thin-scrollbar relative mt-4 flex-1 overflow-y-auto" aria-label="Menu utama">
-        <span ref={ghost} className="pointer-events-none absolute inset-x-0 top-0 h-10 rounded-xl bg-white/[0.07] opacity-0" />
-        <span ref={marker} className="pointer-events-none absolute inset-x-0 top-0 h-10 rounded-xl bg-brand opacity-0 shadow-[0_10px_24px_-10px_var(--brand)]" />
-        {NAV_GROUPS.map((g) => (
-          <div key={g} className="mb-3">
-            <p data-side-item className="micro px-3 pb-1.5 pt-2 text-white/35">
-              {g}
-            </p>
-            {NAV.filter((n) => n.group === g).map((n) => {
-              const active = isActive(path, n.to);
-              return (
-                <Link
-                  key={n.to}
-                  to={n.to}
-                  data-nav
-                  data-side-item
-                  data-active={active}
-                  className={cx(
-                    "relative z-[1] flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] font-semibold transition-colors",
-                    active ? "text-white" : "text-white/60 hover:text-white",
-                  )}
-                >
-                  <n.icon data-icon className="h-[17px] w-[17px] shrink-0" strokeWidth={2.2} />
-                  <span className="flex-1">{n.label}</span>
-                  {n.to === "/live" && lives.length > 0 ? (
-                    <span className="pill bg-white text-brand">{lives.length}</span>
-                  ) : (
-                    <span className={cx("font-mono text-[10px]", active ? "text-white/70" : "text-white/25")}>{num(NAV.indexOf(n))}</span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-
-      {lives.length > 0 ? (
-        <Link to="/live" data-side-item className="group mt-3 block rounded-[18px] bg-brand p-3 transition-transform hover:-translate-y-0.5">
-          <span className="micro flex items-center justify-between text-white/85">
-            On air
-            <SignalBars />
-          </span>
-          <span className="mt-2.5 flex items-center">
-            {lives.slice(0, 4).map((l, i) => (
-              <Img key={l.id} src={l.img || l.avatar} alt={l.name} className={cx("h-8 w-8 rounded-full object-cover object-top ring-2 ring-brand", i > 0 && "-ml-2.5")} />
-            ))}
-            <span className="ml-2.5 text-[13px] font-bold leading-tight">
-              {lives.length} member
-              <br />
-              <span className="font-medium text-white/80">sedang live</span>
-            </span>
+    <>
+      <aside
+        ref={root}
+        style={{ width: collapsed ? SIDE_MINI : SIDE_OPEN }}
+        className="fixed bottom-3 left-3 top-3 z-40 hidden flex-col overflow-hidden rounded-[26px] bg-nav p-3 text-white shadow-[0_20px_50px_-20px_rgb(0_0_0/0.5)] lg:flex dark:ring-1 dark:ring-white/[0.06]"
+      >
+        <Link to="/" data-side-item className="group flex items-center gap-3 rounded-[18px] bg-white/[0.06] p-2 transition-colors hover:bg-white/[0.1]" aria-label="JKT48Connect, ke beranda">
+          <PixelCross className="h-9 w-9 shrink-0 transition-transform duration-500 group-hover:rotate-90" />
+          <span data-label className="min-w-0 whitespace-nowrap">
+            <span className="block text-[16px] font-extrabold leading-none tracking-tight">JKT48Connect</span>
+            <span className="micro mt-1.5 block text-white/45">Fan Signal</span>
           </span>
         </Link>
-      ) : show ? (
-        <Link to="/theater/$id" params={{ id: show.id }} data-side-item className="mt-3 block rounded-[18px] bg-white/[0.06] p-3 transition-colors hover:bg-white/[0.1]">
-          <span className="micro block text-white/45">Show berikutnya</span>
-          <span className="mt-1.5 block truncate text-[14px] font-bold">{show.title}</span>
-          <Countdown target={show.date} className="mt-0.5 block font-mono text-[12px] text-brand" />
-        </Link>
-      ) : null}
 
-      <div data-side-item className="mt-3 flex items-center justify-between px-1">
-        <span className="font-mono text-[10px] text-white/35">© {new Date().getFullYear()} · Fan-made</span>
-        <ThemeToggle className="h-9 w-9 text-white/60 hover:bg-white/10 hover:text-white" />
-      </div>
-    </aside>
+        <nav ref={nav} className="no-scrollbar relative mt-4 flex-1 overflow-y-auto overflow-x-hidden" aria-label="Menu utama">
+          <span ref={ghost} className="pointer-events-none absolute inset-x-0 top-0 h-10 rounded-xl bg-white/[0.07] opacity-0" />
+          <span ref={marker} className="pointer-events-none absolute inset-x-0 top-0 h-10 rounded-xl bg-brand opacity-0 shadow-[0_10px_24px_-10px_var(--brand)]" />
+          {NAV_GROUPS.map((g) => (
+            <div key={g} className="mb-3">
+              <p data-side-item className="relative h-7 px-3 pt-2">
+                <span data-label className="micro block whitespace-nowrap text-white/35">
+                  {g}
+                </span>
+                <span className={cx("absolute inset-x-3 top-1/2 h-px bg-white/10 transition-opacity duration-300", collapsed ? "opacity-100" : "opacity-0")} />
+              </p>
+              {NAV.filter((n) => n.group === g).map((n) => {
+                const active = isActive(path, n.to);
+                return (
+                  <Link
+                    key={n.to}
+                    to={n.to}
+                    data-nav
+                    data-side-item
+                    data-active={active}
+                    data-title={n.label}
+                    aria-label={n.label}
+                    className={cx(
+                      "relative z-[1] flex h-10 items-center gap-3 rounded-xl px-[17.5px] text-[14px] font-semibold transition-colors",
+                      active ? "text-white" : "text-white/60 hover:text-white",
+                    )}
+                  >
+                    <span className="relative shrink-0">
+                      <n.icon data-icon className="h-[17px] w-[17px]" strokeWidth={2.2} />
+                      {n.to === "/live" && lives.length > 0 && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-brand ring-2 ring-nav" />}
+                    </span>
+                    <span data-label className="flex flex-1 items-center justify-between gap-2 whitespace-nowrap">
+                      {n.label}
+                      {n.to === "/live" && lives.length > 0 ? (
+                        <span className="pill bg-white text-brand">{lives.length}</span>
+                      ) : (
+                        <span className={cx("font-mono text-[10px]", active ? "text-white/70" : "text-white/25")}>{num(NAV.indexOf(n))}</span>
+                      )}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        {lives.length > 0 ? (
+          <Link
+            to="/live"
+            data-side-item
+            aria-label={`${lives.length} member sedang live`}
+            className={cx("group mt-3 block rounded-[18px] bg-brand transition-[padding] duration-300", collapsed ? "p-2" : "p-3")}
+          >
+            {collapsed ? (
+              <span className="grid h-9 place-items-center">
+                <SignalBars />
+              </span>
+            ) : (
+              <>
+                <span className="micro flex items-center justify-between whitespace-nowrap text-white/85">
+                  On air
+                  <SignalBars />
+                </span>
+                <span className="mt-2.5 flex items-center whitespace-nowrap">
+                  {lives.slice(0, 4).map((l, i) => (
+                    <Img key={l.id} src={l.img || l.avatar} alt={l.name} className={cx("h-8 w-8 rounded-full object-cover object-top ring-2 ring-brand", i > 0 && "-ml-2.5")} />
+                  ))}
+                  <span className="ml-2.5 text-[13px] font-bold leading-tight">
+                    {lives.length} member
+                    <br />
+                    <span className="font-medium text-white/80">sedang live</span>
+                  </span>
+                </span>
+              </>
+            )}
+          </Link>
+        ) : show ? (
+          <Link
+            to="/theater/$id"
+            params={{ id: show.id }}
+            data-side-item
+            aria-label={`Show berikutnya: ${show.title}`}
+            className={cx("mt-3 block rounded-[18px] bg-white/[0.06] transition-colors hover:bg-white/[0.1]", collapsed ? "p-2" : "p-3")}
+          >
+            {collapsed ? (
+              <span className="grid h-9 place-items-center">
+                <Ticket className="h-[17px] w-[17px] text-brand" />
+              </span>
+            ) : (
+              <>
+                <span className="micro block whitespace-nowrap text-white/45">Show berikutnya</span>
+                <span className="mt-1.5 block truncate text-[14px] font-bold">{show.title}</span>
+                <Countdown target={show.date} className="mt-0.5 block whitespace-nowrap font-mono text-[12px] text-brand" />
+              </>
+            )}
+          </Link>
+        ) : null}
+
+        <div data-side-item className={cx("mt-3 flex items-center gap-1", collapsed ? "flex-col" : "justify-between pl-1")}>
+          {!collapsed && <span className="whitespace-nowrap font-mono text-[10px] text-white/35">© {new Date().getFullYear()} · Fan-made</span>}
+          <span className={cx("flex items-center gap-1", collapsed && "flex-col")}>
+            <ThemeToggle className="h-9 w-9 text-white/60 hover:bg-white/10 hover:text-white" />
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={collapsed ? "Buka menu samping" : "Ciutkan menu samping"}
+              aria-expanded={!collapsed}
+              title={`${collapsed ? "Buka" : "Ciutkan"} menu ( [ )`}
+              className="grid h-9 w-9 place-items-center rounded-xl text-white/60 transition hover:bg-white/10 hover:text-white"
+            >
+              <span data-toggle-icon className="grid place-items-center">
+                {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
+              </span>
+            </button>
+          </span>
+        </div>
+      </aside>
+      <span
+        ref={tip}
+        aria-hidden
+        style={{ left: SIDE_MINI + 22, opacity: 0 }}
+        className="pointer-events-none fixed z-50 hidden whitespace-nowrap rounded-lg bg-nav px-2.5 py-1.5 text-[12px] font-bold text-white shadow-lg lg:block"
+      />
+    </>
   );
 }
 
