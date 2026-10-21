@@ -307,6 +307,11 @@ export type RecentLive = {
 export type Fan = { name: string; avatar: string; amount: number | null };
 export type GiftSummary = { name: string; img: string; num: number | null; users: number | null };
 
+export type Recording = { url: string; durationMs: number; startedAt: string; partial: boolean };
+
+/** Replay baru boleh diputar di situs setelah jeda ini sejak live selesai. */
+export const REPLAY_LOCK_HOURS = 72;
+
 export type RecentDetail = RecentLive & {
   gifts: GiftSummary[];
   giftsPartial: boolean;
@@ -314,7 +319,9 @@ export type RecentDetail = RecentLive & {
   comments: number | null;
   commenters: number | null;
   leaderboard: string;
-  replayUrl: string;
+  recordings: Recording[];
+  /** Waktu replay terbuka: akhir live + REPLAY_LOCK_HOURS. */
+  replayUnlockAt: string;
   recordingPartial: boolean;
   screenshots: string[];
 };
@@ -352,8 +359,10 @@ export async function getRecent(id: string): Promise<RecentDetail> {
   const info: Raw = r.live_info ?? {};
   const shot: Raw | undefined = info.screenshot;
   const recordings = list(r.recordings);
+  const base = mapRecent(r);
+  const endMs = Date.parse(base.end) || Date.parse(base.start) + base.durationMs;
   return {
-    ...mapRecent(r),
+    ...base,
     id: str(r.data_id, id),
     gifts: list(info.gift?.list)
       .map((g) => ({ name: str(g.name), img: g.image_available === false ? "" : str(g.img), num: num(g.num), users: num(g.user_count) }))
@@ -366,7 +375,10 @@ export async function getRecent(id: string): Promise<RecentDetail> {
     comments: num(info.comments?.num),
     commenters: num(info.comments?.users),
     leaderboard: readyDesign(r.leaderboard_designs, "portrait"),
-    replayUrl: str(recordings[0]?.player_url),
+    recordings: recordings
+      .map((x) => ({ url: str(x.url), durationMs: num(x.duration_ms) ?? 0, startedAt: str(x.started_at), partial: !!x.partial }))
+      .filter((x) => x.url.endsWith(".mp4")),
+    replayUnlockAt: Number.isFinite(endMs) ? new Date(endMs + REPLAY_LOCK_HOURS * 3_600_000).toISOString() : "",
     recordingPartial: r.recording_session?.status === "partial" || recordings.some((x) => x.partial),
     screenshots:
       shot?.base_url && Array.isArray(shot.list)

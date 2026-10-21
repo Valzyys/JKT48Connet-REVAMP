@@ -2,6 +2,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BackLink } from "@/components/back-link";
 import { Page } from "@/components/page";
+import { Replay } from "@/components/replay";
 import { ErrorState, Img, PlatformTag, Skeleton } from "@/components/ui";
 import { fmtDate, fmtDuration, fmtNumber, fmtTime } from "@/lib/format";
 import { pointLabel } from "@/lib/jkt48";
@@ -59,11 +60,6 @@ export function RecentDetailPage() {
                 </h1>
                 {r.title && <p className="mt-1 text-ink-soft">“{r.title}”</p>}
               </div>
-              {r.replayUrl && (
-                <a href={r.replayUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
-                  Tonton replay
-                </a>
-              )}
             </div>
 
             <dl data-reveal className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -84,6 +80,17 @@ export function RecentDetailPage() {
               <p className="pt-3 text-[13px] text-ink-soft">
                 Data parsial: {[r.recordingPartial && "sebagian rekaman tidak tercatat", r.giftsPartial && "rincian gift hanya dari event yang teramati"].filter(Boolean).join("; ")}.
               </p>
+            )}
+
+            {r.recordings.length > 0 && (
+              <div className="pt-8">
+                <Replay
+                  recordings={r.recordings}
+                  unlockAt={r.replayUnlockAt}
+                  vertical={r.platform === "idn"}
+                  poster={r.screenshots[Math.floor(r.screenshots.length / 2)]}
+                />
+              </div>
             )}
 
             <div className="grid gap-x-12 gap-y-10 pt-10 lg:grid-cols-[minmax(0,1fr)_340px]">
