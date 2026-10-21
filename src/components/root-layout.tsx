@@ -1,9 +1,8 @@
 import { Outlet, useRouterState } from "@tanstack/react-router";
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { IntroProvider } from "@/components/intro";
-import { ScrollLoop } from "@/components/motion";
-import { Aside, BottomNav, Footer, Rail, Topbar } from "@/components/shell";
-import { gsap, ScrollTrigger, prefersReducedMotion } from "@/lib/gsap";
+import { Aside, Dock, Footer, Sidebar, Topbar } from "@/components/shell";
+import { gsap, ScrollTrigger } from "@/lib/gsap";
 
 const WIPE_COLS = 6;
 const WIPE_ROWS = 4;
@@ -14,6 +13,23 @@ export function RootLayout() {
   const content = useRef<HTMLDivElement>(null);
   const first = useRef(true);
 
+  // Data API sering datang setelah halaman tampil, sehingga tinggi halaman berubah. Hitung ulang
+  // posisi ScrollTrigger setiap kali tinggi konten berubah agar reveal & footer tetap terpicu.
+  useEffect(() => {
+    const el = content.current;
+    if (!el) return;
+    let t = 0;
+    const ro = new ResizeObserver(() => {
+      clearTimeout(t);
+      t = window.setTimeout(() => ScrollTrigger.refresh(), 120);
+    });
+    ro.observe(el);
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+    };
+  }, []);
+
   // Transisi antar halaman: kotak-kotak merah menyapu kolom utama, lalu konten baru naik.
   useLayoutEffect(() => {
     if (first.current) {
@@ -22,7 +38,7 @@ export function RootLayout() {
     }
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
     requestAnimationFrame(() => ScrollTrigger.refresh());
-    if (prefersReducedMotion() || !wipe.current || !content.current) return;
+    if (!wipe.current || !content.current) return;
     const cells = wipe.current.children;
     const tl = gsap.timeline();
     tl.set(wipe.current, { display: "grid" })
@@ -38,10 +54,9 @@ export function RootLayout() {
       <a href="#konten" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2 focus:text-white">
         Lewati ke konten
       </a>
-      <Rail />
-      <div className="flex min-h-screen lg:pl-[84px]">
+      <Sidebar />
+      <div className="flex min-h-screen lg:pl-[236px]">
         <div className="relative min-w-0 flex-1">
-          <ScrollLoop className="absolute inset-y-0 right-0 h-full w-1/2" />
           <Topbar />
           <main id="konten" className="relative z-[1] pb-12">
             <div ref={content}>
@@ -50,7 +65,7 @@ export function RootLayout() {
             <div
               ref={wipe}
               aria-hidden
-              className="pointer-events-none fixed inset-0 z-20 hidden lg:left-[84px] xl:right-[340px]"
+              className="pointer-events-none fixed inset-0 z-20 hidden lg:left-[236px] xl:right-[340px]"
               style={{ gridTemplateColumns: `repeat(${WIPE_COLS}, 1fr)`, gridTemplateRows: `repeat(${WIPE_ROWS}, 1fr)` }}
             >
               {Array.from({ length: WIPE_COLS * WIPE_ROWS }).map((_, i) => (
@@ -58,13 +73,11 @@ export function RootLayout() {
               ))}
             </div>
           </main>
-          <div className="container-x pb-28 xl:hidden">
-            <Footer className="border-t border-line pt-6" />
-          </div>
+          <Footer />
         </div>
         <Aside />
       </div>
-      <BottomNav />
+      <Dock />
     </IntroProvider>
   );
 }

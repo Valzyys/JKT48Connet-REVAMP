@@ -12,13 +12,14 @@ Remake UI publik JKT48Connect dengan gaya **Fan Signal**, identitas visual yang 
 
 | Bagian | Wujud |
 | --- | --- |
-| Layout | Desktop 3 kolom: rail ikon di kiri, kolom utama, sidebar kanan (cari member, jadwal, birthday, footer). HP: navigasi bawah dengan sheet "Lainnya". |
-| Intro | Piksel beterbangan menyusun logo salib JKT48Connect, bar sinyal naik, garis lengkung tergambar, nama muncul huruf demi huruf, lalu layar pecah jadi kotak-kotak yang menyusut. Sekali per sesi, bisa dilewati. |
-| Navigasi | Kotak merah di rail meluncur (elastic) ke menu aktif. Judul topbar berganti dengan animasi geser. Ticker sinyal berjalan berisi member live dan show berikutnya. |
+| Layout | Desktop 3 kolom: sidebar tinta di kiri, kolom utama, sidebar kanan (cari member, jadwal, birthday). HP: dock mengambang di bawah plus menu layar penuh. |
+| Intro | HUD di empat sudut mengetik diri dan frekuensi naik ke 48.0 MHz. Panel merah naik, judul tersusun huruf demi huruf, dan logo piksel terbentuk. 12 foto member asli membalik masuk dengan nomor 01–12, satu dipilih jadi "your oshi", pita teks miring melintas, lalu semuanya beterbangan dan kotak merah membuka halaman. Diputar setiap situs dibuka, bisa dilewati. |
+| Navigasi | Desktop: panel tinta melayang dengan menu berkelompok (Utama/Arsip/Info) dan nomor 01–10. Pil merah meluncur (elastic) ke menu aktif, sorotan tipis mengikuti kursor, dan kartu "On air" menampilkan member yang live atau hitung mundur show berikutnya. HP: dock tinta, menu aktif melebar jadi pil merah berlabel, tombol kisi membuka menu merah layar penuh yang mekar melingkar. Ticker sinyal di topbar. |
 | Hero | Carousel banner desain **jkt48connect** (kartu notifikasi live + banner jadwal show): wipe, zoom pelan, progress bar per slide, bisa digeser. Show yang desainnya masih *pending* tampil sebagai panel merah. |
 | Isi | Statistik yang menghitung naik, kartu dengan tilt 3D, nomor merah "01" ala lineup, judul "JUDUL / jumlah" yang muncul huruf demi huruf, poster jadwal potret jkt48connect, dan daftar jadwal yang masuk bertahap. |
 | Transisi halaman | Sapuan kotak-kotak merah di kolom utama, lalu konten baru naik. |
-| Latar | Pola tanda "+" dan garis lengkung yang tergambar mengikuti scroll. |
+| Footer | Blok tinta di dasar kolom utama: tagline, kolom tautan, tombol sosial, wordmark raksasa JKT48CONNECT yang tersusun huruf demi huruf saat discroll, jam WIB, dan tombol kembali ke atas. |
+| Latar | Polos (krem / gelap), tanpa pola. |
 
 Font: **Archivo** (condensed untuk judul) dan **IBM Plex Mono** (label kecil), self-hosted via Fontsource. Palet krem +
 merah JKT48Connect, dengan mode gelap opsional. Semua gambar desain (jadwal, notifikasi live, leaderboard) memakai
@@ -145,10 +146,10 @@ repository secrets berikut:
 
 ```
 src/
-  components/   intro (piksel), shell (rail, topbar, sidebar, nav bawah), carousel, motion (GSAP), kartu
+  components/   intro, shell (sidebar kiri, topbar, sidebar kanan, footer, dock + menu HP), carousel, motion (GSAP), kartu
   pages/        satu file per halaman (lazy-loaded)
   lib/          api.ts (klien), jkt48.ts (normalisasi respons), queries, format, gsap
-  hooks/        use-reveal (ScrollTrigger), use-member-index, use-theme
+  hooks/        use-reveal (ScrollTrigger), use-member-index, use-theme, use-clock
 worker/         Cloudflare Worker + proxy API
 functions/      Cloudflare Pages Functions
 scripts/        cf-setup.mjs
@@ -161,14 +162,15 @@ Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 
 | | |
 | --- | --- |
-| ![Intro: logo piksel](docs/screenshots/01-intro.jpg) | ![Intro: layar pecah](docs/screenshots/01b-intro-open.jpg) |
+| ![Intro: lineup dan your oshi](docs/screenshots/01-intro.jpg) | ![Intro: keluar](docs/screenshots/01b-intro-open.jpg) |
 | ![Beranda gelap](docs/screenshots/02b-home-desktop-dark.jpg) | ![Live](docs/screenshots/04-live.jpg) |
 | ![Theater](docs/screenshots/05-theater.jpg) | ![Detail theater](docs/screenshots/06-theater-detail.jpg) |
 | ![Jadwal](docs/screenshots/07-schedule.jpg) | ![Member](docs/screenshots/08-members.jpg) |
 | ![Profil member](docs/screenshots/09-member-detail.jpg) | ![Birthday](docs/screenshots/10-birthday.jpg) |
 | ![Recent](docs/screenshots/11-recent.jpg) | ![Detail recent](docs/screenshots/12-recent-detail.jpg) |
 | ![Berita](docs/screenshots/13-news.jpg) | ![Detail berita](docs/screenshots/14-news-detail.jpg) |
-| ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu lainnya mobile](docs/screenshots/19-mobile-menu.jpg) |
+| ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu layar penuh mobile](docs/screenshots/19-mobile-menu.jpg) |
+| ![Footer mobile](docs/screenshots/20-footer-mobile.jpg) | |
 
 ---
 

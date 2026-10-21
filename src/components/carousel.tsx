@@ -6,7 +6,7 @@ import { PixelCross } from "@/components/logo";
 import { SignalBars } from "@/components/motion";
 import { Skeleton, cx } from "@/components/ui";
 import { fmtDate, fmtTime } from "@/lib/format";
-import { gsap, prefersReducedMotion } from "@/lib/gsap";
+import { gsap } from "@/lib/gsap";
 import { q } from "@/lib/queries";
 
 type Slide = {
@@ -68,18 +68,15 @@ export function HeroCarousel() {
   useLayoutEffect(() => {
     const el = root.current;
     if (!el || !count) return;
-    const reduce = prefersReducedMotion();
     const ctx = gsap.context(() => {
       const items = gsap.utils.toArray<HTMLElement>("[data-slide]");
       items.forEach((s, i) => gsap.set(s, { zIndex: i === index ? 2 : 0, visibility: i === index ? "visible" : "hidden" }));
       const cur = items[index];
       if (!cur) return;
-      if (!reduce) {
-        gsap.fromTo(cur, { clipPath: "inset(0 0 0 100%)" }, { clipPath: "inset(0 0 0 0%)", duration: 0.9, ease: "power4.inOut" });
-        const img = cur.querySelector("img");
-        if (img) gsap.fromTo(img, { scale: 1.06 }, { scale: 1, duration: DURATION + 1, ease: "none" });
-        gsap.fromTo(cur.querySelectorAll("[data-cap]"), { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, stagger: 0.08, delay: 0.35, ease: "power3.out" });
-      }
+      gsap.fromTo(cur, { clipPath: "inset(0 0 0 100%)" }, { clipPath: "inset(0 0 0 0%)", duration: 0.9, ease: "power4.inOut" });
+      const img = cur.querySelector("img");
+      if (img) gsap.fromTo(img, { scale: 1.06 }, { scale: 1, duration: DURATION + 1, ease: "none" });
+      gsap.fromTo(cur.querySelectorAll("[data-cap]"), { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, stagger: 0.08, delay: 0.35, ease: "power3.out" });
       // Progress bar slide aktif; selesai → slide berikutnya.
       const bars = gsap.utils.toArray<HTMLElement>("[data-bar]");
       bars.forEach((b, i) => gsap.set(b, { scaleX: i < index ? 1 : 0 }));

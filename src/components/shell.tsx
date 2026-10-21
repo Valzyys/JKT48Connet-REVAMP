@@ -1,16 +1,18 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Moon, MoreHorizontal, Search, Sun, X } from "lucide-react";
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, ArrowUpRight, LayoutGrid, Moon, Search, Sun, X } from "lucide-react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Countdown } from "@/components/countdown";
-import { Logo, PixelCross } from "@/components/logo";
+import { useIntroDone } from "@/components/intro";
+import { Logo, PIXELS, PixelCross } from "@/components/logo";
 import { SignalBars, Ticker } from "@/components/motion";
 import { Img, cx } from "@/components/ui";
+import { useClock } from "@/hooks/use-clock";
 import { useTheme } from "@/hooks/use-theme";
 import { dateParts, fmtTime } from "@/lib/format";
-import { gsap, prefersReducedMotion } from "@/lib/gsap";
+import { gsap } from "@/lib/gsap";
 import type { TheaterShow } from "@/lib/jkt48";
-import { MOBILE_MAIN, NAV, SOCIALS, isActive, navFor } from "@/lib/nav";
+import { MOBILE_MAIN, NAV, NAV_GROUPS, SOCIALS, isActive, navFor } from "@/lib/nav";
 import { q } from "@/lib/queries";
 
 function usePath() {
@@ -31,50 +33,146 @@ export function ThemeToggle({ className }: { className?: string }) {
   );
 }
 
-/* ─────────────── Rail kiri (desktop) ─────────────── */
+/* ─────────────── Sidebar kiri (desktop) ─────────────── */
 
-/** Rail ikon vertikal. Kotak merah di belakang ikon aktif meluncur ke item yang dipilih. */
-export function Rail() {
+const num = (i: number) => String(i + 1).padStart(2, "0");
+
+/**
+ * Panel tinta yang melayang di kiri. Pil merah meluncur (elastic) ke menu aktif,
+ * sorotan tipis mengikuti kursor, dan kartu "On air" di bawah menampilkan member yang sedang live.
+ */
+export function Sidebar() {
   const path = usePath();
+  const ready = useIntroDone();
+  const root = useRef<HTMLElement>(null);
   const nav = useRef<HTMLElement>(null);
   const marker = useRef<HTMLSpanElement>(null);
+  const ghost = useRef<HTMLSpanElement>(null);
+  const live = useQuery(q.live());
+  const next = useQuery(q.nextSchedule());
+  const lives = live.data ?? [];
+  const show = next.data?.find((s) => s.category === "show");
+
+  // Masuk bertahap setelah intro selesai.
+  useLayoutEffect(() => {
+    if (!ready || !root.current) return;
+    const ctx = gsap.context(() => {
+      gsap.from(root.current, { xPercent: -110, duration: 0.9, ease: "expo.out" });
+      gsap.from("[data-side-item]", { x: -24, opacity: 0, duration: 0.5, stagger: 0.035, delay: 0.25, ease: "power3.out" });
+    }, root);
+    return () => ctx.revert();
+  }, [ready]);
 
   useLayoutEffect(() => {
     const el = nav.current?.querySelector<HTMLElement>("[data-active='true']");
-    if (!el || !marker.current) return;
-    gsap.to(marker.current, {
-      y: el.offsetTop,
-      opacity: 1,
-      duration: prefersReducedMotion() ? 0 : 0.6,
-      ease: "elastic.out(1, 0.7)",
-    });
+    const m = marker.current;
+    if (!el || !m) return;
+    const first = !m.dataset.ready;
+    m.dataset.ready = "1";
+    gsap.to(m, { y: el.offsetTop, opacity: 1, duration: first ? 0 : 0.75, ease: "elastic.out(1, 0.7)" });
+    if (!first) gsap.fromTo(m, { scaleX: 0.82 }, { scaleX: 1, duration: 0.6, ease: "back.out(3)" });
+    gsap.fromTo(el.querySelector("[data-icon]"), { rotate: -25, scale: 0.5 }, { rotate: 0, scale: 1, duration: 0.6, ease: "back.out(3)" });
   }, [path]);
 
+  // Sorotan hover yang ikut meluncur antar menu.
+  useEffect(() => {
+    const n = nav.current;
+    const g = ghost.current;
+    if (!n || !g) return;
+    const y = gsap.quickTo(g, "y", { duration: 0.35, ease: "power3.out" });
+    const over = (e: PointerEvent) => {
+      const a = (e.target as HTMLElement).closest<HTMLElement>("[data-nav]");
+      if (!a) return;
+      if (Number(gsap.getProperty(g, "opacity")) < 0.05) gsap.set(g, { y: a.offsetTop });
+      else y(a.offsetTop);
+      gsap.to(g, { opacity: 1, duration: 0.2, overwrite: "auto" });
+    };
+    const leave = () => gsap.to(g, { opacity: 0, duration: 0.25, overwrite: "auto" });
+    n.addEventListener("pointerover", over);
+    n.addEventListener("pointerleave", leave);
+    return () => {
+      n.removeEventListener("pointerover", over);
+      n.removeEventListener("pointerleave", leave);
+    };
+  }, []);
+
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[84px] flex-col items-center border-r border-line bg-bg/80 py-5 backdrop-blur lg:flex">
-      <Logo compact />
-      <nav ref={nav} className="relative mt-8 flex flex-col items-center gap-1" aria-label="Menu utama">
-        <span ref={marker} className="absolute left-1/2 top-0 h-[58px] w-[64px] -translate-x-1/2 rounded-2xl bg-brand opacity-0 shadow-[0_8px_20px_-8px_var(--brand)]" />
-        {NAV.map((n) => {
-          const active = isActive(path, n.to);
-          return (
-            <Link
-              key={n.to}
-              to={n.to}
-              data-active={active}
-              className={cx(
-                "group relative flex h-[58px] w-[64px] flex-col items-center justify-center gap-1 rounded-2xl transition-colors",
-                active ? "text-white" : "text-ink-soft hover:bg-surface hover:text-ink",
-              )}
-            >
-              <n.icon className="h-[19px] w-[19px] transition-transform duration-300 group-hover:-translate-y-0.5" strokeWidth={2} />
-              <span className="text-[10px] font-semibold leading-none">{n.label}</span>
-            </Link>
-          );
-        })}
+    <aside
+      ref={root}
+      className="fixed bottom-3 left-3 top-3 z-40 hidden w-[224px] flex-col rounded-[26px] bg-nav p-3 text-white shadow-[0_20px_50px_-20px_rgb(0_0_0/0.5)] lg:flex dark:ring-1 dark:ring-white/[0.06]"
+    >
+      <Link to="/" data-side-item className="group flex items-center gap-3 rounded-[18px] bg-white/[0.06] p-3 transition-colors hover:bg-white/[0.1]" aria-label="JKT48Connect, ke beranda">
+        <PixelCross className="h-9 w-9 shrink-0 transition-transform duration-500 group-hover:rotate-90" />
+        <span className="min-w-0">
+          <span className="block text-[16px] font-extrabold leading-none tracking-tight">JKT48Connect</span>
+          <span className="micro mt-1.5 block text-white/45">Fan Signal</span>
+        </span>
+      </Link>
+
+      <nav ref={nav} className="thin-scrollbar relative mt-4 flex-1 overflow-y-auto" aria-label="Menu utama">
+        <span ref={ghost} className="pointer-events-none absolute inset-x-0 top-0 h-10 rounded-xl bg-white/[0.07] opacity-0" />
+        <span ref={marker} className="pointer-events-none absolute inset-x-0 top-0 h-10 rounded-xl bg-brand opacity-0 shadow-[0_10px_24px_-10px_var(--brand)]" />
+        {NAV_GROUPS.map((g) => (
+          <div key={g} className="mb-3">
+            <p data-side-item className="micro px-3 pb-1.5 pt-2 text-white/35">
+              {g}
+            </p>
+            {NAV.filter((n) => n.group === g).map((n) => {
+              const active = isActive(path, n.to);
+              return (
+                <Link
+                  key={n.to}
+                  to={n.to}
+                  data-nav
+                  data-side-item
+                  data-active={active}
+                  className={cx(
+                    "relative z-[1] flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] font-semibold transition-colors",
+                    active ? "text-white" : "text-white/60 hover:text-white",
+                  )}
+                >
+                  <n.icon data-icon className="h-[17px] w-[17px] shrink-0" strokeWidth={2.2} />
+                  <span className="flex-1">{n.label}</span>
+                  {n.to === "/live" && lives.length > 0 ? (
+                    <span className="pill bg-white text-brand">{lives.length}</span>
+                  ) : (
+                    <span className={cx("font-mono text-[10px]", active ? "text-white/70" : "text-white/25")}>{num(NAV.indexOf(n))}</span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
-      <div className="mt-auto">
-        <ThemeToggle />
+
+      {lives.length > 0 ? (
+        <Link to="/live" data-side-item className="group mt-3 block rounded-[18px] bg-brand p-3 transition-transform hover:-translate-y-0.5">
+          <span className="micro flex items-center justify-between text-white/85">
+            On air
+            <SignalBars />
+          </span>
+          <span className="mt-2.5 flex items-center">
+            {lives.slice(0, 4).map((l, i) => (
+              <Img key={l.id} src={l.img || l.avatar} alt={l.name} className={cx("h-8 w-8 rounded-full object-cover object-top ring-2 ring-brand", i > 0 && "-ml-2.5")} />
+            ))}
+            <span className="ml-2.5 text-[13px] font-bold leading-tight">
+              {lives.length} member
+              <br />
+              <span className="font-medium text-white/80">sedang live</span>
+            </span>
+          </span>
+        </Link>
+      ) : show ? (
+        <Link to="/theater/$id" params={{ id: show.id }} data-side-item className="mt-3 block rounded-[18px] bg-white/[0.06] p-3 transition-colors hover:bg-white/[0.1]">
+          <span className="micro block text-white/45">Show berikutnya</span>
+          <span className="mt-1.5 block truncate text-[14px] font-bold">{show.title}</span>
+          <Countdown target={show.date} className="mt-0.5 block font-mono text-[12px] text-brand" />
+        </Link>
+      ) : null}
+
+      <div data-side-item className="mt-3 flex items-center justify-between px-1">
+        <span className="font-mono text-[10px] text-white/35">© {new Date().getFullYear()} · Fan-made</span>
+        <ThemeToggle className="h-9 w-9 text-white/60 hover:bg-white/10 hover:text-white" />
       </div>
     </aside>
   );
@@ -93,7 +191,7 @@ export function Topbar() {
 
   // Judul halaman berganti dengan animasi geser.
   useLayoutEffect(() => {
-    if (!title.current || prefersReducedMotion()) return;
+    if (!title.current) return;
     gsap.fromTo(title.current, { yPercent: 100, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.5, ease: "power3.out" });
   }, [current.to]);
 
@@ -222,7 +320,7 @@ export function ScheduleCard() {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
 
   useLayoutEffect(() => {
-    if (!list.current || !days.length || prefersReducedMotion()) return;
+    if (!list.current || !days.length) return;
     gsap.fromTo(list.current.children, { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.5, stagger: 0.07, ease: "power3.out" });
   }, [days.length]);
 
@@ -319,138 +417,274 @@ export function BirthdayCard() {
   );
 }
 
-export function Footer({ className }: { className?: string }) {
+const FOOTER_COLS: { title: string; links: { label: string; to: string }[] }[] = [
+  { title: "Jelajahi", links: NAV.filter((n) => n.group === "Utama").map((n) => ({ label: n.label, to: n.to })) },
+  { title: "Arsip", links: NAV.filter((n) => n.group === "Arsip").map((n) => ({ label: n.label, to: n.to })) },
+  {
+    title: "Info",
+    links: [
+      { label: "Tentang", to: "/about" },
+      { label: "Disclaimer", to: "/disclaimer" },
+      { label: "Ketentuan", to: "/terms" },
+      { label: "Privasi", to: "/privacy" },
+    ],
+  },
+];
+
+/**
+ * Footer tinta di dasar kolom utama: tagline, kolom tautan, wordmark raksasa yang
+ * tersusun huruf demi huruf saat discroll, dan tombol kembali ke atas.
+ */
+export function Footer() {
+  const ref = useRef<HTMLElement>(null);
+  const clock = useClock();
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ scrollTrigger: { trigger: el, start: "top 85%", once: true } });
+      tl.from("[data-ft]", { y: 30, opacity: 0, duration: 0.6, stagger: 0.05, ease: "power3.out" })
+        .from("[data-fl]", { yPercent: 105, duration: 0.8, stagger: 0.045, ease: "expo.out" }, 0.2)
+        .from("[data-fpx]", { scale: 0, rotate: 90, transformOrigin: "50% 50%", duration: 0.5, stagger: { each: 0.04, from: "random" }, ease: "back.out(3)" }, 0.5);
+    }, el);
+    return () => ctx.revert();
+  }, []);
+
   return (
-    <footer className={cx("text-[13px] text-ink-soft", className)}>
-      <div className="flex items-center gap-2 text-ink">
-        <PixelCross className="h-5 w-5" />
-        <span className="font-extrabold">JKT48Connect</span>
-        <SignalBars className="ml-auto text-brand" />
+    <footer ref={ref} className="@container mx-3 mb-28 mt-16 overflow-hidden rounded-[28px] bg-nav text-white sm:mx-6 lg:mb-6">
+      <div className="grid gap-10 p-6 sm:p-10 @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <div>
+          <p data-ft className="micro flex items-center gap-2 text-white/50">
+            <SignalBars className="text-brand" /> JKT48Connect · Fan Signal
+          </p>
+          <p data-ft className="condensed mt-5 text-[clamp(2rem,4.6cqw,3.2rem)] uppercase leading-[0.88]">
+            Your oshi.
+            <br />
+            <span className="text-brand">Your front row</span> feeling.
+          </p>
+          <div data-ft className="mt-7 flex flex-wrap gap-2">
+            {SOCIALS.map((s, i) => (
+              <a
+                key={s.href}
+                href={s.href}
+                target="_blank"
+                rel="noreferrer"
+                className={cx("btn group", i === 0 ? "bg-brand text-white hover:bg-brand-strong" : "bg-white/[0.08] text-white hover:bg-white/[0.16]")}
+              >
+                {s.label}
+                <ArrowUpRight className="h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+              </a>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
+          {FOOTER_COLS.map((c) => (
+            <div key={c.title} data-ft>
+              <p className="micro text-white/40">{c.title}</p>
+              <ul className="mt-4 space-y-2.5">
+                {c.links.map((l) => (
+                  <li key={l.label}>
+                    <Link to={l.to} className="group inline-flex items-center gap-2 text-[15px] font-semibold text-white/75 transition-colors hover:text-white">
+                      <span className="h-1.5 w-1.5 scale-0 rounded-full bg-brand transition-transform duration-300 group-hover:scale-100" />
+                      <span className="-ml-3.5 transition-[margin] duration-300 group-hover:ml-0">{l.label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       </div>
-      <p className="mt-3 leading-relaxed">Your oshi, your front row feeling. Proyek komunitas, bukan situs resmi JKT48.</p>
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
-        {SOCIALS.map((s) => (
-          <a key={s.href} href={s.href} target="_blank" rel="noreferrer" className="hover:text-brand">
-            {s.label}
-          </a>
-        ))}
+
+      <div className="@container relative px-5 sm:px-9" aria-hidden>
+        <p className="condensed flex overflow-hidden whitespace-nowrap pb-[1.5cqw] text-[15.2cqw] uppercase leading-[0.8]">
+          {"JKT48".split("").map((c, i) => (
+            <span key={`a${i}`} data-fl className="inline-block">
+              {c}
+            </span>
+          ))}
+          {"CONNECT".split("").map((c, i) => (
+            <span key={`b${i}`} data-fl className="inline-block text-brand">
+              {c}
+            </span>
+          ))}
+        </p>
       </div>
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-line pt-3">
-        <Link to="/disclaimer" className="hover:text-brand">
-          Disclaimer
-        </Link>
-        <Link to="/terms" className="hover:text-brand">
-          Ketentuan
-        </Link>
-        <Link to="/privacy" className="hover:text-brand">
-          Privasi
-        </Link>
-        <span className="font-mono text-[11px]">© {new Date().getFullYear()}</span>
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 px-6 py-4 font-mono text-[11px] text-white/45 sm:px-10">
+        <span className="flex items-center gap-2 text-white/70">
+          <svg viewBox="0 0 50 50" className="h-4 w-4">
+            {PIXELS.map(([x, y]) => (
+              <rect key={`${x}-${y}`} data-fpx x={x * 10} y={y * 10} width="10" height="10" rx="1.5" className="fill-brand" />
+            ))}
+          </svg>
+          © {new Date().getFullYear()} JKT48Connect
+        </span>
+        <span>Proyek komunitas, bukan situs resmi JKT48</span>
+        <span className="ml-auto flex items-center gap-4">
+          <span className="num">WIB {clock}</span>
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            aria-label="Kembali ke atas"
+            className="group grid h-10 w-10 place-items-center rounded-full bg-brand text-white transition-colors hover:bg-brand-strong"
+          >
+            <ArrowUp className="h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5" />
+          </button>
+        </span>
       </div>
     </footer>
   );
 }
 
-/** Sidebar kanan (xl+): cari member, jadwal, birthday, dan footer. */
+/** Sidebar kanan (xl+): cari member, jadwal, dan birthday. */
 export function Aside() {
   return (
     <aside className="thin-scrollbar sticky top-0 hidden h-screen w-[340px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-line p-5 xl:flex [&>*]:shrink-0">
       <MemberSearch />
       <ScheduleCard />
       <BirthdayCard />
-      <Footer className="mt-auto px-1 pt-2" />
     </aside>
   );
 }
 
-/* ─────────────── Navigasi bawah (HP) ─────────────── */
+/* ─────────────── Dock + menu layar penuh (HP) ─────────────── */
 
-export function BottomNav() {
+/**
+ * Dock tinta mengambang di bawah. Menu aktif melebar menjadi pil merah berlabel.
+ * Tombol kisi membuka menu layar penuh yang mekar melingkar dari tombolnya.
+ */
+export function Dock() {
   const path = usePath();
-  const [more, setMore] = useState(false);
-  const sheet = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const dock = useRef<HTMLElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
   const main = NAV.filter((n) => MOBILE_MAIN.includes(n.to));
-  const rest = NAV.filter((n) => !MOBILE_MAIN.includes(n.to));
-  const moreActive = rest.some((n) => isActive(path, n.to));
+  const restActive = !main.some((n) => isActive(path, n.to));
 
-  useEffect(() => setMore(false), [path]);
+  useEffect(() => setOpen(false), [path]);
 
   useLayoutEffect(() => {
-    const el = sheet.current;
-    if (!el) return;
-    const d = prefersReducedMotion() ? 0 : 1;
-    if (more) {
-      gsap.set(el, { display: "block" });
-      gsap.fromTo(el.firstElementChild, { yPercent: 100 }, { yPercent: 0, duration: 0.45 * d, ease: "power3.out" });
-      gsap.fromTo(el.querySelectorAll("[data-sheet-item]"), { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35 * d, stagger: 0.04 * d, delay: 0.1 * d });
-    } else {
-      gsap.to(el.firstElementChild, {
-        yPercent: 100,
-        duration: 0.3 * d,
-        ease: "power3.in",
-        onComplete: () => void gsap.set(el, { display: "none" }),
-      });
-    }
-  }, [more]);
+    const el = dock.current?.querySelector("[data-active='true'] [data-icon]");
+    if (el) gsap.fromTo(el, { y: -8, rotate: -15 }, { y: 0, rotate: 0, duration: 0.6, ease: "elastic.out(1, 0.5)" });
+  }, [path]);
 
   return (
     <>
-      <div ref={sheet} style={{ display: "none" }} className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setMore(false)}>
-        <div className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-card px-4 pb-24 pt-5" onClick={(e) => e.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between">
-            <p className="micro text-ink-soft">Menu lainnya</p>
-            <button type="button" onClick={() => setMore(false)} aria-label="Tutup" className="grid h-8 w-8 place-items-center rounded-full bg-surface">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {rest.map((n) => (
+      <MenuScreen open={open} onClose={() => setOpen(false)} origin={button} />
+      <div className="pointer-events-none fixed inset-x-0 bottom-3 z-50 flex justify-center px-3 lg:hidden">
+        <nav
+          ref={dock}
+          aria-label="Menu"
+          className="pointer-events-auto flex items-center gap-1 rounded-full bg-nav p-1.5 text-white shadow-[0_14px_34px_-12px_rgb(0_0_0/0.55)] dark:ring-1 dark:ring-white/[0.08]"
+        >
+          {main.map((n) => {
+            const active = isActive(path, n.to);
+            return (
               <Link
                 key={n.to}
                 to={n.to}
-                data-sheet-item
+                data-active={active}
+                aria-label={n.label}
                 className={cx(
-                  "flex flex-col items-center gap-2 rounded-2xl py-4 text-[13px] font-semibold",
-                  isActive(path, n.to) ? "bg-brand text-white" : "bg-surface",
+                  "flex h-11 items-center rounded-full px-3.5 transition-[background-color,color,gap] duration-300",
+                  active ? "gap-2 bg-brand text-white" : "gap-0 text-white/55",
                 )}
               >
-                <n.icon className="h-5 w-5" />
-                {n.label}
+                <n.icon data-icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2.2} />
+                <span
+                  className={cx(
+                    "overflow-hidden whitespace-nowrap text-[13px] font-bold transition-[max-width,opacity] duration-300",
+                    active ? "max-w-[84px] opacity-100" : "max-w-0 opacity-0",
+                  )}
+                >
+                  {n.label}
+                </span>
               </Link>
-            ))}
-          </div>
-        </div>
+            );
+          })}
+          <button
+            ref={button}
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="Semua menu"
+            className={cx("ml-0.5 grid h-11 w-11 place-items-center rounded-full transition-colors", restActive ? "bg-white text-nav" : "bg-white/10 text-white")}
+          >
+            <LayoutGrid className="h-[18px] w-[18px]" />
+          </button>
+        </nav>
       </div>
+    </>
+  );
+}
 
-      <nav className="fixed inset-x-3 bottom-3 z-50 flex items-center justify-around rounded-2xl border border-line bg-card/95 p-1.5 shadow-[0_10px_30px_-10px_rgb(0_0_0/0.3)] backdrop-blur lg:hidden" aria-label="Menu">
-        {main.map((n) => {
+function MenuScreen({ open, onClose, origin }: { open: boolean; onClose: () => void; origin: RefObject<HTMLButtonElement | null> }) {
+  const path = usePath();
+  const ref = useRef<HTMLDivElement>(null);
+  const first = useRef(true);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (first.current) {
+      first.current = false;
+      if (!open) return;
+    }
+    const r = origin.current?.getBoundingClientRect();
+    const at = r ? `${r.left + r.width / 2}px ${r.top + r.height / 2}px` : "90% 95%";
+    const items = el.querySelectorAll("[data-menu-item]");
+    if (open) {
+      document.body.classList.add("is-locked");
+      gsap.timeline()
+        .set(el, { display: "flex" })
+        .fromTo(el, { clipPath: `circle(0% at ${at})` }, { clipPath: `circle(150% at ${at})`, duration: 0.7, ease: "power3.inOut" })
+        .fromTo(items, { yPercent: 110 }, { yPercent: 0, duration: 0.55, stagger: 0.035, ease: "expo.out" }, 0.25)
+        .fromTo("[data-menu-fade]", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.06 }, 0.45);
+    } else {
+      document.body.classList.remove("is-locked");
+      gsap.timeline()
+        .to(items, { yPercent: -110, duration: 0.3, stagger: 0.015, ease: "power3.in" })
+        .to(el, { clipPath: `circle(0% at ${at})`, duration: 0.5, ease: "power3.inOut" }, 0.1)
+        .set(el, { display: "none" });
+    }
+  }, [open, origin]);
+
+  return (
+    <div ref={ref} style={{ display: "none" }} className="fixed inset-0 z-[60] flex-col bg-brand px-5 pb-8 pt-5 text-white lg:hidden" role="dialog" aria-modal="true" aria-label="Semua menu">
+      <div data-menu-fade className="flex items-center justify-between">
+        <span className="flex items-center gap-2.5">
+          <PixelCross className="h-8 w-8" cellClass="fill-white" />
+          <span className="text-[16px] font-extrabold">JKT48Connect</span>
+        </span>
+        <button type="button" onClick={onClose} aria-label="Tutup menu" className="grid h-11 w-11 place-items-center rounded-full bg-white text-brand">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <nav className="mt-8 flex-1 overflow-y-auto">
+        {NAV.map((n, i) => {
           const active = isActive(path, n.to);
           return (
-            <Link
-              key={n.to}
-              to={n.to}
-              className={cx(
-                "flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-semibold transition-colors",
-                active ? "bg-brand text-white" : "text-ink-soft",
-              )}
-            >
-              <n.icon className="h-[18px] w-[18px]" />
-              {n.label}
-            </Link>
+            <div key={n.to} className="overflow-hidden border-b border-white/20">
+              <Link to={n.to} data-menu-item className="flex items-baseline gap-4 py-2">
+                <span className="w-6 font-mono text-[11px] text-white/60">{num(i)}</span>
+                <span className={cx("condensed text-[clamp(2rem,10vw,2.75rem)] uppercase leading-[1.05]", active && "text-butter")}>{n.label}</span>
+                {active && <span className="micro ml-auto text-butter">Di sini</span>}
+              </Link>
+            </div>
           );
         })}
-        <button
-          type="button"
-          onClick={() => setMore((m) => !m)}
-          className={cx(
-            "flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-semibold",
-            more || moreActive ? "bg-ink text-bg" : "text-ink-soft",
-          )}
-        >
-          <MoreHorizontal className="h-[18px] w-[18px]" />
-          Lainnya
-        </button>
       </nav>
-    </>
+      <div data-menu-fade className="mt-6 flex items-center gap-x-4 gap-y-2 text-[13px] font-semibold">
+        <div className="flex flex-1 flex-wrap gap-x-4 gap-y-1.5">
+          {SOCIALS.map((s) => (
+            <a key={s.href} href={s.href} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline">
+              {s.label}
+            </a>
+          ))}
+        </div>
+        <ThemeToggle className="bg-white/15 text-white hover:bg-white/25 hover:text-white" />
+      </div>
+    </div>
   );
 }

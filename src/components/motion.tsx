@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { clsx as cx } from "clsx";
-import { gsap, ScrollTrigger, prefersReducedMotion } from "@/lib/gsap";
+import { gsap, ScrollTrigger } from "@/lib/gsap";
 
 /** Judul yang muncul huruf demi huruf saat masuk viewport (atau saat teksnya berganti). */
 export function SplitText({ text, className, as: Tag = "span" }: { text: string; className?: string; as?: "span" | "h1" | "h2" }) {
   const ref = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || prefersReducedMotion()) return;
+    if (!el) return;
     const chars = el.querySelectorAll("[data-ch]");
     const tween = gsap.fromTo(
       chars,
@@ -50,10 +50,6 @@ export function CountUp({ value, className, format = (n: number) => n.toLocaleSt
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (prefersReducedMotion()) {
-      el.textContent = format(value);
-      return;
-    }
     const o = { v: 0 };
     const tween = gsap.to(o, {
       v: value,
@@ -80,7 +76,7 @@ export function SignalBars({ active = true, className }: { active?: boolean; cla
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el || !active || prefersReducedMotion()) return;
+    if (!el || !active) return;
     const bars = el.querySelectorAll("span");
     const tweens = Array.from(bars).map((b, i) =>
       gsap.to(b, { scaleY: 0.3, duration: 0.35 + i * 0.08, repeat: -1, yoyo: true, ease: "sine.inOut", delay: i * 0.1 }),
@@ -105,7 +101,7 @@ export function Tilt({ children, className, max = 7 }: { children: ReactNode; cl
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el || prefersReducedMotion() || matchMedia("(pointer: coarse)").matches) return;
+    if (!el || matchMedia("(pointer: coarse)").matches) return;
     gsap.set(el, { transformPerspective: 700 });
     const rx = gsap.quickTo(el, "rotationX", { duration: 0.5, ease: "power3.out" });
     const ry = gsap.quickTo(el, "rotationY", { duration: 0.5, ease: "power3.out" });
@@ -140,7 +136,7 @@ export function Ticker({ children, speed = 40 }: { children: ReactNode; speed?: 
   const track = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = track.current;
-    if (!el || prefersReducedMotion()) return;
+    if (!el) return;
     const tween = gsap.to(el, { xPercent: -50, ease: "none", duration: el.scrollWidth / 2 / speed, repeat: -1 });
     const pause = () => tween.pause();
     const play = () => tween.play();
@@ -161,38 +157,6 @@ export function Ticker({ children, speed = 40 }: { children: ReactNode; speed?: 
         </div>
       </div>
     </div>
-  );
-}
-
-/** Garis lengkung khas desain jkt48connect yang tergambar mengikuti scroll. */
-export function ScrollLoop({ className }: { className?: string }) {
-  const ref = useRef<SVGPathElement>(null);
-  useLayoutEffect(() => {
-    const p = ref.current;
-    if (!p || prefersReducedMotion()) return;
-    const len = p.getTotalLength();
-    gsap.set(p, { strokeDasharray: len, strokeDashoffset: len });
-    const tween = gsap.to(p, {
-      strokeDashoffset: 0,
-      ease: "none",
-      scrollTrigger: { trigger: document.body, start: "top top", end: "bottom bottom", scrub: 0.6 },
-    });
-    return () => {
-      tween.scrollTrigger?.kill();
-      tween.kill();
-    };
-  }, []);
-  return (
-    <svg viewBox="0 0 400 1600" preserveAspectRatio="none" className={cx("pointer-events-none", className)} aria-hidden>
-      <path
-        ref={ref}
-        d="M380 0 C 120 160, 40 320, 220 460 S 420 760, 160 900 S -40 1200, 260 1340 S 380 1520, 120 1600"
-        fill="none"
-        stroke="var(--brand)"
-        strokeOpacity="0.16"
-        strokeWidth="2"
-      />
-    </svg>
   );
 }
 

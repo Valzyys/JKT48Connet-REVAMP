@@ -12,22 +12,25 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type NavItem = { to: string; label: string; icon: LucideIcon };
+export type NavItem = { to: string; label: string; icon: LucideIcon; group: NavGroup };
+export type NavGroup = "Utama" | "Arsip" | "Info";
 
 export const NAV: NavItem[] = [
-  { to: "/", label: "Beranda", icon: House },
-  { to: "/live", label: "Live", icon: Radio },
-  { to: "/theater", label: "Theater", icon: Ticket },
-  { to: "/schedule", label: "Jadwal", icon: CalendarDays },
-  { to: "/member", label: "Member", icon: Users },
-  { to: "/recent", label: "Recent", icon: History },
-  { to: "/news", label: "Berita", icon: Newspaper },
-  { to: "/birthday", label: "Birthday", icon: Cake },
-  { to: "/video", label: "Video", icon: PlayCircle },
-  { to: "/about", label: "Tentang", icon: Info },
+  { to: "/", label: "Beranda", icon: House, group: "Utama" },
+  { to: "/live", label: "Live", icon: Radio, group: "Utama" },
+  { to: "/theater", label: "Theater", icon: Ticket, group: "Utama" },
+  { to: "/schedule", label: "Jadwal", icon: CalendarDays, group: "Utama" },
+  { to: "/member", label: "Member", icon: Users, group: "Utama" },
+  { to: "/recent", label: "Recent", icon: History, group: "Arsip" },
+  { to: "/news", label: "Berita", icon: Newspaper, group: "Arsip" },
+  { to: "/birthday", label: "Birthday", icon: Cake, group: "Arsip" },
+  { to: "/video", label: "Video", icon: PlayCircle, group: "Arsip" },
+  { to: "/about", label: "Tentang", icon: Info, group: "Info" },
 ];
 
-/** Empat menu utama di navigasi bawah (HP); sisanya masuk "Lainnya". */
+export const NAV_GROUPS: NavGroup[] = ["Utama", "Arsip", "Info"];
+
+/** Empat menu utama di dock bawah (HP); semua menu ada di layar menu penuh. */
 export const MOBILE_MAIN = ["/", "/live", "/schedule", "/member"];
 
 export function isActive(path: string, to: string) {
