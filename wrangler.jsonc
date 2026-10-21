@@ -2,8 +2,12 @@
   // Cloudflare Workers + Static Assets.
   // Deploy: `npm run deploy`  ·  Setup awal: `npm run cf:setup`
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "jkt48connect",
+  // Harus sama dengan nama Worker di dashboard Cloudflare (Workers Builds menolak nama berbeda).
+  "name": "jkt48connet-revamp",
   "main": "worker/index.ts",
+  // Build Vite dijalankan otomatis sebelum `wrangler deploy` / `versions upload` / `dev`,
+  // jadi Workers Builds cukup memakai perintah default.
+  "build": { "command": "npm run build" },
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./dist",

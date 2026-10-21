@@ -1,5 +1,6 @@
 import "@fontsource-variable/archivo/wdth.css";
-import "@fontsource-variable/doto";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
 import "./styles.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

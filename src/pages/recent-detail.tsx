@@ -14,7 +14,7 @@ function pickMoments(list: string[], n = 6) {
 }
 
 function H2({ children }: { children: React.ReactNode }) {
-  return <h2 className="condensed mb-1 border-b border-line pb-2 text-[24px] uppercase leading-none">{children}</h2>;
+  return <h2 className="condensed mb-3 text-[28px] uppercase leading-none">{children}</h2>;
 }
 
 export function RecentDetailPage() {
@@ -25,7 +25,7 @@ export function RecentDetailPage() {
 
   return (
     <Page deps={[r]}>
-      <div className="container-x pt-20 sm:pt-24">
+      <div className="container-x pt-6">
         <BackLink to="/recent" label="Semua recent live" />
 
         {recent.isError ? (
@@ -39,8 +39,8 @@ export function RecentDetailPage() {
           </div>
         ) : (
           <>
-            <div data-reveal className="flex flex-wrap items-end gap-5 border-b border-ink pb-5 pt-6">
-              <Img src={r.img} alt={r.name} eager className="h-24 w-24 rounded-md object-cover object-top" />
+            <div data-reveal className="flex flex-wrap items-end gap-5 border-b-2 border-brand pb-5 pt-6">
+              <Img src={r.img} alt={r.name} eager className="h-24 w-24 rounded-2xl object-cover object-top" />
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-ink-soft">
                   <PlatformTag platform={r.platform} />
@@ -66,7 +66,7 @@ export function RecentDetailPage() {
               )}
             </div>
 
-            <dl data-reveal className="grid grid-cols-2 border-b border-line sm:grid-cols-5">
+            <dl data-reveal className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
               {[
                 ["Durasi", fmtDuration(r.durationMs)],
                 ["Penonton", fmtNumber(r.viewers)],
@@ -74,8 +74,8 @@ export function RecentDetailPage() {
                 ["Komentar", fmtNumber(r.comments)],
                 ["Pemberi komentar", fmtNumber(r.commenters)],
               ].map(([k, v]) => (
-                <div key={k} className="border-line py-4 pr-4 sm:border-r sm:pl-4 sm:first:pl-0 sm:last:border-r-0">
-                  <dt className="text-[13px] text-ink-soft">{k}</dt>
+                <div key={k} className="panel p-4 first:border-brand first:bg-brand first:text-white">
+                  <dt className="micro opacity-70">{k}</dt>
                   <dd className="num condensed mt-1 text-[32px] leading-none">{v}</dd>
                 </div>
               ))}
@@ -91,9 +91,9 @@ export function RecentDetailPage() {
                 {r.fans.length > 0 && (
                   <section data-reveal>
                     <H2>Top supporter</H2>
-                    <ol>
+                    <ol className="panel overflow-hidden">
                       {r.fans.slice(0, 10).map((f, i) => (
-                        <li key={`${f.name}-${i}`} className="grid grid-cols-[1.5rem_auto_1fr_auto] items-center gap-3 border-b border-line py-2">
+                        <li key={`${f.name}-${i}`} className="grid grid-cols-[1.5rem_auto_1fr_auto] items-center gap-3 border-t border-line px-4 py-2.5 first:border-t-0">
                           <span className="num text-ink-soft">{i + 1}</span>
                           <Img src={f.avatar} alt={f.name} className="h-8 w-8 rounded-full object-cover" />
                           <span className="truncate font-medium">{f.name}</span>
@@ -109,9 +109,9 @@ export function RecentDetailPage() {
                 {r.gifts.length > 0 && (
                   <section data-reveal>
                     <H2>Gift</H2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3">
+                    <div className="panel grid grid-cols-2 overflow-hidden sm:grid-cols-3">
                       {r.gifts.slice(0, 12).map((g) => (
-                        <div key={g.name} className="flex items-center gap-3 border-b border-line py-2.5 pr-3">
+                        <div key={g.name} className="flex items-center gap-3 border-t border-line px-4 py-2.5">
                           {g.img ? <img src={g.img} alt="" loading="lazy" className="h-9 w-9 shrink-0 object-contain" /> : <span className="h-9 w-9 shrink-0 rounded bg-surface" />}
                           <div className="min-w-0">
                             <p className="truncate text-[14px] font-semibold">{g.name}</p>
@@ -141,7 +141,7 @@ export function RecentDetailPage() {
               {r.leaderboard && (
                 <aside data-reveal className="lg:sticky lg:top-20 lg:self-start">
                   <H2>Rekap</H2>
-                  <a href={r.leaderboard} target="_blank" rel="noopener noreferrer" className="mt-3 block overflow-hidden rounded-md border border-line">
+                  <a href={r.leaderboard} target="_blank" rel="noopener noreferrer" className="mt-3 block overflow-hidden rounded-2xl border border-line">
                     <img src={r.leaderboard} alt="Rekap dan leaderboard sesi live" loading="lazy" className="w-full" />
                   </a>
                 </aside>

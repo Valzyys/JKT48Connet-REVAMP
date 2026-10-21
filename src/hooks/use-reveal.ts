@@ -33,12 +33,14 @@ export function useReveal(scope: RefObject<HTMLElement | null>, deps: unknown[] 
         els.forEach((el) => (el.dataset.revealed = ""));
         gsap.fromTo(
           els,
-          { opacity: 0, y: 28 },
+          { opacity: 0, y: 40, scale: 0.96 },
           {
             opacity: 1,
             y: 0,
-            duration: 0.7,
-            stagger: 0.06,
+            scale: 1,
+            duration: 0.75,
+            ease: "back.out(1.4)",
+            stagger: 0.07,
             overwrite: true,
             clearProps: "transform",
             onComplete: () => els.forEach(show),

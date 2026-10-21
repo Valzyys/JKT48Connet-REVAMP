@@ -1,30 +1,45 @@
-export type NavItem = { to: string; label: string };
+import {
+  Cake,
+  CalendarDays,
+  History,
+  House,
+  Info,
+  Newspaper,
+  PlayCircle,
+  Radio,
+  Ticket,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
-/** Menu situs, bernomor seperti urutan lagu di setlist theater (M01, M02, …). */
+export type NavItem = { to: string; label: string; icon: LucideIcon };
+
 export const NAV: NavItem[] = [
-  { to: "/live", label: "Live" },
-  { to: "/theater", label: "Theater" },
-  { to: "/schedule", label: "Jadwal" },
-  { to: "/member", label: "Member" },
-  { to: "/news", label: "Berita" },
-  { to: "/recent", label: "Recent" },
-  { to: "/birthday", label: "Birthday" },
-  { to: "/video", label: "Video" },
-  { to: "/about", label: "Tentang" },
+  { to: "/", label: "Beranda", icon: House },
+  { to: "/live", label: "Live", icon: Radio },
+  { to: "/theater", label: "Theater", icon: Ticket },
+  { to: "/schedule", label: "Jadwal", icon: CalendarDays },
+  { to: "/member", label: "Member", icon: Users },
+  { to: "/recent", label: "Recent", icon: History },
+  { to: "/news", label: "Berita", icon: Newspaper },
+  { to: "/birthday", label: "Birthday", icon: Cake },
+  { to: "/video", label: "Video", icon: PlayCircle },
+  { to: "/about", label: "Tentang", icon: Info },
 ];
 
-/** "M03" untuk item ke-3. */
-export function setlistNo(i: number) {
-  return `M${String(i + 1).padStart(2, "0")}`;
+/** Empat menu utama di navigasi bawah (HP); sisanya masuk "Lainnya". */
+export const MOBILE_MAIN = ["/", "/live", "/schedule", "/member"];
+
+export function isActive(path: string, to: string) {
+  return to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`);
 }
 
-/** Nomor setlist untuk path halaman (dipakai judul halaman). */
-export function setlistNoFor(path: string) {
-  const i = NAV.findIndex((n) => path === n.to || path.startsWith(`${n.to}/`));
-  return i >= 0 ? setlistNo(i) : "";
+export function navFor(path: string) {
+  return NAV.find((n) => n.to !== "/" && isActive(path, n.to)) ?? NAV[0];
 }
 
 export const SOCIALS = [
   { label: "X @JKT48Connect", href: "https://x.com/JKT48Connect" },
   { label: "Bot Discord", href: "https://discord.com/discovery/applications/1305141693477027891" },
+  { label: "Public API", href: "https://api.jkt48connect.app/docs" },
 ];

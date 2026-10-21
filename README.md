@@ -1,31 +1,34 @@
 # JKT48Connect — Revamp UI
 
-Remake UI publik JKT48Connect dengan konsep **pertunjukan theater**. Data dari
-[JKT48Connect API](https://api.jkt48connect.app/docs), animasi memakai **GSAP**, dan situs siap jalan di
-**Cloudflare Workers** atau **Cloudflare Pages**.
+Remake UI publik JKT48Connect dengan gaya **Fan Signal**, identitas visual yang sama dengan gambar desain
+`jkt48connect` dari API. Data dari [JKT48Connect API](https://api.jkt48connect.app/docs), animasi penuh memakai
+**GSAP**, siap jalan di **Cloudflare Workers** atau **Cloudflare Pages**.
 
-![Beranda](docs/screenshots/02-home-desktop-dark.jpg)
+![Beranda](docs/screenshots/02-home-desktop.jpg)
+
+![Animasi](docs/demo.webp)
 
 ## Konsep
 
-Semua bagian situs meminjam bahasa visual JKT48 Theater, bukan template landing page biasa:
-
 | Bagian | Wujud |
 | --- | --- |
-| Intro | Tirai beludru tertutup, lampu sorot menyapu panggung, papan LED "JKT48CONNECT" menyala huruf demi huruf, lalu tirai dibuka (GSAP). Sekali per sesi, bisa dilewati, otomatis mati untuk _reduced motion_. |
-| Header & navigasi | Logo potongan tiket. Menu bernomor seperti setlist theater (`M01 Live`, `M02 Theater`, …). Papan **ON AIR** LED menyala dan berkedip saat ada member yang live. Di HP, menu terbuka sebagai kartu setlist. |
-| Hero | Tiket fisik untuk show berikutnya: garis sobek dengan takik, kode show sebagai nomor tiket, barcode, hitung mundur, cap "Seitansai". Di sebelahnya panggung ON AIR berisi member yang live dengan cincin penlight. Lampu sorot latar mengikuti kursor. |
-| Footer | _Curtain call_: rumbai tirai, "Terima kasih sudah datang ke theater", hitung mundur ke show berikutnya. |
-| Isi halaman | Daftar bergaya papan jadwal: tanggal besar, garis tipis, kolom angka sejajar. |
+| Layout | Desktop 3 kolom: rail ikon di kiri, kolom utama, sidebar kanan (cari member, jadwal, birthday, footer). HP: navigasi bawah dengan sheet "Lainnya". |
+| Intro | Piksel beterbangan menyusun logo salib JKT48Connect, bar sinyal naik, garis lengkung tergambar, nama muncul huruf demi huruf, lalu layar pecah jadi kotak-kotak yang menyusut. Sekali per sesi, bisa dilewati. |
+| Navigasi | Kotak merah di rail meluncur (elastic) ke menu aktif. Judul topbar berganti dengan animasi geser. Ticker sinyal berjalan berisi member live dan show berikutnya. |
+| Hero | Carousel banner desain **jkt48connect** (kartu notifikasi live + banner jadwal show): wipe, zoom pelan, progress bar per slide, bisa digeser. Show yang desainnya masih *pending* tampil sebagai panel merah. |
+| Isi | Statistik yang menghitung naik, kartu dengan tilt 3D, nomor merah "01" ala lineup, judul "JUDUL / jumlah" yang muncul huruf demi huruf, poster jadwal potret jkt48connect, dan daftar jadwal yang masuk bertahap. |
+| Transisi halaman | Sapuan kotak-kotak merah di kolom utama, lalu konten baru naik. |
+| Latar | Pola tanda "+" dan garis lengkung yang tergambar mengikuti scroll. |
 
-Font: **Archivo** (variable, versi condensed untuk judul) dan **Doto** (dot-matrix untuk papan LED), self-hosted via
-Fontsource. Tema gelap ("lampu theater dimatikan") jadi default; tema terang berwarna kertas tiket.
+Font: **Archivo** (condensed untuk judul) dan **IBM Plex Mono** (label kecil), self-hosted via Fontsource. Palet krem +
+merah JKT48Connect, dengan mode gelap opsional. Semua gambar desain (jadwal, notifikasi live, leaderboard) memakai
+tema `jkt48connect`, bukan photobook.
 
 ## Halaman & endpoint
 
 | Route | Isi | Endpoint |
 | --- | --- | --- |
-| `/` | Tiket show berikutnya, ON AIR, jadwal theater, recent live, berita, ulang tahun, video | beberapa |
+| `/` | Carousel banner jkt48connect, statistik, live, poster show, recent live, berita, video (+ jadwal & birthday di sidebar) | beberapa |
 | `/live` | Member yang sedang live (filter Showroom / IDN) | `GET /api/now_live?group=jkt48` |
 | `/theater`, `/theater/:id` | Daftar show & detail: lineup, seitansai, graduation, setlist, rekaman, poster jadwal | `GET /api/theater`, `/api/theater/:id` |
 | `/schedule` | Show, exclusive, dan event per hari (WIB) | `GET /api/next_schedule`, `/api/theater` |
@@ -89,6 +92,19 @@ npm run cf:secret           # = wrangler secret put JKT48CONNECT_API_KEY
 
 Uji Worker hasil build secara lokal: `npm run cf:dev`.
 
+### Workers Builds (hubungkan repo dari dashboard Cloudflare)
+
+Nama Worker di dashboard harus sama dengan `name` di `wrangler.jsonc` (sekarang `jkt48connet-revamp`). Pengaturan
+build:
+
+| Field | Isi |
+| --- | --- |
+| Build command | kosongkan (wrangler menjalankan `npm run build` sendiri lewat `build.command`) |
+| Deploy command | `npx wrangler deploy` |
+| Non-production branch deploy command | `npx wrangler versions upload` |
+
+Lalu tambahkan secret `JKT48CONNECT_API_KEY` di **Worker → Settings → Variables and Secrets**.
+
 ### Cloudflare Pages
 
 Folder [`functions/api/[[path]].ts`](functions/api/%5B%5Bpath%5D%5D.ts) memakai proxy yang sama.
@@ -129,7 +145,7 @@ repository secrets berikut:
 
 ```
 src/
-  components/   intro (tirai), header (setlist + ON AIR), hero (tiket), footer (curtain call), baris & kartu
+  components/   intro (piksel), shell (rail, topbar, sidebar, nav bawah), carousel, motion (GSAP), kartu
   pages/        satu file per halaman (lazy-loaded)
   lib/          api.ts (klien), jkt48.ts (normalisasi respons), queries, format, gsap
   hooks/        use-reveal (ScrollTrigger), use-member-index, use-theme
@@ -141,18 +157,18 @@ docs/screenshots/
 
 ## Screenshot
 
-Diambil dari dev server dengan data asli API pada 21 Oktober 2026.
+Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 
 | | |
 | --- | --- |
-| ![Intro: tirai & papan LED](docs/screenshots/01-intro.jpg) | ![Intro: tirai dibuka](docs/screenshots/01b-intro-open.jpg) |
-| ![Beranda terang](docs/screenshots/03-home-desktop-light.jpg) | ![Live](docs/screenshots/04-live.jpg) |
+| ![Intro: logo piksel](docs/screenshots/01-intro.jpg) | ![Intro: layar pecah](docs/screenshots/01b-intro-open.jpg) |
+| ![Beranda gelap](docs/screenshots/02b-home-desktop-dark.jpg) | ![Live](docs/screenshots/04-live.jpg) |
 | ![Theater](docs/screenshots/05-theater.jpg) | ![Detail theater](docs/screenshots/06-theater-detail.jpg) |
 | ![Jadwal](docs/screenshots/07-schedule.jpg) | ![Member](docs/screenshots/08-members.jpg) |
 | ![Profil member](docs/screenshots/09-member-detail.jpg) | ![Birthday](docs/screenshots/10-birthday.jpg) |
 | ![Recent](docs/screenshots/11-recent.jpg) | ![Detail recent](docs/screenshots/12-recent-detail.jpg) |
 | ![Berita](docs/screenshots/13-news.jpg) | ![Detail berita](docs/screenshots/14-news-detail.jpg) |
-| ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu setlist mobile](docs/screenshots/19-mobile-menu.jpg) |
+| ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu lainnya mobile](docs/screenshots/19-mobile-menu.jpg) |
 
 ---
 

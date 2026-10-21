@@ -30,11 +30,13 @@ export function MembersPage() {
   return (
     <Page deps={[shown]}>
       <PageHeader
+        label="The lineup"
         title="Member"
-        desc={members.isSuccess ? `${shown.length} member` : "Direktori member JKT48."}
+        count={members.isSuccess ? shown.length : undefined}
+        desc="Direktori member JKT48. Ketik nama atau nama panggilan."
         aside={
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex h-9 items-center gap-2 rounded-md border border-line px-3 focus-within:border-ink">
+            <label className="flex h-10 items-center gap-2 rounded-full border border-line bg-card px-4 focus-within:border-brand">
               <Search className="h-4 w-4 text-ink-soft" />
               <input
                 value={query}
@@ -54,9 +56,9 @@ export function MembersPage() {
         ) : members.isLoading ? (
           <SkeletonGrid count={12} className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-4 lg:grid-cols-6" item="aspect-[3/4]" />
         ) : shown.length ? (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-4 lg:grid-cols-6">
-            {shown.map((m) => (
-              <MemberCard key={m.id} m={m} />
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6">
+            {shown.map((m, i) => (
+              <MemberCard key={m.id} m={m} n={i + 1} />
             ))}
           </div>
         ) : (
