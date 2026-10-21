@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 
@@ -28,12 +29,16 @@ export default defineConfig(({ mode }) => {
   const upstream = env.API_UPSTREAM || "https://api.jkt48connect.app";
   const key = env.JKT48CONNECT_API_KEY ?? "";
 
+  // Di balik proxy keluar (kantor/CI), request ke upstream lewat HTTPS_PROXY.
+  const outbound = process.env.HTTPS_PROXY || process.env.https_proxy;
+
   // Proxy lokal meniru worker/proxy.ts: key ditambahkan di server dev, bukan di browser.
   const proxy = {
     "/api": {
       target: upstream,
       changeOrigin: true,
       headers: key ? { "X-API-Key": key } : {},
+      agent: outbound ? new HttpsProxyAgent(outbound) : undefined,
     },
   };
 

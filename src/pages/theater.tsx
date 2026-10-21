@@ -1,11 +1,11 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ShowCard } from "@/components/cards";
+import { ShowRow } from "@/components/cards";
 import { Page } from "@/components/page";
-import { EmptyState, ErrorState, PageHero, Pagination, SkeletonGrid } from "@/components/ui";
+import { Empty, ErrorState, PageHeader, Pagination, SkeletonList } from "@/components/ui";
 import { q } from "@/lib/queries";
 
-const PER = 12;
+const PER = 15;
 
 export function TheaterPage() {
   const { page = 1 } = useSearch({ strict: false }) as { page?: number };
@@ -14,27 +14,17 @@ export function TheaterPage() {
 
   return (
     <Page deps={[theater.data]}>
-      <PageHero
-        eyebrow="JKT48 Theater"
-        title={
-          <>
-            Jadwal <span className="text-brand">theater.</span>
-          </>
-        }
-        desc="Semua pertunjukan di JKT48 Theater: setlist, tanggal, member yang tampil, dan seitansai."
-      />
-      <section className="container-x pt-12">
+      <PageHeader title="Theater" desc="Pertunjukan di JKT48 Theater: setlist, member yang tampil, dan seitansai." />
+      <section className="container-x pt-4">
         {theater.isError ? (
           <ErrorState error={theater.error} onRetry={() => theater.refetch()} />
         ) : theater.isLoading ? (
-          <SkeletonGrid count={6} className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3" item="aspect-[4/3.6] rounded-[28px]" />
+          <SkeletonList rows={8} />
         ) : theater.data?.items.length ? (
           <>
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {theater.data.items.map((s) => (
-                <ShowCard key={s.id} s={s} />
-              ))}
-            </div>
+            {theater.data.items.map((s) => (
+              <ShowRow key={s.id} s={s} lineup />
+            ))}
             <Pagination
               page={page}
               perpage={PER}
@@ -43,7 +33,7 @@ export function TheaterPage() {
             />
           </>
         ) : (
-          <EmptyState title="Belum ada jadwal" desc="Coba lagi nanti." />
+          <Empty>Belum ada jadwal theater.</Empty>
         )}
       </section>
     </Page>

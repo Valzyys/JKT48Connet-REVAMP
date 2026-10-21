@@ -11,47 +11,37 @@
   --color-line: var(--line);
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
-  --color-brand-soft: var(--brand-soft);
-  --color-gold: var(--gold);
 
-  --font-display: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-led: "Doto Variable", ui-monospace, monospace;
 }
 
 :root {
-  /* Light — kertas hangat + crimson JKT + aksen emas */
-  --bg: #f6f3ee;
-  --surface: #ece7df;
-  --card: #fffdf9;
-  --ink: #111114;
-  --ink-soft: #6a655e;
-  --line: rgb(17 17 20 / 0.09);
-  --brand: #e30b1c;
-  --brand-strong: #b8071a;
-  --brand-soft: #fbe3e1;
-  --gold: #e3ad3a;
+  /* Terang: kertas tiket theater */
+  --bg: #f2ede3;
+  --surface: #e6dfd2;
+  --card: #fbf8f2;
+  --ink: #17120f;
+  --ink-soft: #6f665c;
+  --line: rgb(23 18 15 / 0.13);
+  --brand: #d7192b;
+  --brand-strong: #a80f1e;
+  --glow: rgb(215 25 43 / 0.35);
   color-scheme: light;
 }
 
 .dark {
-  /* Dark — charcoal pekat + crimson menyala */
-  --bg: #0b0b0d;
-  --surface: #16161a;
-  --card: #121215;
-  --ink: #f1efea;
-  --ink-soft: #9b978f;
-  --line: rgb(255 255 255 / 0.08);
-  --brand: #ff3446;
-  --brand-strong: #ff6170;
-  --brand-soft: #2a1013;
-  --gold: #f0bd4f;
+  /* Gelap: ruang theater saat lampu dimatikan */
+  --bg: #0d0a0a;
+  --surface: #1a1414;
+  --card: #141010;
+  --ink: #f0ebe4;
+  --ink-soft: #988d84;
+  --line: rgb(255 240 230 / 0.1);
+  --brand: #ff2e43;
+  --brand-strong: #ff5c6c;
+  --glow: rgb(255 46 67 / 0.55);
   color-scheme: dark;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
-  scroll-behavior: smooth;
 }
 
 body {
@@ -59,8 +49,8 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
   overflow-x: hidden;
 }
 
@@ -74,10 +64,65 @@ body.is-locked {
 }
 
 @layer components {
+  /* Papan LED dot-matrix (ON AIR, jam, kode tiket). */
+  .led {
+    font-family: var(--font-led);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: var(--brand);
+    text-shadow:
+      0 0 4px var(--glow),
+      0 0 14px var(--glow);
+  }
+  .led-off {
+    color: var(--ink-soft);
+    opacity: 0.45;
+    text-shadow: none;
+  }
+
+  /* Tekstur tirai beludru: lipatan vertikal + bayangan atas/bawah. */
+  .velvet {
+    background:
+      linear-gradient(180deg, rgb(0 0 0 / 0.55), transparent 22%, transparent 70%, rgb(0 0 0 / 0.6)),
+      repeating-linear-gradient(90deg, #3b060c 0, #7a0f1b 2.2%, #a3172a 3.4%, #6b0c17 5%, #3b060c 7%);
+  }
+
+  /* Tiket: takik setengah lingkaran di atas & bawah garis sobek (posisi --cut). */
+  .ticket {
+    --cut: 70%;
+    --r: 14px;
+    -webkit-mask:
+      radial-gradient(circle var(--r) at var(--cut) 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--r) at var(--cut) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+    mask:
+      radial-gradient(circle var(--r) at var(--cut) 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--r) at var(--cut) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+  }
+  @media (max-width: 767px) {
+    /* Di HP sobekan horizontal: takik di kiri & kanan. */
+    .ticket {
+      --cut: calc(100% - var(--stub, 128px));
+      -webkit-mask:
+        radial-gradient(circle var(--r) at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle var(--r) at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat;
+      mask:
+        radial-gradient(circle var(--r) at 0 var(--cut), #0000 98%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle var(--r) at 100% var(--cut), #0000 98%, #000) right / 51% 100% no-repeat;
+    }
+  }
+
+  /* Cincin penlight di avatar member yang sedang live. */
+  .penlight {
+    box-shadow:
+      0 0 0 2px var(--bg),
+      0 0 0 4px var(--brand),
+      0 0 18px 2px var(--glow);
+  }
+
   .container-x {
     margin-inline: auto;
     width: 100%;
-    max-width: 1400px;
+    max-width: 1320px;
     padding-inline: 1rem;
   }
   @media (min-width: 640px) {
@@ -87,111 +132,102 @@ body.is-locked {
   }
   @media (min-width: 1024px) {
     .container-x {
-      padding-inline: 2.5rem;
+      padding-inline: 2rem;
     }
   }
 
-  .eyebrow {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--brand);
+  /* Judul condensed ala papan jadwal. */
+  .condensed {
+    font-stretch: 72%;
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
 
   .num {
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
 
-  .chip {
+  .tag {
     display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
     flex-shrink: 0;
-    white-space: nowrap;
-    border-radius: 999px;
-    padding: 0.2rem 0.6rem;
-    font-size: 10px;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 3px;
+    padding: 0.1rem 0.35rem;
+    font-size: 10.5px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
     text-transform: uppercase;
+    white-space: nowrap;
   }
 
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    border-radius: 999px;
-    padding: 0.7rem 1.2rem;
-    font-size: 0.875rem;
+    gap: 0.45rem;
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    font-size: 14px;
     font-weight: 600;
     transition:
-      transform 0.2s ease,
-      background-color 0.2s ease,
-      color 0.2s ease,
-      border-color 0.2s ease;
-  }
-  .btn:active {
-    transform: scale(0.97);
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
   }
   .btn-primary {
+    background: var(--ink);
+    color: var(--bg);
+  }
+  .btn-primary:hover {
     background: var(--brand);
     color: #fff;
   }
-  .btn-primary:hover {
-    background: var(--brand-strong);
-  }
   .btn-ghost {
     border: 1px solid var(--line);
-    background: var(--card);
     color: var(--ink);
   }
   .btn-ghost:hover {
     border-color: var(--ink);
   }
 
-  .prose-legal h2 {
+  .link-arrow {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    transition: color 0.15s;
+  }
+  .link-arrow:hover {
+    color: var(--ink);
+  }
+
+  .prose-body h2 {
     margin-top: 2rem;
-    font-family: var(--font-display);
     font-size: 1.15rem;
     font-weight: 700;
     color: var(--ink);
   }
-  .prose-legal p,
-  .prose-legal li {
+  .prose-body p,
+  .prose-body li {
     color: var(--ink-soft);
     line-height: 1.75;
   }
-  .prose-legal p + p {
+  .prose-body p + p {
     margin-top: 0.85rem;
   }
-  .prose-legal ul {
+  .prose-body ul {
     margin-top: 0.6rem;
     list-style: disc;
     padding-left: 1.25rem;
   }
-  .prose-legal strong {
+  .prose-body strong {
     color: var(--ink);
   }
-  .prose-legal a {
+  .prose-body a {
     color: var(--brand);
     text-decoration: underline;
     text-underline-offset: 3px;
-  }
-}
-
-/* Marquee tanpa JS — dipakai di footer & strip hero */
-.marquee {
-  display: flex;
-  width: max-content;
-  animation: marquee 40s linear infinite;
-}
-@keyframes marquee {
-  to {
-    transform: translateX(-50%);
   }
 }
 
@@ -211,11 +247,5 @@ body.is-locked {
 @media (prefers-reduced-motion: reduce) {
   .js [data-reveal] {
     opacity: 1 !important;
-  }
-  .marquee {
-    animation: none;
-  }
-  html {
-    scroll-behavior: auto;
   }
 }

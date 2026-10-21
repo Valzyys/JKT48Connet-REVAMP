@@ -1,16 +1,14 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 
 export function NotFound() {
   return (
-    <section className="container-x flex min-h-[80vh] flex-col items-start justify-center pt-24">
-      <p className="eyebrow">Error 404</p>
-      <h1 className="mt-4 font-display text-[clamp(5rem,20vw,14rem)] font-extrabold leading-[0.85] tracking-[-0.06em]">
-        4<span className="text-brand">0</span>4
-      </h1>
-      <p className="mt-6 max-w-md text-ink-soft">Halaman yang kamu cari tidak ada atau sudah dipindahkan.</p>
-      <Link to="/" className="btn btn-primary mt-8">
-        <ArrowLeft className="h-4 w-4" /> Kembali ke beranda
+    <section className="container-x pt-24 sm:pt-28">
+      <div className="border-b border-ink pb-5">
+        <h1 className="condensed text-[clamp(4rem,14vw,9rem)] uppercase leading-[0.85]">404</h1>
+        <p className="mt-3 text-ink-soft">Halaman ini tidak ada atau sudah dipindahkan.</p>
+      </div>
+      <Link to="/" className="link-arrow mt-5 inline-block">
+        ← Kembali ke beranda
       </Link>
     </section>
   );

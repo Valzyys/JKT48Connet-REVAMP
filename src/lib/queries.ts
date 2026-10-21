@@ -14,7 +14,6 @@ export const q = {
     }),
   theater: (id: string) => queryOptions({ queryKey: ["theater-detail", id], queryFn: () => api.getTheater(id) }),
   nextSchedule: () => queryOptions({ queryKey: ["next-schedule"], queryFn: api.getNextSchedule }),
-  events: () => queryOptions({ queryKey: ["events"], queryFn: api.getEvents }),
   newsList: (page: number, perpage = 10) =>
     queryOptions({
       queryKey: ["news", page, perpage],

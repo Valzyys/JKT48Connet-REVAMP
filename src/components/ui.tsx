@@ -1,116 +1,56 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { clsx } from "clsx";
-import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, User } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { ApiError } from "@/lib/api";
-import { initials } from "@/lib/format";
+import { setlistNoFor } from "@/lib/nav";
 
 export function cx(...a: Parameters<typeof clsx>) {
   return clsx(...a);
 }
 
-/** Header halaman dalam (bukan beranda): eyebrow, judul besar, deskripsi. */
-export function PageHero({
-  eyebrow,
-  title,
-  desc,
-  children,
-}: {
-  eyebrow: string;
-  title: ReactNode;
-  desc?: ReactNode;
-  children?: ReactNode;
-}) {
+/** Kepala halaman dalam: nomor setlist (M01…), judul condensed besar, garis bawah. */
+export function PageHeader({ title, desc, aside }: { title: string; desc?: ReactNode; aside?: ReactNode }) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const no = setlistNoFor(path);
   return (
-    <section className="relative overflow-hidden border-b border-line">
-      <div className="container-x pb-10 pt-28 sm:pb-14 sm:pt-36">
-        <p data-reveal className="eyebrow">
-          {eyebrow}
-        </p>
-        <h1
-          data-reveal
-          className="mt-4 max-w-4xl font-display text-[clamp(2.5rem,7vw,5.5rem)] font-extrabold leading-[0.92] tracking-[-0.04em]"
-        >
-          {title}
-        </h1>
-        {desc && (
-          <p data-reveal className="mt-5 max-w-xl text-[15px] leading-relaxed text-ink-soft">
-            {desc}
-          </p>
-        )}
-        {children && (
-          <div data-reveal className="mt-7">
-            {children}
-          </div>
-        )}
+    <header className="container-x pt-24 sm:pt-28">
+      <div data-reveal className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-ink pb-5">
+        <div>
+          {no && <p className="led mb-2 text-[18px] leading-none">{no}</p>}
+          <h1 className="condensed text-[clamp(2.75rem,8vw,5.5rem)] uppercase leading-[0.85]">{title}</h1>
+          {desc && <p className="mt-3 max-w-xl text-ink-soft">{desc}</p>}
+        </div>
+        {aside}
       </div>
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand/15 blur-3xl"
-      />
-    </section>
+    </header>
   );
 }
 
-export function SectionHead({
-  eyebrow,
-  title,
-  meta,
-  to,
-  linkLabel = "Lihat semua",
-}: {
-  eyebrow: string;
-  title: ReactNode;
-  meta?: ReactNode;
-  to?: string;
-  linkLabel?: string;
-}) {
+export function SectionHead({ title, count, to, no }: { title: string; count?: ReactNode; to?: string; no?: string }) {
   return (
-    <div data-reveal className="mb-7 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h2 className="mt-2 font-display text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">{title}</h2>
-        {meta && <p className="mt-1.5 text-sm text-ink-soft">{meta}</p>}
-      </div>
+    <div data-reveal className="mb-4 flex items-baseline justify-between gap-4 border-t border-line pt-5">
+      <h2 className="condensed flex items-baseline gap-3 text-[30px] uppercase leading-none">
+        {no && <span className="led led-off text-[15px]">{no}</span>}
+        {title}
+        {count != null && <span className="num ml-2 text-[20px] font-semibold text-ink-soft">{count}</span>}
+      </h2>
       {to && (
-        <Link to={to} className="group inline-flex items-center gap-2 text-sm font-semibold text-ink">
-          {linkLabel}
-          <span className="grid h-8 w-8 place-items-center rounded-full border border-line transition group-hover:border-brand group-hover:bg-brand group-hover:text-white">
-            <ArrowRight className="h-4 w-4" />
-          </span>
+        <Link to={to} className="link-arrow">
+          Semua →
         </Link>
       )}
     </div>
   );
 }
 
-/** Gambar dengan placeholder inisial bila URL kosong atau gagal dimuat (sesuai saran docs). */
-export function Img({
-  src,
-  alt,
-  className,
-  fallbackClassName,
-  eager,
-}: {
-  src?: string;
-  alt: string;
-  className?: string;
-  fallbackClassName?: string;
-  eager?: boolean;
-}) {
+/** Gambar dengan placeholder netral bila URL kosong atau gagal dimuat (sesuai saran docs). */
+export function Img({ src, alt, className, eager }: { src?: string; alt: string; className?: string; eager?: boolean }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) {
     return (
-      <div
-        role="img"
-        aria-label={alt}
-        className={cx(
-          "grid place-items-center bg-gradient-to-br from-brand/25 via-surface to-gold/20 font-display font-extrabold text-ink/40",
-          className,
-          fallbackClassName,
-        )}
-      >
-        <span className="text-[clamp(1rem,4vw,2rem)]">{initials(alt) || "48"}</span>
+      <div role="img" aria-label={alt} className={cx("grid place-items-center bg-surface text-ink-soft/40", className)}>
+        <User className="h-1/3 max-h-12 w-1/3 max-w-12" strokeWidth={1.5} />
       </div>
     );
   }
@@ -127,7 +67,19 @@ export function Img({
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cx("animate-pulse rounded-2xl bg-surface", className)} />;
+  return <div className={cx("animate-pulse rounded-md bg-surface", className)} />;
+}
+
+export function SkeletonList({ rows = 5, className = "h-16" }: { rows?: number; className?: string }) {
+  return (
+    <div className="divide-y divide-line">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="py-3">
+          <Skeleton className={className} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function SkeletonGrid({ count = 8, className, item }: { count?: number; className: string; item: string }) {
@@ -140,14 +92,8 @@ export function SkeletonGrid({ count = 8, className, item }: { count?: number; c
   );
 }
 
-export function EmptyState({ title, desc, icon }: { title: string; desc?: string; icon?: ReactNode }) {
-  return (
-    <div className="flex flex-col items-center rounded-3xl border border-dashed border-line bg-card/60 px-6 py-14 text-center">
-      {icon && <div className="mb-4 grid h-12 w-12 place-items-center rounded-full bg-surface text-ink-soft">{icon}</div>}
-      <p className="font-display text-lg font-bold">{title}</p>
-      {desc && <p className="mt-1.5 max-w-sm text-sm text-ink-soft">{desc}</p>}
-    </div>
-  );
+export function Empty({ children }: { children: ReactNode }) {
+  return <p className="border-y border-line py-10 text-center text-ink-soft">{children}</p>;
 }
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
@@ -158,16 +104,14 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
       : status === 404
         ? "Data tidak ditemukan."
         : status === 401
-          ? "Akses API ditolak. Periksa konfigurasi API key di server."
-          : "Gagal memuat data. Periksa koneksi lalu coba lagi.";
+          ? "Akses API ditolak. Periksa API key di server."
+          : "Data gagal dimuat.";
   return (
-    <div className="flex flex-col items-center rounded-3xl border border-brand/30 bg-brand-soft/40 px-6 py-12 text-center">
-      <AlertTriangle className="h-6 w-6 text-brand" />
-      <p className="mt-3 font-display text-lg font-bold">Ups, ada kendala</p>
-      <p className="mt-1 max-w-sm text-sm text-ink-soft">{msg}</p>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-y border-line py-6">
+      <p className="text-ink-soft">{msg}</p>
       {onRetry && (
-        <button type="button" onClick={onRetry} className="btn btn-ghost mt-5">
-          <RefreshCw className="h-4 w-4" /> Coba lagi
+        <button type="button" onClick={onRetry} className="btn btn-ghost">
+          Muat ulang
         </button>
       )}
     </div>
@@ -188,42 +132,61 @@ export function Pagination({
   const pages = Math.max(1, Math.ceil(total / perpage));
   if (pages <= 1) return null;
   const btn =
-    "grid h-10 min-w-10 place-items-center rounded-full border border-line px-3 text-sm font-semibold transition hover:border-ink disabled:pointer-events-none disabled:opacity-40";
+    "inline-flex h-9 items-center gap-1 rounded-md border border-line px-3 text-sm font-semibold transition hover:border-ink disabled:pointer-events-none disabled:opacity-35";
   return (
-    <nav aria-label="Halaman" className="mt-12 flex items-center justify-center gap-2">
-      <button type="button" className={btn} disabled={page <= 1} onClick={() => onChange(page - 1)} aria-label="Sebelumnya">
-        <ChevronLeft className="h-4 w-4" />
+    <nav aria-label="Halaman" className="mt-8 flex items-center justify-between border-t border-line pt-5">
+      <button type="button" className={btn} disabled={page <= 1} onClick={() => onChange(page - 1)}>
+        <ChevronLeft className="h-4 w-4" /> Sebelumnya
       </button>
-      <span className="num px-3 text-sm text-ink-soft">
-        <span className="text-ink">{page}</span> / {pages}
+      <span className="num text-sm text-ink-soft">
+        Halaman {page} dari {pages}
       </span>
-      <button
-        type="button"
-        className={btn}
-        disabled={page >= pages}
-        onClick={() => onChange(page + 1)}
-        aria-label="Berikutnya"
-      >
-        <ChevronRight className="h-4 w-4" />
+      <button type="button" className={btn} disabled={page >= pages} onClick={() => onChange(page + 1)}>
+        Berikutnya <ChevronRight className="h-4 w-4" />
       </button>
     </nav>
   );
 }
 
-export function PlatformChip({ platform }: { platform: string }) {
-  const idn = platform === "idn";
+export function PlatformTag({ platform }: { platform: string }) {
+  const label = platform === "idn" ? "IDN" : platform === "showroom" ? "Showroom" : platform || "Live";
+  return <span className="tag border border-line text-ink-soft">{label}</span>;
+}
+
+export function LiveTag() {
   return (
-    <span className={cx("chip", idn ? "bg-[#d61f3c] text-white" : "bg-[#1e1e24] text-white")}>
-      {idn ? "IDN Live" : platform === "showroom" ? "Showroom" : platform || "Live"}
+    <span className="tag bg-brand text-white">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+      Live
     </span>
   );
 }
 
-export function LiveDot({ className }: { className?: string }) {
+/** Kontrol segmen sederhana (filter). */
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: readonly { id: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
   return (
-    <span className={cx("relative flex h-2 w-2", className)}>
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
-      <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
-    </span>
+    <div className="inline-flex rounded-md border border-line p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          onClick={() => onChange(o.id)}
+          className={cx(
+            "rounded-[5px] px-3 py-1.5 text-[13px] font-semibold transition",
+            value === o.id ? "bg-ink text-bg" : "text-ink-soft hover:text-ink",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }

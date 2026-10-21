@@ -1,29 +1,33 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Cake, Calendar, Clock, Play, Users } from "lucide-react";
 import { BackLink } from "@/components/back-link";
-import { ShowRow } from "@/components/cards";
 import { Countdown } from "@/components/countdown";
 import { Page } from "@/components/page";
-import { EmptyState, ErrorState, Img, Skeleton, cx } from "@/components/ui";
+import { Empty, ErrorState, Img, Skeleton } from "@/components/ui";
+import { useMemberPhotos } from "@/hooks/use-member-index";
 import { fmtDate, fmtTime } from "@/lib/format";
 import type { ShowMember } from "@/lib/jkt48";
 import { q } from "@/lib/queries";
 
-function MemberTile({ m, tag }: { m: ShowMember; tag?: string }) {
+function Lineup({ title, people, note }: { title: string; people: ShowMember[]; note?: (m: ShowMember) => string | undefined }) {
+  const photos = useMemberPhotos();
   return (
-    <Link
-      to="/member/$id"
-      params={{ id: m.id }}
-      data-reveal
-      className={cx("group block overflow-hidden rounded-3xl border bg-card transition hover:-translate-y-1", tag ? "border-gold" : "border-line hover:border-brand/60")}
-    >
-      <div className="relative aspect-[4/5] overflow-hidden bg-surface">
-        <Img src={m.img} alt={m.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.05]" />
-        {tag && <span className="chip absolute left-2.5 top-2.5 bg-gold text-black">{tag}</span>}
+    <div className="mt-10">
+      <h2 data-reveal className="condensed mb-4 border-b border-line pb-2 text-[24px] uppercase leading-none">
+        {title} <span className="num text-ink-soft">{people.length}</span>
+      </h2>
+      <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 lg:grid-cols-6">
+        {people.map((m) => (
+          <Link key={m.id} to="/member/$id" params={{ id: m.id }} data-reveal className="group block">
+            <div className="aspect-[3/4] overflow-hidden rounded-md bg-surface">
+              <Img src={m.img || photos.get(m.id)} alt={m.name} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+            </div>
+            <p className="mt-1.5 truncate text-[14px] font-semibold group-hover:text-brand">{m.name}</p>
+            {note?.(m) && <p className="text-[12px] font-semibold text-brand">{note(m)}</p>}
+          </Link>
+        ))}
       </div>
-      <p className="truncate px-3 py-2.5 text-center text-sm font-semibold">{m.name}</p>
-    </Link>
+    </div>
   );
 }
 
@@ -32,97 +36,66 @@ export function TheaterDetailPage() {
   const show = useQuery(q.theater(id));
   const s = show.data;
   const upcoming = s?.date ? new Date(s.date).getTime() > Date.now() : false;
-  const birthdayIds = new Set(s?.birthday.map((b) => b.name));
+  const bday = new Set(s?.birthday.map((b) => b.id));
 
   return (
     <Page deps={[s]}>
-      <section className="container-x pt-28">
-        <BackLink to="/theater" label="Semua jadwal" />
-      </section>
+      <div className="container-x pt-20 sm:pt-24">
+        <BackLink to="/theater" label="Semua jadwal theater" />
 
-      {show.isError ? (
-        <div className="container-x pt-10">
-          <ErrorState error={show.error} onRetry={() => show.refetch()} />
-        </div>
-      ) : !s ? (
-        <div className="container-x space-y-5 pt-10">
-          <Skeleton className="aspect-[21/9] w-full rounded-[32px]" />
-          <Skeleton className="h-12 w-2/3" />
-        </div>
-      ) : (
-        <>
-          <section className="container-x pt-8">
-            <div data-reveal className="relative overflow-hidden rounded-[36px] bg-surface">
-              <Img src={s.designBanner || s.banner || s.poster} alt={s.title} eager className="aspect-[16/10] w-full object-cover sm:aspect-[21/9]" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-6 text-white sm:p-10">
-                <div className="flex flex-wrap gap-2">
-                  {upcoming && <span className="chip bg-brand text-white">Akan datang</span>}
-                  {s.birthday.length > 0 && (
-                    <span className="chip bg-gold text-black">
-                      <Cake className="h-3 w-3" /> Seitansai
-                    </span>
-                  )}
-                </div>
-                <h1 className="mt-3 font-display text-[clamp(2rem,6vw,4.5rem)] font-extrabold leading-[0.95] tracking-[-0.04em]">{s.title}</h1>
-              </div>
-            </div>
-          </section>
-
-          <section className="container-x grid gap-10 pt-10 lg:grid-cols-[1fr_360px]">
+        {show.isError ? (
+          <div className="pt-8">
+            <ErrorState error={show.error} onRetry={() => show.refetch()} />
+          </div>
+        ) : !s ? (
+          <div className="space-y-4 pt-8">
+            <Skeleton className="h-16 w-2/3" />
+            <Skeleton className="aspect-[16/9] w-full" />
+          </div>
+        ) : (
+          <div className="grid gap-x-12 pt-6 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0">
-              {s.setlistDescription && (
-                <div data-reveal>
-                  <p className="eyebrow">Tentang setlist</p>
-                  <p className="mt-3 max-w-3xl whitespace-pre-line text-[15px] leading-relaxed text-ink-soft">{s.setlistDescription}</p>
+              <div data-reveal className="border-b border-ink pb-4">
+                <p className="num text-ink-soft">
+                  {fmtDate(s.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · {fmtTime(s.date)} WIB
+                  {s.team && ` · Team ${s.team}`}
+                </p>
+                <h1 className="condensed mt-2 text-[clamp(2.5rem,7vw,5rem)] uppercase leading-[0.86]">{s.title}</h1>
+              </div>
+
+              {s.members.length ? (
+                <Lineup title="Lineup" people={s.members} note={(m) => (bday.has(m.id) ? "Seitansai" : undefined)} />
+              ) : (
+                <div className="mt-10">
+                  <Empty>Lineup belum diumumkan.</Empty>
                 </div>
               )}
+              {s.graduation.length > 0 && <Lineup title="Graduation" people={s.graduation} />}
 
-              <div className="mt-12">
-                <div data-reveal className="mb-6 flex items-end justify-between">
-                  <div>
-                    <p className="eyebrow">Lineup</p>
-                    <h2 className="mt-2 font-display text-3xl font-extrabold tracking-tight">Member yang tampil</h2>
-                  </div>
-                  <span className="num text-sm text-ink-soft">{s.members.length || s.memberCount || 0} member</span>
-                </div>
-                {s.members.length ? (
-                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-                    {s.members.map((m) => (
-                      <MemberTile key={m.id} m={m} tag={birthdayIds.has(m.name) ? "🎂 Seitansai" : undefined} />
+              {s.songs.length > 0 && (
+                <div className="mt-10">
+                  <h2 data-reveal className="condensed mb-2 border-b border-line pb-2 text-[24px] uppercase leading-none">Setlist</h2>
+                  <ol className="num columns-1 gap-8 text-[15px] sm:columns-2">
+                    {s.songs.map((t, i) => (
+                      <li key={`${i}-${t}`} className="flex gap-3 border-b border-line py-2">
+                        <span className="w-6 text-ink-soft">{i + 1}</span>
+                        {t}
+                      </li>
                     ))}
-                  </div>
-                ) : (
-                  <EmptyState icon={<Users className="h-5 w-5" />} title="Lineup belum diumumkan" />
-                )}
-              </div>
-
-              {s.graduation.length > 0 && (
-                <div className="mt-12">
-                  <p data-reveal className="eyebrow">Graduation show</p>
-                  <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-                    {s.graduation.map((m) => (
-                      <MemberTile key={m.id} m={m} tag="Graduation" />
-                    ))}
-                  </div>
+                  </ol>
                 </div>
               )}
 
               {s.recordings.length > 0 && (
-                <div className="mt-12">
-                  <p data-reveal className="eyebrow">Rekaman</p>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="mt-10">
+                  <h2 data-reveal className="condensed mb-4 border-b border-line pb-2 text-[24px] uppercase leading-none">Rekaman</h2>
+                  <div className="grid gap-4 sm:grid-cols-2">
                     {s.recordings.map((r) => (
                       <a key={r.youtubeUrl} href={r.youtubeUrl} target="_blank" rel="noopener noreferrer" data-reveal className="group block">
-                        <div className="relative aspect-video overflow-hidden rounded-3xl bg-surface">
+                        <div className="aspect-video overflow-hidden rounded-md bg-surface">
                           <Img src={r.thumbnail} alt={r.title} className="h-full w-full object-cover" />
-                          <span className="absolute inset-0 grid place-items-center bg-black/30">
-                            <span className="grid h-12 w-12 place-items-center rounded-full bg-white text-brand">
-                              <Play className="h-5 w-5 translate-x-0.5 fill-current" />
-                            </span>
-                          </span>
                         </div>
-                        <p className="mt-2 text-sm font-semibold group-hover:text-brand">{r.title}</p>
+                        <p className="mt-2 font-semibold group-hover:text-brand">{r.title} · YouTube</p>
                       </a>
                     ))}
                   </div>
@@ -130,41 +103,33 @@ export function TheaterDetailPage() {
               )}
             </div>
 
-            <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-              <div data-reveal className="rounded-[28px] border border-line bg-card p-6">
-                <div className="space-y-4 text-sm">
-                  <p className="flex items-center gap-3">
-                    <Calendar className="h-4 w-4 text-brand" />
-                    {fmtDate(s.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                  </p>
-                  <p className="flex items-center gap-3">
-                    <Clock className="h-4 w-4 text-brand" /> {fmtTime(s.date)} WIB
-                  </p>
-                </div>
+            <aside className="mt-10 space-y-5 lg:mt-0 lg:sticky lg:top-20 lg:self-start">
+              {s.poster && (
+                <a data-reveal href={s.poster} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-md border border-line">
+                  <img src={s.poster} alt={`Poster jadwal ${s.title}`} loading="lazy" className="w-full" />
+                </a>
+              )}
+              <div data-reveal className="space-y-3 text-[14px]">
                 {upcoming && (
-                  <div className="mt-6 border-t border-line pt-6">
-                    <p className="eyebrow mb-3 !text-ink-soft">Dimulai dalam</p>
-                    <Countdown target={s.date} />
-                  </div>
+                  <p className="flex justify-between border-b border-line pb-3">
+                    <span className="text-ink-soft">Mulai dalam</span>
+                    <Countdown target={s.date} className="font-semibold" />
+                  </p>
                 )}
+                <p className="flex justify-between border-b border-line pb-3">
+                  <span className="text-ink-soft">Kode show</span>
+                  <span className="num font-semibold">{s.id}</span>
+                </p>
                 {s.url && (
-                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary mt-6 w-full">
-                    Info resmi & tiket <ArrowUpRight className="h-4 w-4" />
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary w-full">
+                    Beli tiket di jkt48.com
                   </a>
                 )}
               </div>
-              {s.otherShows.length > 0 && (
-                <div className="space-y-3">
-                  <p className="eyebrow">Show lain di hari yang sama</p>
-                  {s.otherShows.map((o) => (
-                    <ShowRow key={o.id} s={o} />
-                  ))}
-                </div>
-              )}
             </aside>
-          </section>
-        </>
-      )}
+          </div>
+        )}
+      </div>
     </Page>
   );
 }

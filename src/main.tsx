@@ -1,7 +1,5 @@
-import "@fontsource-variable/bricolage-grotesque";
-import "@fontsource-variable/plus-jakarta-sans";
-import "@fontsource/jetbrains-mono/500.css";
-import "@fontsource/jetbrains-mono/600.css";
+import "@fontsource-variable/archivo/wdth.css";
+import "@fontsource-variable/doto";
 import "./styles.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

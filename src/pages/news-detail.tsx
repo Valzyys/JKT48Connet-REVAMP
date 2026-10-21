@@ -1,7 +1,6 @@
 import { useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
-import { ArrowUpRight } from "lucide-react";
 import { useMemo } from "react";
 import { BackLink } from "@/components/back-link";
 import { Page } from "@/components/page";
@@ -33,42 +32,40 @@ export function NewsDetailPage() {
 
   return (
     <Page deps={[n]}>
-      <article className="container-x max-w-4xl pt-28">
+      <article className="container-x max-w-3xl pt-20 sm:pt-24">
         <BackLink to="/news" label="Semua berita" />
         {news.isError ? (
-          <div className="pt-10">
+          <div className="pt-8">
             <ErrorState error={news.error} onRetry={() => news.refetch()} />
           </div>
         ) : !n ? (
-          <div className="space-y-4 pt-10">
-            <Skeleton className="h-6 w-40" />
+          <div className="space-y-4 pt-8">
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-64 w-full" />
           </div>
         ) : (
           <>
-            <header className="border-b border-line pb-10 pt-10">
-              <div data-reveal className="flex flex-wrap items-center gap-3">
-                <span className="chip bg-brand-soft text-brand">{n.category}</span>
-                <span className="num text-sm text-ink-soft">{fmtDate(n.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
-              </div>
-              <h1 data-reveal className="mt-5 font-display text-[clamp(2rem,5vw,3.75rem)] font-extrabold leading-[1] tracking-[-0.035em]">
-                {n.title}
-              </h1>
+            <header data-reveal className="border-b border-ink pb-5 pt-6">
+              <p className="num text-ink-soft">
+                {n.category} · {fmtDate(n.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              </p>
+              <h1 className="mt-2 text-[clamp(1.75rem,4.5vw,2.75rem)] font-bold leading-[1.1] tracking-tight">{n.title}</h1>
             </header>
             {html ? (
               <div
                 data-reveal
-                className="prose-legal pt-10 text-[16px] [&_img]:my-6 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-2xl [&_table]:w-full"
+                className="prose-body pt-6 text-[16px] [&_img]:my-5 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-md [&_table]:w-full"
                 dangerouslySetInnerHTML={{ __html: html }}
               />
             ) : (
-              <p className="pt-10 text-ink-soft">Isi berita belum tersedia.</p>
+              <p className="pt-6 text-ink-soft">Isi berita belum tersedia.</p>
             )}
             {n.url && (
-              <a href={n.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost mt-10">
-                Baca di situs resmi <ArrowUpRight className="h-4 w-4" />
-              </a>
+              <p className="mt-8 border-t border-line pt-4">
+                <a href={n.url} target="_blank" rel="noopener noreferrer" className="link-arrow">
+                  Baca di jkt48.com →
+                </a>
+              </p>
             )}
           </>
         )}

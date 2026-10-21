@@ -11,10 +11,10 @@ function show(el: HTMLElement) {
  * `deps` dipakai untuk memindai ulang ketika konten async (data API) muncul.
  * Elemen yang sudah tampil ditandai `data-revealed` dan tidak pernah disembunyikan lagi.
  */
-export function useReveal(scope: RefObject<HTMLElement | null>, deps: unknown[] = []) {
+export function useReveal(scope: RefObject<HTMLElement | null>, deps: unknown[] = [], enabled = true) {
   useLayoutEffect(() => {
     const root = scope.current;
-    if (!root) return;
+    if (!root || !enabled) return;
     const items = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal]:not([data-revealed])"));
     if (!items.length) return;
 
@@ -55,5 +55,5 @@ export function useReveal(scope: RefObject<HTMLElement | null>, deps: unknown[] 
       triggers.forEach((t) => t.kill());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, enabled]);
 }

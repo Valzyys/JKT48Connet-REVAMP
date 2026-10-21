@@ -1,118 +1,98 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight } from "lucide-react";
-import { MORE_NAV, PRIMARY_NAV, SOCIALS } from "@/lib/nav";
+import { useQuery } from "@tanstack/react-query";
+import { Countdown } from "@/components/countdown";
+import { NAV, SOCIALS, setlistNo } from "@/lib/nav";
+import { q } from "@/lib/queries";
 
-const TICKER = ["Live member", "Jadwal theater", "Birthday", "Recent live", "Berita resmi", "Video terbaru"];
-
-function Ticker() {
-  const row = (
-    <div className="flex shrink-0 items-center">
-      {TICKER.map((t) => (
-        <span key={t} className="flex items-center gap-8 pr-8 font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
-          {t}
-          <span aria-hidden className="text-brand">
-            ✦
-          </span>
-        </span>
-      ))}
-    </div>
-  );
+/** Rumbai tirai di tepi atas footer. */
+function Valance() {
   return (
-    <div className="overflow-hidden border-y border-line py-5" aria-hidden>
-      <div className="marquee">
-        {row}
-        {row}
-      </div>
-    </div>
+    <div
+      aria-hidden
+      className="velvet h-10"
+      style={{
+        WebkitMask: "radial-gradient(22px 14px at 50% 100%, #0000 98%, #000) 0 0 / 44px 100% repeat-x",
+        mask: "radial-gradient(22px 14px at 50% 100%, #0000 98%, #000) 0 0 / 44px 100% repeat-x",
+      }}
+    />
   );
 }
 
-function Col({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="eyebrow mb-5 !text-ink-soft">{title}</p>
-      <ul className="space-y-2.5 text-[15px]">{children}</ul>
-    </div>
-  );
-}
-
+/** "Curtain call": penutup halaman berisi kredit dan hitung mundur ke show berikutnya. */
 export function Footer() {
+  const next = useQuery(q.nextSchedule());
+  const show = next.data?.find((s) => s.category === "show");
+
   return (
     <footer className="mt-28">
-      <Ticker />
-      <div className="container-x grid gap-12 py-16 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
-        <div>
-          <p className="max-w-sm text-[15px] leading-relaxed text-ink-soft">
-            Hub komunitas untuk mengikuti JKT48 secara real-time: live member, jadwal theater, birthday, rekap live, dan
-            berita terbaru — dalam satu tempat.
+      <Valance />
+      <div className="container-x pb-10 pt-14">
+        <div className="text-center">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.35em] text-ink-soft">Curtain call</p>
+          <p className="condensed mx-auto mt-3 max-w-3xl text-[clamp(2.25rem,6vw,4.5rem)] uppercase leading-[0.9]">
+            Terima kasih sudah datang ke theater
           </p>
-          <p className="num mt-6 text-[11px] uppercase tracking-[0.2em] text-ink-soft">
-            Fan-made · bukan situs resmi JKT48
-          </p>
+          {show && (
+            <Link to="/theater/$id" params={{ id: show.id }} className="group mt-6 inline-flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1">
+              <span className="text-ink-soft">Show berikutnya</span>
+              <span className="font-semibold group-hover:text-brand">{show.title}</span>
+              <Countdown target={show.date} className="led text-[20px]" />
+            </Link>
+          )}
         </div>
-        <Col title="Jelajah">
-          {PRIMARY_NAV.slice(1).map((n) => (
-            <li key={n.to}>
-              <Link to={n.to} className="text-ink-soft transition hover:text-ink">
-                {n.label}
-              </Link>
-            </li>
-          ))}
-        </Col>
-        <Col title="Lainnya">
-          {MORE_NAV.map((n) => (
-            <li key={n.to}>
-              <Link to={n.to} className="text-ink-soft transition hover:text-ink">
-                {n.label}
-              </Link>
-            </li>
-          ))}
-        </Col>
-        <Col title="Komunitas">
-          {SOCIALS.map((s) => (
-            <li key={s.href}>
-              <a href={s.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-ink-soft transition hover:text-ink">
-                {s.label} <ArrowUpRight className="h-3.5 w-3.5" />
-              </a>
-            </li>
-          ))}
-          <li>
-            <a
-              href="https://api.jkt48connect.app/docs"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-ink-soft transition hover:text-ink"
-            >
-              Public API <ArrowUpRight className="h-3.5 w-3.5" />
-            </a>
-          </li>
-        </Col>
-      </div>
 
-      <div className="container-x overflow-hidden">
-        <p
-          aria-hidden
-          className="select-none font-display text-[18.5vw] font-extrabold leading-[0.8] tracking-[-0.06em] text-ink lg:text-[17vw]"
-        >
-          jkt48<span className="text-brand">.</span>c
-        </p>
-      </div>
+        <div className="mx-auto mt-14 grid max-w-4xl gap-x-10 gap-y-8 border-t border-line pt-8 text-[14px] sm:grid-cols-3">
+          <div>
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-soft">Setlist</p>
+            <ul className="grid grid-cols-2 gap-y-1.5">
+              {NAV.map((n, i) => (
+                <li key={n.to}>
+                  <Link to={n.to} className="group inline-flex items-baseline gap-2 hover:text-brand">
+                    <span className="led led-off text-[11px] group-hover:opacity-100">{setlistNo(i)}</span>
+                    {n.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-soft">Komunitas</p>
+            <ul className="space-y-1.5">
+              {SOCIALS.map((s) => (
+                <li key={s.href}>
+                  <a href={s.href} target="_blank" rel="noreferrer" className="hover:text-brand">
+                    {s.label} ↗
+                  </a>
+                </li>
+              ))}
+              <li>
+                <a href="https://api.jkt48connect.app/docs" target="_blank" rel="noreferrer" className="hover:text-brand">
+                  Public API ↗
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-soft">Catatan</p>
+            <p className="leading-relaxed text-ink-soft">
+              Proyek komunitas fan-made. Bukan situs resmi dan tidak berafiliasi dengan JKT48 Operation Team.
+            </p>
+          </div>
+        </div>
 
-      <div className="border-t border-line">
-        <div className="container-x flex flex-col gap-3 py-6 text-[12px] text-ink-soft md:flex-row md:items-center md:justify-between">
-          <p className="num uppercase tracking-[0.15em]">© {new Date().getFullYear()} JKT48Connect</p>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
+        <div className="mx-auto mt-10 flex max-w-4xl flex-col gap-2 border-t border-line pt-5 text-[13px] text-ink-soft sm:flex-row sm:justify-between">
+          <p>© {new Date().getFullYear()} JKT48Connect</p>
+          <div className="flex gap-4">
             <Link to="/disclaimer" className="hover:text-ink">
               Disclaimer
             </Link>
             <Link to="/terms" className="hover:text-ink">
-              Syarat & Ketentuan
+              Ketentuan
             </Link>
             <Link to="/privacy" className="hover:text-ink">
               Privasi
             </Link>
           </div>
-          <p>Tidak berafiliasi dengan JKT48 Operation Team.</p>
         </div>
       </div>
     </footer>

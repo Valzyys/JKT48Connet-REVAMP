@@ -10,25 +10,30 @@ export function useNow(intervalMs = 1000) {
   return now;
 }
 
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Hitung mundur ringkas: "2 hari 04:12:33". */
 export function Countdown({ target, className }: { target: string | Date; className?: string }) {
   const now = useNow();
   const c = countdown(new Date(target), now);
-  if (!c) return <span className={className}>Sedang berlangsung</span>;
-  const cell = (v: number, l: string) => (
-    <span className="flex flex-col items-center">
-      <span className="num text-2xl font-semibold leading-none sm:text-3xl">{String(v).padStart(2, "0")}</span>
-      <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.18em] opacity-60">{l}</span>
-    </span>
-  );
   return (
-    <span className={`flex items-start gap-3 ${className ?? ""}`}>
-      {cell(c.d, "hari")}
-      <span className="num text-xl opacity-40">:</span>
-      {cell(c.h, "jam")}
-      <span className="num text-xl opacity-40">:</span>
-      {cell(c.m, "menit")}
-      <span className="num text-xl opacity-40">:</span>
-      {cell(c.s, "detik")}
+    <span className={`num ${className ?? ""}`}>
+      {c ? `${c.d ? `${c.d} hari ` : ""}${pad(c.h)}:${pad(c.m)}:${pad(c.s)}` : "sedang berlangsung"}
     </span>
   );
+}
+
+/** Jam WIB yang berjalan, untuk baris tanggal di beranda. */
+export function Clock() {
+  const now = useNow(15_000);
+  const f = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return <span className="num">{f.format(now)} WIB</span>;
 }

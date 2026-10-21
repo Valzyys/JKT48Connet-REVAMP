@@ -1,12 +1,11 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { History } from "lucide-react";
-import { RecentCard } from "@/components/cards";
+import { RecentHead, RecentRow } from "@/components/cards";
 import { Page } from "@/components/page";
-import { EmptyState, ErrorState, PageHero, Pagination, SkeletonGrid } from "@/components/ui";
+import { Empty, ErrorState, PageHeader, Pagination, SkeletonList } from "@/components/ui";
 import { q } from "@/lib/queries";
 
-const PER = 18;
+const PER = 20;
 
 export function RecentPage() {
   const { page = 1 } = useSearch({ strict: false }) as { page?: number };
@@ -15,36 +14,22 @@ export function RecentPage() {
 
   return (
     <Page deps={[recent.data]}>
-      <PageHero
-        eyebrow="Rekap live"
-        title={
-          <>
-            Recent <span className="text-brand">live.</span>
-          </>
-        }
-        desc="Live Showroom dan IDN yang baru selesai, lengkap dengan durasi, penonton, gift, dan replay bila tersedia."
-      />
-      <section className="container-x pt-12">
+      <PageHeader title="Recent live" desc="Live Showroom dan IDN yang sudah selesai: durasi, penonton, gift, dan replay bila ada." />
+      <section className="container-x pt-6">
         {recent.isError ? (
           <ErrorState error={recent.error} onRetry={() => recent.refetch()} />
         ) : recent.isLoading ? (
-          <SkeletonGrid count={9} className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" item="h-[88px] rounded-3xl" />
+          <SkeletonList rows={10} className="h-11" />
         ) : recent.data?.items.length ? (
           <>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {recent.data.items.map((r) => (
-                <RecentCard key={r.id} r={r} />
-              ))}
-            </div>
-            <Pagination
-              page={page}
-              perpage={PER}
-              total={recent.data.total}
-              onChange={(p) => navigate({ to: "/recent", search: p > 1 ? { page: p } : {} })}
-            />
+            <RecentHead />
+            {recent.data.items.map((r) => (
+              <RecentRow key={r.id} r={r} />
+            ))}
+            <Pagination page={page} perpage={PER} total={recent.data.total} onChange={(p) => navigate({ to: "/recent", search: p > 1 ? { page: p } : {} })} />
           </>
         ) : (
-          <EmptyState icon={<History className="h-5 w-5" />} title="Belum ada rekap live" />
+          <Empty>Belum ada rekap live.</Empty>
         )}
       </section>
     </Page>

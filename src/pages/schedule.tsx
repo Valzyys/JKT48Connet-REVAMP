@@ -1,93 +1,68 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays } from "lucide-react";
 import { useMemo, useState } from "react";
-import { EventCard, ShowRow } from "@/components/cards";
+import { ShowRow } from "@/components/cards";
 import { Page } from "@/components/page";
-import { EmptyState, ErrorState, PageHero, SkeletonGrid, cx } from "@/components/ui";
+import { Empty, ErrorState, PageHeader, Segmented, SkeletonList } from "@/components/ui";
 import { dayKey, fmtDate } from "@/lib/format";
-import type { EventItem, TheaterShow } from "@/lib/jkt48";
+import type { TheaterShow } from "@/lib/jkt48";
 import { q } from "@/lib/queries";
 
-type Entry = { kind: "show"; date: string; show: TheaterShow } | { kind: "event"; date: string; event: EventItem };
-
 const TABS = [
-  { id: "upcoming", label: "Akan datang" },
+  { id: "upcoming", label: "Mendatang" },
   { id: "past", label: "Sudah lewat" },
 ] as const;
 
+function group(items: TheaterShow[]) {
+  const map = new Map<string, TheaterShow[]>();
+  for (const s of items) {
+    const k = dayKey(s.date);
+    if (k) map.set(k, [...(map.get(k) ?? []), s]);
+  }
+  return [...map.values()];
+}
+
 export function SchedulePage() {
-  const theater = useQuery(q.theaterList(1, 30));
-  const events = useQuery(q.events());
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("upcoming");
+  // Mendatang: next_schedule (show + exclusive + event). Sudah lewat: daftar theater.
+  const next = useQuery(q.nextSchedule());
+  const theater = useQuery({ ...q.theaterList(1, 40), enabled: tab === "past" });
+  const source = tab === "upcoming" ? next : theater;
 
-  const groups = useMemo(() => {
-    const entries: Entry[] = [
-      ...(theater.data?.items ?? []).map((s) => ({ kind: "show" as const, date: s.date, show: s })),
-      ...(events.data ?? []).map((e) => ({ kind: "event" as const, date: e.date, event: e })),
-    ].filter((e) => dayKey(e.date));
-
-    const today = dayKey(new Date().toISOString());
-    const filtered = entries.filter((e) => (tab === "upcoming" ? dayKey(e.date) >= today : dayKey(e.date) < today));
-    filtered.sort((a, b) => (tab === "upcoming" ? 1 : -1) * (new Date(a.date).getTime() - new Date(b.date).getTime()));
-
-    const map = new Map<string, Entry[]>();
-    for (const e of filtered) {
-      const k = dayKey(e.date);
-      map.set(k, [...(map.get(k) ?? []), e]);
-    }
-    return [...map.entries()];
-  }, [theater.data, events.data, tab]);
-
-  const loading = theater.isLoading || events.isLoading;
+  const days = useMemo(() => {
+    const now = Date.now();
+    if (tab === "upcoming") return group([...(next.data ?? [])].sort((a, b) => +new Date(a.date) - +new Date(b.date)));
+    const past = (theater.data?.items ?? []).filter((s) => new Date(s.date).getTime() < now);
+    return group(past.sort((a, b) => +new Date(b.date) - +new Date(a.date)));
+  }, [tab, next.data, theater.data]);
 
   return (
-    <Page deps={[groups]}>
-      <PageHero
-        eyebrow="Kalender"
-        title={
-          <>
-            Jadwal <span className="text-brand">JKT48.</span>
-          </>
-        }
-        desc="Pertunjukan theater dan event JKT48 dikelompokkan per hari, dalam waktu Indonesia Barat."
-      >
-        <div className="inline-flex rounded-full border border-line bg-card p-1">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={cx("rounded-full px-4 py-1.5 text-[13px] font-semibold transition", tab === t.id ? "bg-ink text-bg" : "text-ink-soft hover:text-ink")}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </PageHero>
-
-      <section className="container-x pt-12">
-        {theater.isError && events.isError ? (
-          <ErrorState error={theater.error} onRetry={() => (theater.refetch(), events.refetch())} />
-        ) : loading ? (
-          <SkeletonGrid count={5} className="space-y-3" item="h-[88px] rounded-3xl" />
-        ) : groups.length ? (
-          <div className="space-y-12">
-            {groups.map(([day, items]) => (
-              <div key={day} className="grid gap-4 md:grid-cols-[220px_1fr]">
-                <div data-reveal className="md:sticky md:top-24 md:self-start">
-                  <p className="font-display text-2xl font-extrabold tracking-tight">{fmtDate(items[0].date, { weekday: "long" })}</p>
-                  <p className="num mt-1 text-sm text-ink-soft">{fmtDate(items[0].date)}</p>
-                </div>
-                <div className="space-y-3">
-                  {items.map((e) =>
-                    e.kind === "show" ? <ShowRow key={`s-${e.show.id}`} s={e.show} /> : <EventCard key={`e-${e.event.id}`} e={e.event} />,
-                  )}
-                </div>
+    <Page deps={[days]}>
+      <PageHeader
+        title="Jadwal"
+        desc="Show theater, event exclusive, dan event JKT48 per hari (WIB)."
+        aside={<Segmented value={tab} options={TABS} onChange={setTab} />}
+      />
+      <section className="container-x pt-2">
+        {source.isError ? (
+          <ErrorState error={source.error} onRetry={() => source.refetch()} />
+        ) : source.isLoading ? (
+          <SkeletonList rows={6} />
+        ) : days.length ? (
+          days.map((items) => (
+            <div key={items[0].date} className="grid gap-x-8 border-b border-line py-6 md:grid-cols-[200px_1fr]">
+              <div data-reveal className="pb-2 md:sticky md:top-20 md:self-start">
+                <p className="condensed text-[26px] uppercase leading-none">{fmtDate(items[0].date, { weekday: "long" })}</p>
+                <p className="num mt-1 text-[14px] text-ink-soft">{fmtDate(items[0].date)}</p>
               </div>
-            ))}
-          </div>
+              <div className="[&>*:last-child]:border-b-0">
+                {items.map((s) => (
+                  <ShowRow key={`${s.id}-${s.title}`} s={s} />
+                ))}
+              </div>
+            </div>
+          ))
         ) : (
-          <EmptyState icon={<CalendarDays className="h-5 w-5" />} title={tab === "upcoming" ? "Belum ada jadwal mendatang" : "Belum ada riwayat jadwal"} />
+          <Empty>{tab === "upcoming" ? "Belum ada jadwal mendatang." : "Belum ada riwayat jadwal."}</Empty>
         )}
       </section>
     </Page>

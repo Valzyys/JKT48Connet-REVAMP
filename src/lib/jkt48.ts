@@ -1,24 +1,16 @@
 import { apiGet } from "./api";
 
 /*
- * Bentuk respons JKT48Connect API berbeda per endpoint (lihat docs: "jangan
- * mengasumsikan semua respons memiliki properti `data` yang sama"). Semua
- * fungsi di sini menormalkan respons ke tipe milik UI, supaya komponen tidak
- * perlu tahu variasi nama field dari sumber data.
+ * Normalisasi respons JKT48Connect API ke tipe milik UI.
+ * Bentuk field mengikuti respons asli api.jkt48connect.app (dicek Oktober 2026);
+ * fallback kecil tetap ada untuk field yang berbeda antara IDN dan Showroom.
  */
 
 type Raw = Record<string, any>;
 
-/** Ambil array dari respons yang bisa berupa array langsung atau dibungkus key tertentu. */
-function list(data: unknown, ...keys: string[]): Raw[] {
-  if (Array.isArray(data)) return data.filter(Boolean);
-  if (data && typeof data === "object") {
-    for (const k of [...keys, "data", "results", "items"]) {
-      const v = (data as Raw)[k];
-      if (Array.isArray(v)) return v.filter(Boolean);
-    }
-  }
-  return [];
+function list(data: unknown, key?: string): Raw[] {
+  const arr = Array.isArray(data) ? data : key && data && typeof data === "object" ? (data as Raw)[key] : null;
+  return Array.isArray(arr) ? arr.filter((x) => x && typeof x === "object") : [];
 }
 
 function str(...vals: unknown[]): string {
@@ -29,23 +21,17 @@ function str(...vals: unknown[]): string {
 
 function num(...vals: unknown[]): number | null {
   for (const v of vals) {
-    const n = typeof v === "string" ? Number(v.replace(/[^\d.-]/g, "")) : v;
+    const n = typeof v === "string" && v.trim() ? Number(v) : v;
     if (typeof n === "number" && Number.isFinite(n)) return n;
   }
   return null;
 }
 
-function imgOf(o: Raw | undefined | null): string {
-  if (!o) return "";
-  return str(o.img, o.img_alt, o.image, o.image_url, o.photo, o.avatar, o.thumbnail);
-}
-
-type DesignImage = { status?: string; url?: string | null };
-/** Pilih gambar desain (schedule/leaderboard/notification) yang sudah `ready`. */
-function readyDesign(designs: Raw | undefined, layout: "banner" | "portrait"): string {
+/** Gambar desain (jadwal/leaderboard/notifikasi) yang statusnya sudah `ready`. */
+function readyDesign(designs: Raw | undefined, layout: "banner" | "portrait", theme = "photobook"): string {
   if (!designs) return "";
-  for (const theme of ["jkt48connect", "photobook", "avonera48"]) {
-    const img = designs[theme]?.[layout] as DesignImage | undefined;
+  for (const t of [theme, "jkt48connect", "photobook"]) {
+    const img = designs[t]?.[layout];
     if (img?.status === "ready" && img.url) return img.url;
   }
   return "";
@@ -53,10 +39,14 @@ function readyDesign(designs: Raw | undefined, layout: "banner" | "portrait"): s
 
 export type Paged<T> = { items: T[]; page: number; perpage: number; total: number };
 
-function paged<T>(data: unknown, key: string, map: (r: Raw) => T, page: number, perpage: number): Paged<T> {
+function paged<T>(data: Raw, key: string, map: (r: Raw) => T, page: number, perpage: number): Paged<T> {
   const items = list(data, key).map(map);
-  const total = num((data as Raw)?.total_count, (data as Raw)?.total) ?? items.length;
-  return { items, page: num((data as Raw)?.page) ?? page, perpage: num((data as Raw)?.perpage) ?? perpage, total };
+  return {
+    items,
+    page: num(data?.page) ?? page,
+    perpage: num(data?.perpage) ?? perpage,
+    total: num(data?.total_count) ?? items.length,
+  };
 }
 
 /* ───────────────────────────── Member ───────────────────────────── */
@@ -66,9 +56,8 @@ export type Member = {
   name: string;
   nickname: string;
   img: string;
-  generation: string;
-  team: string;
   isGraduate: boolean;
+  idnUsername: string;
 };
 
 export type MemberDetail = Member & {
@@ -81,46 +70,44 @@ export type MemberDetail = Member & {
   socials: { title: string; url: string }[];
   upcomingShows: TheaterShow[];
   recentShows: TheaterShow[];
+  totalLive: { showroom: number; idn: number } | null;
 };
 
 function mapMember(m: Raw): Member {
-  const nicknames = Array.isArray(m.nicknames) ? m.nicknames : [];
   return {
-    id: str(m.url_key, m.url, m.id, m._id, m.slug, m.name),
-    name: str(m.name, m.fullname),
-    nickname: str(m.nickname, nicknames[0]),
-    img: imgOf(m),
-    generation: str(m.generation, m.gen),
-    team: str(m.team?.name, m.team, m.type),
-    isGraduate: Boolean(m.is_graduate ?? m.graduated),
+    id: str(m.url, m.url_key, m._id),
+    name: str(m.name),
+    nickname: str(m.nickname, m.nicknames?.[0]),
+    img: str(m.img, m.img_alt),
+    isGraduate: Boolean(m.is_graduate),
+    idnUsername: str(m.idn_username),
   };
 }
 
 export async function getMembers(): Promise<Member[]> {
-  const data = await apiGet("/api/member");
-  return list(data, "members", "member")
+  return list(await apiGet("/api/member"))
     .map(mapMember)
-    .filter((m) => m.name);
+    .filter((m) => m.name && m.id);
 }
 
 export async function getMember(id: string): Promise<MemberDetail> {
-  const raw = await apiGet<Raw>(`/api/member/${encodeURIComponent(id)}`);
-  const m: Raw = raw?.member ?? raw?.data ?? raw ?? {};
-  const base = mapMember(m);
+  const m = await apiGet<Raw>(`/api/member/${encodeURIComponent(id)}`);
+  const total = m.stats?.total_live;
   return {
-    ...base,
-    id: base.id || id,
-    fullname: str(m.fullname, m.full_name, m.name),
-    birthdate: str(m.birthdate, m.birthday),
-    bloodType: str(m.bloodType, m.blood_type),
+    ...mapMember(m),
+    id: str(m.url, id),
+    fullname: str(m.fullname, m.name),
+    birthdate: str(m.birthdate),
+    bloodType: str(m.bloodType),
     height: str(m.height),
     description: str(m.description),
     jikosokai: str(m.jikosokai),
     socials: list(m.socials)
-      .map((s) => ({ title: str(s.title, s.name), url: str(s.url) }))
+      .map((s) => ({ title: str(s.title), url: str(s.url) }))
       .filter((s) => s.url),
-    upcomingShows: list(m.upcomingTheater ?? m.upcoming_theater).map(mapShow),
-    recentShows: list(m.recentTheater ?? m.recent_theater).map(mapShow),
+    upcomingShows: list(m.upcomingTheater).map(mapShow),
+    recentShows: list(m.recentTheater).map(mapShow),
+    totalLive: total ? { showroom: num(total.showroom) ?? 0, idn: num(total.idn) ?? 0 } : null,
   };
 }
 
@@ -129,47 +116,44 @@ export async function getMember(id: string): Promise<MemberDetail> {
 export type LiveSession = {
   id: string;
   name: string;
+  fullname: string;
   img: string;
+  avatar: string;
   platform: "showroom" | "idn" | string;
   startedAt: string;
   title: string;
-  viewers: number | null;
   link: string;
-  banner: string;
 };
 
-function liveLink(l: Raw, platform: string): string {
-  const direct = str(l.url, l.live_url, l.share_url);
-  if (direct.startsWith("http")) return direct;
-  if (platform === "idn") {
-    const user = str(l.idn?.username, l.username, l.url_key);
-    const slug = str(l.idn?.slug, l.slug);
-    return user && slug ? `https://www.idn.app/${user}/live/${slug}` : "https://www.idn.app";
-  }
-  const key = str(l.room_url_key, l.url_key);
-  return key ? `https://www.showroom-live.com/r/${key}` : "https://www.showroom-live.com";
-}
-
 function mapLive(l: Raw): LiveSession {
-  const platform = str(l.type, l.platform).toLowerCase();
+  const platform = str(l.type).toLowerCase();
+  // notification_caption: "🔴 Nama Lengkap — Judul live\nhttps://…"
+  const caption = str(l.notification_caption);
+  const [head = "", url = ""] = caption.split("\n");
+  const [who, ...titleParts] = head.replace(/^\S*\s*/, "").split(" — ");
+  const fallbackLink =
+    platform === "idn"
+      ? `https://www.idn.app/${l.url_key}/live/${l.slug}`
+      : `https://www.showroom-live.com/r/${str(l.room_url_key, l.url_key)}`;
   return {
-    id: str(l.data_id, l.notification_data_id, l.room_id, l.slug, l.url_key, l.name),
-    name: str(l.name, l.member?.name),
-    img: str(l.img, l.img_alt, l.member?.img, l.image),
+    id: str(l.notification_data_id, l.slug, l.room_id, l.url_key),
+    name: str(l.name),
+    fullname: titleParts.length ? who.trim() : str(l.name),
+    img: str(l.img, l.img_alt),
+    avatar: str(l.img_alt, l.img),
     platform,
-    startedAt: str(l.started_at, l.start_date, l.live_at),
-    title: str(l.title, l.idn?.title),
-    viewers: num(l.viewers?.num, l.viewers, l.view_count, l.view_num),
-    link: liveLink(l, platform),
-    banner: readyDesign(l.notification_designs, "banner") || str(l.image, l.idn?.image, l.thumbnail),
+    startedAt: str(l.started_at),
+    title: titleParts.join(" — ").trim(),
+    link: url.startsWith("http") ? url.trim() : fallbackLink,
   };
 }
 
 export async function getLive(): Promise<LiveSession[]> {
-  const data = await apiGet("/api/now_live", { group: "jkt48" });
-  return list(data, "lives", "live")
+  // now_live bisa memuat sesi yang sama dua kali (versi nama panggilan & nama lengkap).
+  const seen = new Set<string>();
+  return list(await apiGet("/api/now_live", { group: "jkt48" }))
     .map(mapLive)
-    .filter((l) => l.name);
+    .filter((l) => l.name && !seen.has(l.id) && seen.add(l.id));
 }
 
 /* ───────────────────────────── Theater ───────────────────────────── */
@@ -180,172 +164,118 @@ export type TheaterShow = {
   id: string;
   title: string;
   date: string;
+  team: string;
+  /** "show" | "exclusive" | "general" (dari next_schedule); daftar theater selalu "show". */
+  category: string;
   banner: string;
-  poster: string;
   memberCount: number | null;
   members: ShowMember[];
   birthday: ShowMember[];
   url: string;
 };
 
-export type TheaterRecording = { title: string; youtubeUrl: string; thumbnail: string; startedAt: string };
-
 export type TheaterDetail = TheaterShow & {
-  setlistTitle: string;
-  setlistDescription: string;
+  songs: string[];
   graduation: ShowMember[];
-  designBanner: string;
-  recordings: TheaterRecording[];
-  otherShows: TheaterShow[];
+  poster: string;
+  recordings: { title: string; youtubeUrl: string; thumbnail: string }[];
 };
 
 function mapShowMember(m: Raw): ShowMember {
-  return { id: str(m.url_key, m.id, m.member_id, m.name), name: str(m.name), img: imgOf(m) };
+  return { id: str(m.url_key, m.id), name: str(m.name), img: str(m.img) };
+}
+
+function members(v: unknown) {
+  return list(v)
+    .map(mapShowMember)
+    .filter((m) => m.name);
 }
 
 function mapShow(s: Raw): TheaterShow {
-  const members = list(s.members ?? s.member ?? s.lineup ?? s.jkt48_member).map(mapShowMember);
-  const seitansai = list(s.seitansai ?? s.birthday_members ?? s.birthday).map(mapShowMember);
+  const ms = members(s.members);
   return {
-    id: str(s.id, s.reference_code, s.code, s.schedule_id),
-    title: str(s.title, s.setlist?.title, s.name),
-    date: str(s.date, s.show_date, s.start_date),
-    banner: readyDesign(s.schedule_designs, "banner") || str(s.banner, s.setlist?.banner, s.image),
-    poster: str(s.poster, s.setlist?.poster, s.banner, s.setlist?.banner),
-    memberCount: num(s.member_count, members.length || undefined),
-    members,
-    birthday: seitansai,
-    url: str(s.url, s.link),
+    id: str(s.code, s.id),
+    title: str(s.title, s.setlist?.title),
+    date: str(s.start_date, s.date),
+    team: str(s.team),
+    category: str(s.category, "show"),
+    banner: readyDesign(s.schedule_designs, "banner"),
+    memberCount: num(s.member_count) ?? (ms.length || null),
+    members: ms,
+    birthday: members(s.seitansai),
+    url: str(s.url),
   };
 }
 
 export async function getTheaterList(page = 1, perpage = 12): Promise<Paged<TheaterShow>> {
-  const data = await apiGet("/api/theater", { page, perpage });
-  return paged(data, "theater", mapShow, page, perpage);
+  return paged(await apiGet<Raw>("/api/theater", { page, perpage }), "theater", mapShow, page, perpage);
 }
 
 export async function getTheater(id: string): Promise<TheaterDetail> {
   const raw = await apiGet<Raw>(`/api/theater/${encodeURIComponent(id)}`);
-  const shows = list(raw, "shows");
-  const s: Raw = shows[0] ?? raw?.show ?? raw ?? {};
-  const base = mapShow(s);
+  const s = list(raw, "shows")[0] ?? {};
+  const songs = list(s.setlist?.songs)
+    .map((x) => str(x.title, x.name))
+    .concat((Array.isArray(s.setlist?.songs) ? s.setlist.songs : []).filter((x: unknown) => typeof x === "string"))
+    .filter(Boolean);
   return {
-    ...base,
-    id: base.id || id,
-    setlistTitle: str(s.setlist?.title, s.title),
-    setlistDescription: str(s.setlist?.description, s.short_description, s.description),
-    graduation: list(s.graduation).map(mapShowMember),
-    designBanner: readyDesign(s.schedule_designs, "banner"),
+    ...mapShow(s),
+    id: str(s.id, id),
+    songs,
+    graduation: members(s.graduation),
+    poster: readyDesign(s.schedule_designs, "portrait"),
     recordings: list(s.recordings)
       .filter((r) => r.youtube_url)
       .map((r) => ({
-        title: str(r.title, base.title),
+        title: str(r.title, s.title),
         youtubeUrl: str(r.youtube_url),
-        thumbnail: str(list(r.screenshots)[0]?.url, r.thumbnail),
-        startedAt: str(r.started_at),
+        thumbnail: str(list(r.screenshots)[0]?.url),
       })),
-    otherShows: shows.slice(1).map(mapShow),
   };
 }
 
+/** Jadwal mendatang: show theater, event exclusive, dan event umum. */
 export async function getNextSchedule(): Promise<TheaterShow[]> {
-  const data = await apiGet("/api/next_schedule");
-  return list(data, "shows", "theater", "schedule").map(mapShow).filter((s) => s.title);
-}
-
-/* ───────────────────────────── Event ───────────────────────────── */
-
-export type EventItem = { id: string; title: string; date: string; url: string; img: string; type: string };
-
-function mapEvent(e: Raw): EventItem {
-  return {
-    id: str(e.id, e._id, e.code, e.title),
-    title: str(e.title, e.name),
-    date: str(e.date, e.start_date, e.event_date),
-    url: str(e.url, e.link),
-    img: str(e.banner, e.img, e.image, e.poster),
-    type: str(e.type, e.category, e.label),
-  };
-}
-
-export async function getEvents(): Promise<EventItem[]> {
-  const data = await apiGet("/api/jkt48event");
-  return list(data, "events", "event").map(mapEvent).filter((e) => e.title);
+  return list(await apiGet("/api/next_schedule"))
+    .map(mapShow)
+    .filter((s) => s.title && s.date);
 }
 
 /* ───────────────────────────── News ───────────────────────────── */
 
-export type NewsItem = { id: string; title: string; date: string; category: string; url: string; img: string };
+export type NewsItem = { id: string; title: string; date: string; category: string; url: string };
 export type NewsDetail = NewsItem & { content: string };
 
-/** Label berita resmi berupa path ikon (mis. "/images/icon.cat2.png"). */
-const NEWS_LABELS: Record<string, string> = {
-  cat1: "Theater",
-  cat2: "Event",
-  cat3: "Lainnya",
-  cat4: "Release",
-  cat5: "Birthday",
-  cat8: "Merchandise",
-};
-
-function newsCategory(n: Raw): string {
-  const raw = str(n.category, n.label, n.type);
-  const m = /cat\d+/.exec(raw);
-  if (m) return NEWS_LABELS[m[0]] ?? "Berita";
-  return raw && !raw.includes("/") ? raw : "Berita";
-}
-
 function mapNews(n: Raw): NewsItem {
-  return {
-    id: str(n.id, n.news_id, n.slug, n._id),
-    title: str(n.title),
-    date: str(n.date, n.published_at, n.created_at),
-    category: newsCategory(n),
-    url: str(n.url, n.link),
-    img: str(n.background_image, n.image, n.img, n.thumbnail),
-  };
+  return { id: str(n.id), title: str(n.title), date: str(n.date), category: str(n.category, "Berita"), url: str(n.url) };
 }
 
 export async function getNewsList(page = 1, perpage = 10): Promise<Paged<NewsItem>> {
-  const data = await apiGet("/api/news", { page, perpage });
-  return paged(data, "news", mapNews, page, perpage);
+  return paged(await apiGet<Raw>("/api/news", { page, perpage }), "news", mapNews, page, perpage);
 }
 
 export async function getNews(id: string): Promise<NewsDetail> {
-  const raw = await apiGet<Raw>(`/api/news/${encodeURIComponent(id)}`);
-  const n: Raw = raw?.news ?? raw?.data ?? raw ?? {};
-  return { ...mapNews(n), id: str(n.id, id), content: str(n.content, n.content_body, n.body, n.description) };
+  const n = await apiGet<Raw>(`/api/news/${encodeURIComponent(id)}`);
+  return { ...mapNews(n), id: str(n.id, id), content: str(n.content) };
 }
 
 /* ───────────────────────────── Birthday ───────────────────────────── */
 
-export type Birthday = { id: string; name: string; img: string; birthdate: string; next: Date; age: number | null };
+export type Birthday = { id: string; name: string; img: string; birthdate: string; next: Date; age: number };
 
-function nextBirthday(birthdate: string, now = new Date()): Date {
-  const b = new Date(birthdate);
-  const next = new Date(now.getFullYear(), b.getMonth(), b.getDate());
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (next < today) next.setFullYear(next.getFullYear() + 1);
-  return next;
-}
-
+/** Ulang tahun berikutnya dihitung dalam tanggal WIB (birthdate API = 17:00Z hari sebelumnya). */
 function mapBirthday(b: Raw): Birthday {
-  const birthdate = str(b.birthdate, b.birthday, b.date);
-  const next = b.next_birthday ? new Date(b.next_birthday) : nextBirthday(birthdate);
-  const year = new Date(birthdate).getFullYear();
-  return {
-    id: str(b.url_key, b.id, b.name),
-    name: str(b.name),
-    img: imgOf(b),
-    birthdate,
-    next,
-    age: Number.isFinite(year) ? next.getFullYear() - year : num(b.age_after_birthday),
-  };
+  const birthdate = str(b.birthdate);
+  const wib = new Date(new Date(birthdate).getTime() + 7 * 3600_000);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let next = new Date(now.getFullYear(), wib.getUTCMonth(), wib.getUTCDate());
+  if (next < today) next = new Date(now.getFullYear() + 1, wib.getUTCMonth(), wib.getUTCDate());
+  return { id: str(b.url_key, b.name), name: str(b.name), img: str(b.img), birthdate, next, age: next.getFullYear() - wib.getUTCFullYear() };
 }
 
 export async function getBirthdays(): Promise<Birthday[]> {
-  const data = await apiGet("/api/birthday");
-  return list(data, "birthday", "birthdays", "members")
+  return list(await apiGet("/api/next_birthday"))
     .map(mapBirthday)
     .filter((b) => b.name && b.birthdate)
     .sort((a, b) => a.next.getTime() - b.next.getTime());
@@ -356,7 +286,7 @@ export async function getBirthdays(): Promise<Birthday[]> {
 export type RecentLive = {
   id: string;
   name: string;
-  nickname: string;
+  memberId: string;
   img: string;
   platform: string;
   start: string;
@@ -364,97 +294,93 @@ export type RecentLive = {
   durationMs: number;
   viewers: number | null;
   points: number | null;
+  pointUnit: string;
   title: string;
 };
 
+export type Fan = { name: string; avatar: string; amount: number | null };
 export type GiftSummary = { name: string; img: string; num: number | null; users: number | null };
 
 export type RecentDetail = RecentLive & {
   gifts: GiftSummary[];
+  giftsPartial: boolean;
+  fans: Fan[];
+  comments: number | null;
+  commenters: number | null;
   leaderboard: string;
   replayUrl: string;
+  recordingPartial: boolean;
   screenshots: string[];
-  supporters: number | null;
-  partial: boolean;
 };
+
+/** "idn_gold" → "Gold", "showroom_points" → "Poin". */
+export function pointLabel(unit: string) {
+  return unit.includes("gold") ? "Gold" : "Poin";
+}
 
 function mapRecent(r: Raw): RecentLive {
   const info: Raw = r.live_info ?? {};
-  const start = str(info.date?.start, r.start_date, r.created_at);
-  const end = str(info.date?.end, r.end_date);
-  const durationMs =
-    num(info.duration) ?? (start && end ? Math.max(0, new Date(end).getTime() - new Date(start).getTime()) : 0);
+  const member: Raw = r.member ?? r.room_info ?? {};
   return {
-    id: str(r.data_id, r._id, r.id),
-    name: str(r.member?.name, r.name),
-    nickname: str(r.member?.nickname, r.nickname),
-    img: str(r.member?.img_alt, r.member?.img, r.img),
-    platform: str(r.type, r.platform).toLowerCase(),
-    start,
-    end,
-    durationMs: durationMs ?? 0,
-    viewers: num(info.viewers?.num, info.viewers, info.viewer),
-    points: num(r.points, info.gift?.gold_summary?.reported_gold, r.total_gift),
-    title: str(r.idn?.title, r.title),
+    id: str(r.data_id, r._id),
+    name: str(member.name),
+    memberId: str(member.url),
+    img: str(member.img, member.img_alt),
+    platform: str(r.type).toLowerCase(),
+    start: str(info.date?.start),
+    end: str(info.date?.end, r.created_at),
+    durationMs: num(info.duration) ?? 0,
+    viewers: num(info.viewers?.num),
+    points: num(r.points, r.total_gifts),
+    pointUnit: str(r.point_unit, r.type === "idn" ? "idn_gold" : "showroom_points"),
+    title: str(r.idn?.title),
   };
 }
 
 export async function getRecentList(page = 1, perpage = 12): Promise<Paged<RecentLive>> {
-  const data = await apiGet("/api/recent", { page, perpage });
-  return paged(data, "recents", mapRecent, page, perpage);
+  return paged(await apiGet<Raw>("/api/recent", { page, perpage }), "recents", mapRecent, page, perpage);
 }
 
 export async function getRecent(id: string): Promise<RecentDetail> {
-  const raw = await apiGet<Raw>(`/api/recent/${encodeURIComponent(id)}`);
-  const r: Raw = raw?.data ?? raw ?? {};
+  const r = await apiGet<Raw>(`/api/recent/${encodeURIComponent(id)}`);
   const info: Raw = r.live_info ?? {};
   const shot: Raw | undefined = info.screenshot;
-  const shots: string[] =
-    shot?.base_url && Array.isArray(shot.list)
-      ? shot.list.map((t: unknown) => `${shot.base_url}/${t}.${shot.format || "jpg"}`)
-      : [];
   const recordings = list(r.recordings);
   return {
     ...mapRecent(r),
     id: str(r.data_id, id),
-    gifts: list(info.gift?.list ?? info.gift)
-      .map((g) => ({
-        name: str(g.name),
-        img: str(g.img, g.image),
-        num: num(g.num),
-        users: num(g.user_count),
-      }))
-      .filter((g) => g.name),
+    gifts: list(info.gift?.list)
+      .map((g) => ({ name: str(g.name), img: g.image_available === false ? "" : str(g.img), num: num(g.num), users: num(g.user_count) }))
+      .filter((g) => g.name)
+      .sort((a, b) => (b.num ?? 0) - (a.num ?? 0)),
+    giftsPartial: info.gift?.status === "partial",
+    fans: list(r.fans)
+      .map((f) => ({ name: str(f.name), avatar: str(f.avatar_url), amount: num(f.gold, f.point, f.reported_gold) }))
+      .filter((f) => f.name),
+    comments: num(info.comments?.num),
+    commenters: num(info.comments?.users),
     leaderboard: readyDesign(r.leaderboard_designs, "portrait"),
-    replayUrl: str(recordings[0]?.player_url, r.recording?.player_url),
-    screenshots: shots,
-    supporters: num(r.users?.length, info.users, r.fans?.length),
-    partial: Boolean(r.recording?.partial ?? recordings.some((x) => x.partial)),
+    replayUrl: str(recordings[0]?.player_url),
+    recordingPartial: r.recording_session?.status === "partial" || recordings.some((x) => x.partial),
+    screenshots:
+      shot?.base_url && Array.isArray(shot.list)
+        ? shot.list.map((t: unknown) => `${shot.base_url}/${t}.${shot.format || "jpg"}`)
+        : [],
   };
 }
 
 /* ───────────────────────────── YouTube ───────────────────────────── */
 
-export type Video = { id: string; title: string; url: string; date: string; thumbnail: string; channel: string };
+export type Video = { id: string; title: string; url: string; date: string; thumbnail: string; channel: string; views: number | null };
 
 export async function getVideos(): Promise<Video[]> {
-  const data = await apiGet("/api/jkt48_youtube");
-  return list(data, "videos").map((v) => {
-    const thumbs: Raw = v.thumbnails ?? {};
-    const id = str(v.id, v.video_id);
-    return {
-      id,
-      title: str(v.title),
-      url: str(v.url, id && `https://www.youtube.com/watch?v=${id}`),
-      date: str(v.date, v.published_at),
-      thumbnail: str(
-        thumbs.high?.url,
-        thumbs.medium?.url,
-        Array.isArray(thumbs) ? thumbs[0]?.url : undefined,
-        v.thumbnail,
-        id && `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-      ),
-      channel: str(v.channelTitle, v.author, "JKT48"),
-    };
-  });
+  return list(await apiGet("/api/jkt48_youtube")).map((v) => ({
+    id: str(v.id),
+    title: str(v.title),
+    url: str(v.url, `https://www.youtube.com/watch?v=${v.id}`),
+    date: str(v.date),
+    thumbnail: str(v.thumbnails?.high?.url, `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`),
+    channel: str(v.channelTitle, "JKT48"),
+    views: num(v.statistics?.viewCount),
+  }));
 }

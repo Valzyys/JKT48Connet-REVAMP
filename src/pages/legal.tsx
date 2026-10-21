@@ -1,14 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Page } from "@/components/page";
-import { PageHero } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 
-function LegalLayout({ eyebrow, title, children }: { eyebrow: string; title: ReactNode; children: ReactNode }) {
+function LegalLayout({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Page>
-      <PageHero eyebrow={eyebrow} title={title} desc="Berlaku 2026." />
-      <section className="container-x pt-12">
-        <article data-reveal className="prose-legal max-w-3xl text-[15px]">
+      <PageHeader title={title} desc="Berlaku sejak 2026." />
+      <section className="container-x pt-8">
+        <article data-reveal className="prose-body max-w-2xl text-[15px]">
           {children}
         </article>
       </section>
@@ -18,7 +18,7 @@ function LegalLayout({ eyebrow, title, children }: { eyebrow: string; title: Rea
 
 export function DisclaimerPage() {
   return (
-    <LegalLayout eyebrow="Transparansi" title="Disclaimer.">
+    <LegalLayout title="Disclaimer">
       <p>
         JKT48Connect adalah proyek komunitas fan-made untuk membantu fans membaca jadwal, informasi live member, theater,
         birthday, dan berita yang tersedia secara publik.
@@ -41,7 +41,7 @@ export function DisclaimerPage() {
 
 export function TermsPage() {
   return (
-    <LegalLayout eyebrow="Legal" title="Syarat & ketentuan.">
+    <LegalLayout title="Ketentuan">
       <p>
         Dengan mengakses atau menggunakan JKT48Connect (“Layanan”), Anda setuju untuk terikat pada syarat dan ketentuan
         berikut. Bila Anda tidak setuju, mohon berhenti menggunakan Layanan.
@@ -90,7 +90,7 @@ export function TermsPage() {
 
 export function PrivacyPage() {
   return (
-    <LegalLayout eyebrow="Legal" title="Kebijakan privasi.">
+    <LegalLayout title="Privasi">
       <p>
         Kebijakan ini menjelaskan bagaimana JKT48Connect mengumpulkan, menggunakan, dan melindungi data Anda saat
         menggunakan Layanan.
