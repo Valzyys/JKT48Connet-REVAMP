@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0b0d" />
+    <title>JKT48Connect — Live Member, Jadwal Theater & Berita JKT48</title>
+    <meta
+      name="description"
+      content="Hub komunitas JKT48: live member, jadwal theater, member, birthday, recent live, dan berita terbaru secara real-time."
+    />
+    <meta property="og:title" content="JKT48Connect" />
+    <meta property="og:description" content="Live member, jadwal theater, birthday, dan berita JKT48 real-time." />
+    <meta property="og:type" content="website" />
+    <script>
+      // Terapkan tema sebelum render pertama supaya tidak berkedip.
+      document.documentElement.classList.add("js");
+      try {
+        var t = localStorage.getItem("jkt48c:theme");
+        var dark = t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.classList.toggle("dark", dark);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

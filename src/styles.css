@@ -1,0 +1,221 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-gold: var(--gold);
+
+  --font-display: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root {
+  /* Light — kertas hangat + crimson JKT + aksen emas */
+  --bg: #f6f3ee;
+  --surface: #ece7df;
+  --card: #fffdf9;
+  --ink: #111114;
+  --ink-soft: #6a655e;
+  --line: rgb(17 17 20 / 0.09);
+  --brand: #e30b1c;
+  --brand-strong: #b8071a;
+  --brand-soft: #fbe3e1;
+  --gold: #e3ad3a;
+  color-scheme: light;
+}
+
+.dark {
+  /* Dark — charcoal pekat + crimson menyala */
+  --bg: #0b0b0d;
+  --surface: #16161a;
+  --card: #121215;
+  --ink: #f1efea;
+  --ink-soft: #9b978f;
+  --line: rgb(255 255 255 / 0.08);
+  --brand: #ff3446;
+  --brand-strong: #ff6170;
+  --brand-soft: #2a1013;
+  --gold: #f0bd4f;
+  color-scheme: dark;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--brand);
+  color: #fff;
+}
+
+body.is-locked {
+  overflow: hidden;
+}
+
+@layer components {
+  .container-x {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 1400px;
+    padding-inline: 1rem;
+  }
+  @media (min-width: 640px) {
+    .container-x {
+      padding-inline: 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .container-x {
+      padding-inline: 2.5rem;
+    }
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--brand);
+  }
+
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    padding: 0.7rem 1.2rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition:
+      transform 0.2s ease,
+      background-color 0.2s ease,
+      color 0.2s ease,
+      border-color 0.2s ease;
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn-primary {
+    background: var(--brand);
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background: var(--brand-strong);
+  }
+  .btn-ghost {
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+  }
+  .btn-ghost:hover {
+    border-color: var(--ink);
+  }
+
+  .prose-legal h2 {
+    margin-top: 2rem;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .prose-legal p,
+  .prose-legal li {
+    color: var(--ink-soft);
+    line-height: 1.75;
+  }
+  .prose-legal p + p {
+    margin-top: 0.85rem;
+  }
+  .prose-legal ul {
+    margin-top: 0.6rem;
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+  .prose-legal strong {
+    color: var(--ink);
+  }
+  .prose-legal a {
+    color: var(--brand);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* Marquee tanpa JS — dipakai di footer & strip hero */
+.marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 40s linear infinite;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Elemen yang dianimasikan GSAP disembunyikan dulu agar tidak berkedip,
+   tapi tetap terlihat bila JS mati atau pengguna memilih reduced motion. */
+.js [data-reveal] {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js [data-reveal] {
+    opacity: 1 !important;
+  }
+  .marquee {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
