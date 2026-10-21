@@ -35,7 +35,7 @@ tema `jkt48connect`, bukan photobook.
 | `/schedule` | Show, exclusive, dan event per hari (WIB) | `GET /api/next_schedule`, `/api/theater` |
 | `/member`, `/member/:id` | Direktori (cari, aktif/graduated) & profil | `GET /api/member`, `/api/member/:id` |
 | `/birthday` | Ulang tahun terdekat + hitung mundur | `GET /api/next_birthday` |
-| `/recent`, `/recent/:id` | Rekap live: durasi, penonton, gold/poin, top supporter, gift, cuplikan, leaderboard, replay | `GET /api/recent`, `/api/recent/:id` |
+| `/recent`, `/recent/:id` | Rekap live: durasi, penonton, gold/poin, top supporter, gift, cuplikan, leaderboard, replay yang diputar langsung di situs (terbuka 72 jam setelah live) | `GET /api/recent`, `/api/recent/:id` |
 | `/news`, `/news/:id` | Berita resmi (HTML disanitasi DOMPurify) | `GET /api/news`, `/api/news/:id` |
 | `/video` | Upload terbaru JKT48 & JKT48 TV | `GET /api/jkt48_youtube` |
 | `/about`, `/disclaimer`, `/terms`, `/privacy` | Statis | — |
@@ -47,6 +47,7 @@ Beberapa hal yang ditangani di sana:
 - Lineup di daftar tidak membawa foto, jadi foto dicocokkan dari `/api/member`.
 - `now_live` bisa memuat sesi yang sama dua kali, jadi daftarnya dideduplikasi.
 - Item exclusive/event dari `next_schedule` tidak punya halaman detail (API membalas 502), jadi tampil tanpa link.
+- Replay di `/recent/:id` diputar langsung dengan `<video>` dari `recordings[].url` (MP4 H.264, CORS terbuka). Pemutar baru muncul 72 jam setelah `live_info.date.end` (`REPLAY_LOCK_HOURS` di `src/lib/jkt48.ts`); sebelum itu tampil panel terkunci dengan hitung mundur, dan berubah jadi pemutar dengan sendirinya saat waktunya tiba. Rekaman yang terdiri dari beberapa bagian bisa dipilih per bagian.
 - Gambar di isi berita jkt48.com menolak hotlink (403 bila Referer dari domain lain, plus `Cross-Origin-Resource-Policy: same-site`), jadi dilewatkan `/api/media?url=…`.
 
 ## API key tetap di server
@@ -171,6 +172,7 @@ Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 | ![Jadwal](docs/screenshots/07-schedule.jpg) | ![Member](docs/screenshots/08-members.jpg) |
 | ![Profil member](docs/screenshots/09-member-detail.jpg) | ![Birthday](docs/screenshots/10-birthday.jpg) |
 | ![Recent](docs/screenshots/11-recent.jpg) | ![Detail recent](docs/screenshots/12-recent-detail.jpg) |
+| ![Replay terkunci 72 jam](docs/screenshots/22-replay-locked.jpg) | |
 | ![Berita](docs/screenshots/13-news.jpg) | ![Detail berita](docs/screenshots/14-news-detail.jpg) |
 | ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu layar penuh mobile](docs/screenshots/19-mobile-menu.jpg) |
 | ![Footer mobile](docs/screenshots/20-footer-mobile.jpg) | ![Sidebar desktop diciutkan](docs/screenshots/21-sidebar-collapsed.jpg) |
