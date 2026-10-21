@@ -1,5 +1,5 @@
 import { useLayoutEffect, type RefObject } from "react";
-import { gsap, ScrollTrigger, prefersReducedMotion } from "@/lib/gsap";
+import { gsap, ScrollTrigger } from "@/lib/gsap";
 
 function show(el: HTMLElement) {
   el.dataset.revealed = "";
@@ -17,11 +17,6 @@ export function useReveal(scope: RefObject<HTMLElement | null>, deps: unknown[] 
     if (!root || !enabled) return;
     const items = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal]:not([data-revealed])"));
     if (!items.length) return;
-
-    if (prefersReducedMotion()) {
-      items.forEach(show);
-      return;
-    }
 
     // Cleanup hanya mematikan trigger yang belum terpicu; tween yang sedang jalan dibiarkan
     // selesai supaya elemen yang sudah tampil tidak kembali ke opacity 0.
