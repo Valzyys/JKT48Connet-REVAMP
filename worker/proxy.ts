@@ -54,6 +54,7 @@ export async function handleApi(request: Request, env: ProxyEnv, ctx: { waitUnti
   }
 
   const segment = url.pathname.replace(/^\/api\//, "").split("/")[0];
+  if (segment === "media") return handleMedia(url, ctx);
   if (!ALLOWED.includes(segment)) {
     return json({ status: 404, message: "Endpoint tidak tersedia" }, 404);
   }
@@ -114,6 +115,54 @@ export async function handleApi(request: Request, env: ProxyEnv, ctx: { waitUnti
     stale.headers.set("cache-control", `public, max-age=${STALE_TTL}`);
     ctx.waitUntil(Promise.all([cache.put(freshKey, response.clone()), cache.put(staleKey, stale)]));
   }
+  return response;
+}
+
+/** Host gambar yang boleh dilewatkan `/api/media`. */
+export const MEDIA_HOSTS = /(^|\.)jkt48\.com$/;
+const MEDIA_TTL = 60 * 60 * 24 * 7;
+
+/**
+ * `/api/media?url=…` — gambar di berita jkt48.com menolak hotlink (403 bila Referer dari domain lain)
+ * dan dikirim dengan `Cross-Origin-Resource-Policy: same-site`, sehingga browser tidak mau menampilkannya.
+ * Worker mengambilnya dari server tanpa Referer lalu menyajikannya dari domain situs sendiri.
+ */
+async function handleMedia(url: URL, ctx: { waitUntil(p: Promise<unknown>): void }) {
+  let target: URL;
+  try {
+    target = new URL(url.searchParams.get("url") ?? "");
+  } catch {
+    return json({ status: 400, message: "Parameter url tidak valid" }, 400);
+  }
+  if (target.protocol !== "https:" || !MEDIA_HOSTS.test(target.hostname)) {
+    return json({ status: 403, message: "Host gambar tidak diizinkan" }, 403);
+  }
+
+  const cache = (caches as unknown as { default: Cache }).default;
+  const key = new Request(`${url.origin}/api/media?url=${encodeURIComponent(target.href)}`, { method: "GET" });
+  const hit = await cache.match(key);
+  if (hit) return withHeader(hit, "x-cache", "HIT");
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(target.href, { headers: { Accept: "image/*", "User-Agent": "Mozilla/5.0 (JKT48Connect media proxy)" } });
+  } catch {
+    return json({ status: 502, message: "Gambar tidak bisa diambil" }, 502);
+  }
+  const type = upstream.headers.get("content-type") ?? "";
+  if (!upstream.ok || !type.startsWith("image/")) {
+    return json({ status: upstream.ok ? 415 : upstream.status, message: "Bukan gambar" }, upstream.ok ? 415 : upstream.status);
+  }
+
+  const response = new Response(upstream.body, {
+    headers: {
+      "content-type": type,
+      "cache-control": `public, max-age=${MEDIA_TTL}, immutable`,
+      "x-content-type-options": "nosniff",
+      "x-cache": "MISS",
+    },
+  });
+  ctx.waitUntil(cache.put(key, response.clone()));
   return response;
 }
 

@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { PIXELS } from "@/components/logo";
 import { useClock } from "@/hooks/use-clock";
 import { gsap } from "@/lib/gsap";
 import { q } from "@/lib/queries";
@@ -25,13 +24,11 @@ export function IntroProvider({ children }: { children: ReactNode }) {
   );
 }
 
-const COLS = 8;
-const ROWS = 5;
-const TILES = 12;
+const CARDS = 12;
 const RED = "#e1243a";
-const CREAM = "#f3eee6";
 const INK = "#1d1517";
-const MARQUEE = ["Live member", "Jadwal theater", "Birthday", "Recent live", "Berita resmi", "Your oshi", "Front row feeling"];
+const BUTTER = "#fde6b0";
+const WORDS = ["JKT48CONNECT", "YOUR OSHI", "FRONT ROW", "LIVE", "THEATER", "BIRTHDAY"];
 
 function split(text: string, attr: string) {
   return text.split("").map((c, i) => (
@@ -42,12 +39,11 @@ function split(text: string, attr: string) {
 }
 
 /**
- * Intro "Fan Signal" (± 4,5 detik, bisa dilewati):
- * 1. HUD di empat sudut mengetik diri, frekuensi naik 00.0 → 48.0 MHz;
- * 2. panel merah naik dari bawah, judulnya tersusun huruf demi huruf, logo piksel terbentuk;
- * 3. 12 foto member asli membalik masuk dengan nomor 01–12, pita miring melintas;
- * 4. satu kartu terpilih menjadi "your oshi" (cincin merah + hati);
- * 5. semuanya beterbangan keluar, kotak-kotak merah menutup layar lalu menyusut membuka halaman.
+ * Intro "Oshi Roulette" (± 5 detik, bisa dilewati):
+ * 1. layar merah, hitung mundur 3-2-1, HUD di empat sudut, dua baris teks raksasa bergaris tepi melaju berlawanan;
+ * 2. 12 photocard member asli tersusun jadi cincin 3D lalu berputar kencang dan melambat;
+ * 3. cincin berhenti di satu kartu acak: kartu membesar, hati berhamburan, nama "oshi hari ini" muncul;
+ * 4. kartu-kartu terlempar keluar dan layar merah terbelah atas-bawah membuka halaman.
  */
 function SignalIntro({ onDone }: { onDone: () => void }) {
   const root = useRef<HTMLDivElement>(null);
@@ -58,15 +54,23 @@ function SignalIntro({ onDone }: { onDone: () => void }) {
   // 12 member aktif berfoto, urutan acak per kunjungan.
   const lineup = useMemo(() => {
     const pool = (members.data ?? []).filter((m) => !m.isGraduate && m.img);
-    return gsap.utils.shuffle([...pool]).slice(0, TILES);
+    return gsap.utils.shuffle([...pool]).slice(0, CARDS);
   }, [members.data]);
-  const [oshi] = useState(() => Math.floor(Math.random() * TILES));
+  const [oshi] = useState(() => Math.floor(Math.random() * CARDS));
+  const pick = lineup[oshi];
 
   useLayoutEffect(() => {
     document.body.classList.add("is-locked");
     const ctx = gsap.context(() => {
-      const freq = root.current?.querySelector<HTMLElement>("[data-i='freq']");
-      const f = { v: 0 };
+      const el = root.current!;
+      const small = window.innerWidth < 640;
+      const radius = small ? 210 : 340;
+      const step = 360 / CARDS;
+      const cards = gsap.utils.toArray<HTMLElement>("[data-i='card']", el);
+      // Urutan transform harus rotateY lalu translateZ (GSAP selalu translate dulu), jadi slot diatur langsung lewat CSS.
+      gsap.utils.toArray<HTMLElement>("[data-i='slot']", el).forEach((slot, i) => {
+        slot.style.transform = `rotateY(${i * step}deg) translateZ(${radius}px)`;
+      });
 
       const t = gsap.timeline({
         defaults: { ease: "power3.out" },
@@ -77,40 +81,49 @@ function SignalIntro({ onDone }: { onDone: () => void }) {
       });
       tl.current = t;
 
-      t.set("[data-i='cell']", { scale: 0 })
-        .from("[data-i='hud']", { opacity: 0, duration: 0.03, stagger: 0.012 }, 0.1)
-        .to(f, { v: 48, duration: 2.6, ease: "power2.out", onUpdate: () => freq && (freq.textContent = f.v.toFixed(1).padStart(4, "0")) }, 0.2)
-        .from("[data-i='bar']", { scaleY: 0, transformOrigin: "50% 100%", duration: 0.3, stagger: 0.25 }, 0.3)
-        // Panel merah naik dari bawah.
-        .fromTo("[data-i='card']", { clipPath: "inset(100% 0 0 0 round 28px)" }, { clipPath: "inset(0% 0 0 0 round 28px)", duration: 0.8, ease: "expo.inOut" }, 0.35)
-        .from("[data-i='title']", { yPercent: 110, opacity: 0, duration: 0.5, stagger: 0.035, ease: "back.out(2)" }, 0.85)
-        .from("[data-i='px']", { scale: 0, rotate: 90, opacity: 0, duration: 0.45, stagger: { each: 0.04, from: "random" }, ease: "back.out(3)" }, 0.9)
-        .from("[data-i='tag']", { opacity: 0, y: 12, duration: 0.4, stagger: 0.08 }, 1.2)
-        // Kartu member membalik masuk.
-        .from("[data-i='tile']", { rotateY: 90, scale: 0.6, opacity: 0, duration: 0.6, stagger: { each: 0.06, from: "start" }, ease: "back.out(1.6)" }, 0.95)
-        // Pita merah miring melintas.
-        .fromTo("[data-i='band']", { xPercent: -5 }, { xPercent: -45, duration: 3, ease: "none" }, 1.15)
-        // Satu kartu jadi "your oshi".
-        .to(`[data-tile='${oshi}']`, { scale: 1.12, zIndex: 5, duration: 0.4, ease: "back.out(3)" }, 2.55)
-        .fromTo("[data-i='ring']", { opacity: 0, scale: 1.3 }, { opacity: 1, scale: 1, duration: 0.3 }, 2.6)
-        .fromTo("[data-i='heart']", { scale: 0, rotate: -30 }, { scale: 1, rotate: 0, duration: 0.45, ease: "back.out(4)" }, 2.7)
-        .addLabel("out", 3.25)
-        // Semua beterbangan keluar.
-        .to("[data-i='tile']", {
-          y: () => gsap.utils.random(-300, 300),
-          x: () => gsap.utils.random(-200, 200),
-          rotate: () => gsap.utils.random(-40, 40),
+      t.from("[data-i='hud']", { opacity: 0, duration: 0.03, stagger: 0.01 }, 0)
+        .from("[data-i='bar']", { scaleY: 0, transformOrigin: "50% 100%", duration: 0.3, stagger: 0.12 }, 0.1)
+        // Hitung mundur 3-2-1.
+        .fromTo("[data-i='count']", { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.18, stagger: 0.28, ease: "back.out(2)" }, 0.05)
+        .to("[data-i='count']", { scale: 0.4, opacity: 0, duration: 0.14, stagger: 0.28, ease: "power2.in" }, 0.25)
+        // Teks raksasa melaju berlawanan arah.
+        .fromTo("[data-i='row-a']", { xPercent: 0 }, { xPercent: -30, duration: 5, ease: "none" }, 0.3)
+        .fromTo("[data-i='row-b']", { xPercent: -30 }, { xPercent: 0, duration: 5, ease: "none" }, 0.3)
+        .from("[data-i='row-a'], [data-i='row-b']", { opacity: 0, duration: 0.5 }, 0.3)
+        // Cincin photocard muncul lalu berputar dan melambat di kartu terpilih.
+        .from(cards, { scale: 0, opacity: 0, duration: 0.5, stagger: { each: 0.03, from: "random" }, ease: "back.out(1.8)" }, 0.85)
+        .fromTo("[data-i='ring']", { rotationY: 140, rotationX: -14 }, { rotationY: -(oshi * step) - 720, rotationX: -6, duration: 2.3, ease: "expo.inOut" }, 0.85)
+        // Kartu terpilih.
+        .to(cards[oshi], { scale: 1.2, duration: 0.45, ease: "back.out(3)" }, 3.1)
+        .to(cards.filter((_, i) => i !== oshi), { opacity: 0.35, duration: 0.3 }, 3.1)
+        .fromTo("[data-i='heart']", { scale: 0, x: 0, y: 0, opacity: 1 }, {
+          scale: () => gsap.utils.random(0.6, 1.4),
+          x: () => gsap.utils.random(-260, 260),
+          y: () => gsap.utils.random(-220, 160),
+          rotate: () => gsap.utils.random(-50, 50),
+          opacity: 0,
+          duration: 1,
+          stagger: 0.015,
+          ease: "power3.out",
+        }, 3.15)
+        // Nama bisa berubah saat data member datang, jadi pembungkusnya yang disembunyikan sampai giliran.
+        .fromTo("[data-i='pickwrap']", { opacity: 0 }, { opacity: 1, duration: 0.01 }, 3.25)
+        .from("[data-i='pick']", { yPercent: 110, duration: 0.45, stagger: 0.025, ease: "back.out(2)" }, 3.25)
+        .from("[data-i='picklabel']", { opacity: 0, y: 10, duration: 0.3 }, 3.2)
+        .addLabel("out", 4.2)
+        // Keluar: kartu terlempar, layar terbelah.
+        .to(cards, {
+          x: () => gsap.utils.random(-500, 500),
+          y: () => gsap.utils.random(-400, 400),
           opacity: 0,
           duration: 0.5,
           ease: "power3.in",
-          stagger: { each: 0.02, from: "random" },
+          stagger: { each: 0.015, from: "random" },
         }, "out")
-        .to("[data-i='card']", { scale: 0.85, opacity: 0, duration: 0.45, ease: "power3.in" }, "out+=0.1")
-        .to("[data-i='hud'], [data-i='band']", { opacity: 0, duration: 0.3 }, "out")
-        // Kotak merah menutup layar, lalu menyusut membuka halaman.
-        .to("[data-i='cell']", { scale: 1, duration: 0.35, ease: "power2.in", stagger: { grid: [ROWS, COLS], from: "center", amount: 0.3 } }, "out+=0.25")
-        .set("[data-i='bg']", { opacity: 0 })
-        .to("[data-i='cell']", { scale: 0, duration: 0.45, ease: "power3.out", stagger: { grid: [ROWS, COLS], from: "edges", amount: 0.35 } });
+        .to("[data-i='hud'], [data-i='bar'], [data-i='row-a'], [data-i='row-b'], [data-i='pickwrap'], [data-i='picklabel']", { opacity: 0, duration: 0.25 }, "out")
+        .set("[data-i='bg']", { opacity: 0 }, "out+=0.45")
+        .to("[data-i='top']", { yPercent: -100, duration: 0.65, ease: "expo.inOut" }, "out+=0.45")
+        .to("[data-i='bottom']", { yPercent: 100, duration: 0.65, ease: "expo.inOut" }, "out+=0.45");
     }, root);
 
     return () => {
@@ -119,126 +132,108 @@ function SignalIntro({ onDone }: { onDone: () => void }) {
     };
   }, [onDone, oshi]);
 
+  const row = (attr: string, words: string[]) => (
+    <div data-i={attr} className="flex w-max whitespace-nowrap">
+      {Array.from({ length: 4 }).flatMap((_, k) =>
+        words.map((w) => (
+          <span key={`${k}-${w}`} className="px-[2vw]" style={{ WebkitTextStroke: "1.5px rgb(255 255 255 / 0.35)", color: "transparent" }}>
+            {w}
+          </span>
+        )),
+      )}
+    </div>
+  );
+
   return (
-    <div ref={root} className="fixed inset-0 z-[100] overflow-hidden" style={{ color: INK }} aria-hidden>
-      <div data-i="bg" className="absolute inset-0" style={{ background: CREAM }} />
+    <div ref={root} className="fixed inset-0 z-[100] overflow-hidden text-white" aria-hidden>
+      {/* Dua panel merah yang nanti terbelah atas-bawah */}
+      <div data-i="top" className="absolute inset-x-0 top-0 h-1/2" style={{ background: RED }} />
+      <div data-i="bottom" className="absolute inset-x-0 bottom-0 h-1/2" style={{ background: RED }} />
+      <div data-i="bg" className="absolute inset-0" style={{ background: RED }} />
+
+      {/* Teks raksasa bergaris tepi */}
+      <div className="pointer-events-none absolute inset-x-0 top-[9%] overflow-hidden font-extrabold uppercase leading-none" style={{ fontStretch: "75%", fontSize: "clamp(4rem, 14vw, 12rem)" }}>
+        {row("row-a", WORDS)}
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-[9%] overflow-hidden font-extrabold uppercase leading-none" style={{ fontStretch: "75%", fontSize: "clamp(4rem, 14vw, 12rem)" }}>
+        {row("row-b", [...WORDS].reverse())}
+      </div>
+
+      {/* Hitung mundur */}
+      <div className="pointer-events-none absolute inset-0 grid place-items-center">
+        {["3", "2", "1"].map((n) => (
+          <span key={n} data-i="count" className="absolute font-extrabold leading-none opacity-0" style={{ fontStretch: "75%", fontSize: "clamp(8rem, 30vw, 22rem)" }}>
+            {n}
+          </span>
+        ))}
+      </div>
+
+      {/* Cincin photocard 3D */}
+      <div className="absolute inset-0" style={{ perspective: "1100px" }}>
+        <div data-i="ring" className="absolute left-1/2 top-[46%] h-0 w-0" style={{ transformStyle: "preserve-3d" }}>
+          {Array.from({ length: CARDS }).map((_, i) => {
+            const m = lineup[i];
+            return (
+              <div key={i} data-i="slot" className="absolute left-0 top-0" style={{ transformStyle: "preserve-3d" }}>
+              <div
+                data-i="card"
+                className="absolute -left-[50px] -top-[68px] h-[136px] w-[100px] overflow-hidden rounded-xl border-[3px] border-white bg-white shadow-[0_18px_40px_-14px_rgb(0_0_0/0.45)] sm:-left-[75px] sm:-top-[100px] sm:h-[200px] sm:w-[150px] sm:rounded-2xl sm:border-4"
+                style={{ backfaceVisibility: "hidden" }}
+              >
+                <div className="absolute inset-0" style={{ background: "#f6dcdc" }} />
+                {m && <img src={m.img} alt="" className="absolute inset-0 h-full w-full object-cover object-top" />}
+                <span className="absolute left-1.5 top-1.5 rounded-full px-1.5 font-mono text-[9px] font-semibold text-white sm:text-[11px]" style={{ background: RED }}>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                {m && (
+                  <span className="absolute inset-x-0 bottom-0 truncate px-2 py-1 text-[10px] font-extrabold sm:text-[13px]" style={{ background: "rgb(255 255 255 / 0.92)", color: INK }}>
+                    {m.nickname || m.name.split(" ")[0]}
+                  </span>
+                )}
+              </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Hati berhamburan dari kartu terpilih */}
+      <div className="pointer-events-none absolute left-1/2 top-[46%]">
+        {Array.from({ length: 16 }).map((_, i) => (
+          <span key={i} data-i="heart" className="absolute -ml-3 -mt-3 text-[24px] opacity-0" style={{ color: i % 3 ? "#fff" : BUTTER }}>
+            ♥
+          </span>
+        ))}
+      </div>
+
+      {/* Nama oshi terpilih */}
+      <div className="pointer-events-none absolute inset-x-0 top-[calc(46%+124px)] text-center sm:top-[calc(46%+218px)]">
+        <p data-i="picklabel" className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-white/80 sm:text-[11px]">
+          ♥ Oshi hari ini
+        </p>
+        <p data-i="pickwrap" className="mt-1 overflow-hidden font-extrabold uppercase leading-[0.95]" style={{ fontStretch: "75%", fontSize: "clamp(2.2rem, 6vw, 4rem)", color: BUTTER }}>
+          {split(pick ? pick.nickname || pick.name.split(" ")[0] : "JKT48", "pick")}
+        </p>
+      </div>
 
       {/* HUD empat sudut */}
       <div className="absolute inset-x-5 top-5 flex justify-between font-mono text-[10px] font-semibold uppercase tracking-[0.18em] sm:inset-x-8 sm:top-7 sm:text-[11px]">
-        <span>{split("JKT48Connect · Fan Signal", "hud")}</span>
+        <span>{split("JKT48Connect · Oshi roulette", "hud")}</span>
         <span className="hidden sm:inline">{split(`WIB ${clock}`, "hud")}</span>
       </div>
       <div className="absolute inset-x-5 bottom-5 flex items-end justify-between font-mono text-[10px] font-semibold uppercase tracking-[0.18em] sm:inset-x-8 sm:bottom-7 sm:text-[11px]">
-        <span>
-          {split("Tuning ", "hud")}
-          <span data-i="freq" className="text-[18px] sm:text-[22px]" style={{ color: RED }}>
-            00.0
-          </span>
-          {split(" MHz", "hud")}
+        <span>{split(`${lineup.length || CARDS} members · spin`, "hud")}</span>
+        <span className="flex h-5 items-end gap-[3px]">
+          {[0.35, 0.55, 0.75, 1].map((h, i) => (
+            <span key={i} data-i="bar" className="w-[4px] rounded-[1px] bg-white" style={{ height: `${h * 100}%` }} />
+          ))}
         </span>
-        <span className="flex items-end gap-3">
-          <span className="hidden sm:inline">{split("Loading stage file", "hud")}</span>
-          <span className="flex h-5 items-end gap-[3px]">
-            {[0.35, 0.55, 0.75, 1].map((h, i) => (
-              <span key={i} data-i="bar" className="w-[4px] rounded-[1px]" style={{ height: `${h * 100}%`, background: RED }} />
-            ))}
-          </span>
-        </span>
-      </div>
-
-      {/* Panggung tengah: panel merah + mosaik lineup */}
-      <div className="absolute inset-0 flex items-center justify-center px-5 py-16 sm:px-10">
-        <div className="grid w-full max-w-[1100px] items-center gap-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] md:gap-6">
-          <div data-i="card" className="relative overflow-hidden rounded-[28px] p-6 text-white sm:p-8" style={{ background: RED }}>
-            <svg viewBox="0 0 50 50" className="absolute right-6 top-6 h-14 w-14 sm:h-20 sm:w-20">
-              {PIXELS.map(([x, y]) => (
-                <rect key={`${x}-${y}`} data-i="px" x={x * 10} y={y * 10} width="10" height="10" rx="1.5" fill="#fff" />
-              ))}
-            </svg>
-            <p data-i="tag" className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-white/80">
-              ● Welcome to
-            </p>
-            <p className="mt-10 overflow-hidden font-extrabold uppercase leading-[0.85] sm:mt-14" style={{ fontStretch: "75%", fontSize: "clamp(3rem, 8vw, 6rem)" }}>
-              {split("JKT48", "title")}
-              <br />
-              <span style={{ color: "#fde6b0" }}>{split("Connect", "title")}</span>
-            </p>
-            <div className="mt-8 flex items-end justify-between gap-4 border-t border-white/25 pt-4">
-              <p data-i="tag" className="text-[15px] font-extrabold leading-tight sm:text-[17px]">
-                Your oshi.
-                <br />
-                <span className="text-white/80">Your front row feeling.</span>
-              </p>
-              <span data-i="tag" className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/70">
-                {lineup.length || TILES} members on stage
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-6 gap-1.5 [perspective:900px] sm:gap-2.5">
-            {Array.from({ length: TILES }).map((_, i) => {
-              const m = lineup[i];
-              return (
-                <div
-                  key={i}
-                  data-i="tile"
-                  data-tile={i}
-                  className="relative aspect-[3/4] overflow-hidden rounded-lg border bg-white sm:rounded-xl"
-                  style={{ borderColor: "rgb(29 21 23 / 0.1)" }}
-                >
-                  <div className="absolute inset-0" style={{ background: "#f6dcdc" }} />
-                  {m && <img src={m.img} alt="" className="absolute inset-0 h-full w-full object-cover object-top" />}
-                  <span className="absolute left-1 top-1 font-mono text-[8px] font-semibold sm:left-1.5 sm:top-1.5 sm:text-[10px]" style={{ color: RED }}>
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  {m && (
-                    <span className="absolute inset-x-0 bottom-0 truncate bg-white/90 px-1 py-0.5 text-[8px] font-extrabold sm:px-1.5 sm:text-[11px]">
-                      {m.nickname || m.name.split(" ")[0]}
-                    </span>
-                  )}
-                  {i === oshi && (
-                    <>
-                      <span data-i="ring" className="absolute inset-0 rounded-lg border-[3px] opacity-0 sm:rounded-xl" style={{ borderColor: RED }} />
-                      <span data-i="heart" className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full text-[11px] text-white sm:h-7 sm:w-7 sm:text-[14px]" style={{ background: RED }}>
-                        ♥
-                      </span>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Pita merah miring dengan teks berjalan */}
-      <div className="pointer-events-none absolute -left-[20vw] top-[14%] w-[140vw] -rotate-6 overflow-hidden md:top-[76%]">
-        <div data-i="band" className="flex w-max whitespace-nowrap py-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.2em] text-white sm:py-3 sm:text-[14px]" style={{ background: INK }}>
-          {Array.from({ length: 8 }).flatMap((_, k) =>
-            MARQUEE.map((w) => (
-              <span key={`${k}-${w}`} className="flex items-center gap-4 px-4">
-                <span style={{ color: RED }}>✚</span>
-                {w}
-              </span>
-            )),
-          )}
-        </div>
-      </div>
-
-      {/* Kotak-kotak transisi keluar */}
-      <div className="pointer-events-none absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)`, gridTemplateRows: `repeat(${ROWS}, 1fr)` }}>
-        {Array.from({ length: COLS * ROWS }).map((_, i) => (
-          <div key={i} data-i="cell" className="-m-px" style={{ background: RED }} />
-        ))}
       </div>
 
       <button
         type="button"
         onClick={() => tl.current?.progress(1)}
-        className="absolute bottom-14 right-5 z-10 rounded-full border px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] transition hover:text-white sm:bottom-16 sm:right-8"
-        style={{ borderColor: "rgb(29 21 23 / 0.25)" }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = RED)}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        className="absolute bottom-14 right-5 z-10 rounded-full border border-white/40 px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-white hover:text-[#e1243a] sm:bottom-16 sm:right-8"
       >
         Lewati
       </button>

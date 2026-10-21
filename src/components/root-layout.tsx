@@ -55,7 +55,7 @@ export function RootLayout() {
         Lewati ke konten
       </a>
       <Sidebar />
-      <div className="flex min-h-screen lg:pl-[236px]">
+      <div className="flex min-h-screen transition-[padding] duration-500 ease-[cubic-bezier(0.87,0,0.13,1)] lg:pl-[var(--side-pad)]">
         <div className="relative min-w-0 flex-1">
           <Topbar />
           <main id="konten" className="relative z-[1] pb-12">
@@ -65,7 +65,7 @@ export function RootLayout() {
             <div
               ref={wipe}
               aria-hidden
-              className="pointer-events-none fixed inset-0 z-20 hidden lg:left-[236px] xl:right-[340px]"
+              className="pointer-events-none fixed inset-0 z-20 hidden lg:left-[var(--side-pad)] xl:right-[340px]"
               style={{ gridTemplateColumns: `repeat(${WIPE_COLS}, 1fr)`, gridTemplateRows: `repeat(${WIPE_ROWS}, 1fr)` }}
             >
               {Array.from({ length: WIPE_COLS * WIPE_ROWS }).map((_, i) => (

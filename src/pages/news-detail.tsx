@@ -9,12 +9,28 @@ import { fmtDate } from "@/lib/format";
 import { q } from "@/lib/queries";
 
 const ORIGIN = "https://jkt48.com";
+const MEDIA_HOSTS = /(^|\.)jkt48\.com$/;
+
+/** Gambar jkt48.com menolak hotlink, jadi dilewatkan proxy `/api/media` milik situs sendiri. */
+function viaProxy(src: string) {
+  try {
+    const u = new URL(src, ORIGIN);
+    return MEDIA_HOSTS.test(u.hostname) ? `/api/media?url=${encodeURIComponent(u.href)}` : u.href;
+  } catch {
+    return src;
+  }
+}
 
 /** Bersihkan HTML berita dan perbaiki tautan/gambar relatif dari situs resmi. */
 function sanitize(html: string) {
   const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
   const doc = new DOMParser().parseFromString(clean, "text/html");
-  doc.querySelectorAll<HTMLImageElement>("img[src^='/']").forEach((img) => (img.src = ORIGIN + img.getAttribute("src")));
+  doc.querySelectorAll<HTMLImageElement>("img[src]").forEach((img) => {
+    img.setAttribute("src", viaProxy(img.getAttribute("src") ?? ""));
+    img.removeAttribute("srcset");
+    img.loading = "lazy";
+    img.decoding = "async";
+  });
   doc.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
     const href = a.getAttribute("href") ?? "";
     if (href.startsWith("/")) a.href = ORIGIN + href;

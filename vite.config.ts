@@ -33,12 +33,25 @@ export default defineConfig(({ mode }) => {
   const outbound = process.env.HTTPS_PROXY || process.env.https_proxy;
 
   // Proxy lokal meniru worker/proxy.ts: key ditambahkan di server dev, bukan di browser.
+  const agent = outbound ? new HttpsProxyAgent(outbound) : undefined;
   const proxy = {
+    // Meniru /api/media di worker/proxy.ts: ambil gambar jkt48.com dari server dev.
+    "/api/media": {
+      target: "https://jkt48.com",
+      changeOrigin: true,
+      agent,
+      rewrite: (path: string) => {
+        const u = new URL(new URLSearchParams(path.split("?")[1] ?? "").get("url") ?? "https://jkt48.com/");
+        return /(^|\.)jkt48\.com$/.test(u.hostname) ? u.pathname + u.search : "/404";
+      },
+      // Referer dari localhost ditolak (403); ganti dengan origin jkt48.com sendiri.
+      headers: { Referer: "https://jkt48.com/", Cookie: "" },
+    },
     "/api": {
       target: upstream,
       changeOrigin: true,
       headers: key ? { "X-API-Key": key } : {},
-      agent: outbound ? new HttpsProxyAgent(outbound) : undefined,
+      agent,
     },
   };
 
