@@ -156,27 +156,37 @@ async function startSession(): Promise<Wire> {
 
 let wire: Promise<Wire> | null = null;
 
-/** Satu proses sesi untuk semua query yang berjalan bersamaan; diperbarui sebelum kedaluwarsa. */
-function ensureWire(force = false): Promise<Wire> {
-  if (force || !wire) {
-    const next = (async () => {
-      if (!force) {
-        const stored = await loadWire();
-        if (stored && stored.exp - Date.now() > 60_000 && stored.enc && stored.mac) return stored;
-      }
-      return startSession();
-    })();
-    wire = next.catch((err) => {
-      wire = null;
-      throw err;
-    });
-  }
-  return wire.then((w) => (Date.now() > w.exp - 60_000 ? ensureWire(true) : w));
+function guarded(p: Promise<Wire>): Promise<Wire> {
+  const out = p.catch((err) => {
+    if (wire === out) wire = null;
+    throw err;
+  });
+  return out;
+}
+
+/**
+ * Kunci sesi untuk request berikutnya. `rejected` = kunci yang baru saja ditolak server (sesi berganti/kedaluwarsa).
+ * Banyak request yang gagal bersamaan hanya memicu SATU sesi baru: yang datang belakangan memakai hasil yang sudah
+ * diperbarui, sehingga cookie tidak saling menimpa.
+ */
+async function getWire(rejected?: Wire): Promise<Wire> {
+  wire ??= guarded(
+    (async () => {
+      const stored = await loadWire();
+      return stored && stored.exp - Date.now() > 60_000 && stored.enc && stored.mac ? stored : startSession();
+    })(),
+  );
+  const p = wire;
+  const w = await p;
+  if (w !== rejected && Date.now() < w.exp - 60_000) return w;
+  if (wire !== p) return wire; // sudah diperbarui pemanggil lain
+  wire = guarded(startSession());
+  return wire;
 }
 
 /* ───────────────────────────── Request ───────────────────────────── */
 
-const RETRY_CODES = new Set(["session_required", "key_mismatch", "signature_required"]);
+const RETRY_CODES = new Set(["session_required", "key_mismatch", "signature_required", "clock_skew"]);
 
 async function signedFetch(w: Wire, pathAndQuery: string) {
   const ts = String(Date.now() + w.offset);
@@ -195,8 +205,10 @@ export async function apiGet<T = unknown>(path: string, query: Query = {}): Prom
   const u = new URL(`${path}${qs.size ? `?${qs}` : ""}`, location.origin);
   const pathAndQuery = u.pathname + u.search;
 
+  let rejected: Wire | undefined;
   for (let attempt = 0; ; attempt++) {
-    const w = await ensureWire(attempt > 0);
+    const w = await getWire(rejected);
+    rejected = w;
     const res = await signedFetch(w, pathAndQuery);
     const body = await readBody(res);
 

@@ -76,8 +76,13 @@ export async function issueSession(k: Keys, url: URL, sid?: string): Promise<{ s
   };
 }
 
-/** "none" = tidak ada cookie, "expired" = sah tapi kedaluwarsa (normal), "forged" = format/tanda tangan salah (dimanipulasi). */
-export type SessionRead = { ok: true; session: Session } | { ok: false; why: "none" | "expired" | "forged" };
+/**
+ * "none" = tidak ada cookie, "expired" = kedaluwarsa, "invalid" = format/tanda tangan tidak cocok.
+ * "invalid" BUKAN bukti manipulasi: cookie lama dari sebelum SESSION_SECRET diganti juga jatuh di sini,
+ * jadi diperlakukan seperti sesi kedaluwarsa (buat sesi baru), tanpa poin curiga. Cookie palsu tidak memberi
+ * akses apa pun, jadi tidak perlu dihukum.
+ */
+export type SessionRead = { ok: true; session: Session } | { ok: false; why: "none" | "expired" | "invalid" };
 
 export async function readSession(k: Keys, request: Request): Promise<SessionRead> {
   const url = new URL(request.url);
@@ -91,7 +96,7 @@ export async function readSession(k: Keys, request: Request): Promise<SessionRea
   const m = /^v1\.([A-Za-z0-9_-]{22})\.(\d{10})\.([A-Za-z0-9_-]{43})$/.exec(raw);
   const sig = m && unb64url(m[3]);
   // crypto.subtle.verify membandingkan dalam waktu konstan.
-  if (!m || !sig || !(await crypto.subtle.verify("HMAC", k.hmac, sig, enc.encode(`v1.${m[1]}.${m[2]}`)))) return { ok: false, why: "forged" };
+  if (!m || !sig || !(await crypto.subtle.verify("HMAC", k.hmac, sig, enc.encode(`v1.${m[1]}.${m[2]}`)))) return { ok: false, why: "invalid" };
   const exp = Number(m[2]);
   if (exp <= Date.now() / 1000) return { ok: false, why: "expired" };
   return { ok: true, session: { sid: m[1], exp } };
@@ -204,10 +209,14 @@ export async function verifyTurnstile(secret: string, token: string, ip: string)
  * Browser modern mengirim `Sec-Fetch-Site`; browser lama dicek lewat Origin/Referer.
  * Ini bukan autentikasi (klien non-browser bisa memalsukan header), tapi menutup penyalahgunaan dari situs lain.
  */
-/** "ok" | "direct" (dibuka langsung di address bar) | "cross" (dari situs lain / tanpa asal). */
-export function originCheck(request: Request): "ok" | "direct" | "cross" {
+/**
+ * "ok" | "direct" (dibuka langsung di address bar) | "cross" (browser menyatakan asal situs lain) |
+ * "unknown" (tidak ada Sec-Fetch-Site/Origin/Referer: browser lama atau pemblokir privasi — ditolak tanpa poin).
+ */
+export function originCheck(request: Request): "ok" | "direct" | "cross" | "unknown" {
   const site = request.headers.get("sec-fetch-site");
   if (site === "none") return "direct";
+  if (!site && !request.headers.get("origin") && !request.headers.get("referer")) return "unknown";
   return sameOrigin(request) ? "ok" : "cross";
 }
 
