@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useClock } from "@/hooks/use-clock";
 import { gsap } from "@/lib/gsap";
 import { q } from "@/lib/queries";
@@ -59,6 +59,31 @@ function SignalIntro({ onDone }: { onDone: () => void }) {
   const [oshi] = useState(() => Math.floor(Math.random() * CARDS));
   const pick = lineup[oshi];
 
+  // Gerbang mulai putaran: kartu baru berputar setelah foto lineup selesai dimuat (atau batas waktu habis),
+  // supaya cincin tidak berputar dengan kartu kosong saat API/jaringan lambat.
+  const gate = useRef({ opening: false, photos: false, timedOut: false, started: false });
+  const start = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    if (!lineup.length) return;
+    let alive = true;
+    const load = (src: string) =>
+      new Promise<void>((resolve) => {
+        const img = new Image();
+        img.decoding = "async";
+        img.onload = img.onerror = () => resolve();
+        img.src = src;
+      });
+    void Promise.all(lineup.map((m) => load(m.img))).then(() => {
+      if (!alive) return;
+      gate.current.photos = true;
+      start.current();
+    });
+    return () => {
+      alive = false;
+    };
+  }, [lineup]);
+
   useLayoutEffect(() => {
     document.body.classList.add("is-locked");
     const ctx = gsap.context(() => {
@@ -72,30 +97,27 @@ function SignalIntro({ onDone }: { onDone: () => void }) {
         slot.style.transform = `rotateY(${i * step}deg) translateZ(${radius}px)`;
       });
 
-      const t = gsap.timeline({
+      // Teks raksasa melaju terus (terpisah dari timeline) supaya layar tetap hidup selama menunggu foto.
+      gsap.from("[data-i='row-a'], [data-i='row-b']", { opacity: 0, duration: 0.5, delay: 0.3 });
+      gsap.fromTo("[data-i='row-a']", { xPercent: 0 }, { xPercent: -50, duration: 14, ease: "none", repeat: -1 });
+      gsap.fromTo("[data-i='row-b']", { xPercent: -50 }, { xPercent: 0, duration: 14, ease: "none", repeat: -1 });
+
+      // Bagian utama (cincin → oshi → keluar) dibuat dulu dalam keadaan pause.
+      const main = gsap.timeline({
+        paused: true,
         defaults: { ease: "power3.out" },
         onComplete: () => {
           document.body.classList.remove("is-locked");
           onDone();
         },
       });
-      tl.current = t;
-
-      t.from("[data-i='hud']", { opacity: 0, duration: 0.03, stagger: 0.01 }, 0)
-        .from("[data-i='bar']", { scaleY: 0, transformOrigin: "50% 100%", duration: 0.3, stagger: 0.12 }, 0.1)
-        // Hitung mundur 3-2-1.
-        .fromTo("[data-i='count']", { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.18, stagger: 0.28, ease: "back.out(2)" }, 0.05)
-        .to("[data-i='count']", { scale: 0.4, opacity: 0, duration: 0.14, stagger: 0.28, ease: "power2.in" }, 0.25)
-        // Teks raksasa melaju berlawanan arah.
-        .fromTo("[data-i='row-a']", { xPercent: 0 }, { xPercent: -30, duration: 5, ease: "none" }, 0.3)
-        .fromTo("[data-i='row-b']", { xPercent: -30 }, { xPercent: 0, duration: 5, ease: "none" }, 0.3)
-        .from("[data-i='row-a'], [data-i='row-b']", { opacity: 0, duration: 0.5 }, 0.3)
-        // Cincin photocard muncul lalu berputar dan melambat di kartu terpilih.
-        .from(cards, { scale: 0, opacity: 0, duration: 0.5, stagger: { each: 0.03, from: "random" }, ease: "back.out(1.8)" }, 0.85)
-        .fromTo("[data-i='ring']", { rotationY: 140, rotationX: -14 }, { rotationY: -(oshi * step) - 720, rotationX: -6, duration: 2.3, ease: "expo.inOut" }, 0.85)
+      tl.current = main;
+      main
+        .from(cards, { scale: 0, opacity: 0, duration: 0.5, stagger: { each: 0.03, from: "random" }, ease: "back.out(1.8)" }, 0)
+        .fromTo("[data-i='ring']", { rotationY: 140, rotationX: -14 }, { rotationY: -(oshi * step) - 720, rotationX: -6, duration: 2.3, ease: "expo.inOut" }, 0)
         // Kartu terpilih.
-        .to(cards[oshi], { scale: 1.2, duration: 0.45, ease: "back.out(3)" }, 3.1)
-        .to(cards.filter((_, i) => i !== oshi), { opacity: 0.35, duration: 0.3 }, 3.1)
+        .to(cards[oshi], { scale: 1.2, duration: 0.45, ease: "back.out(3)" }, 2.25)
+        .to(cards.filter((_, i) => i !== oshi), { opacity: 0.35, duration: 0.3 }, 2.25)
         .fromTo("[data-i='heart']", { scale: 0, x: 0, y: 0, opacity: 1 }, {
           scale: () => gsap.utils.random(0.6, 1.4),
           x: () => gsap.utils.random(-260, 260),
@@ -105,12 +127,12 @@ function SignalIntro({ onDone }: { onDone: () => void }) {
           duration: 1,
           stagger: 0.015,
           ease: "power3.out",
-        }, 3.15)
+        }, 2.3)
         // Nama bisa berubah saat data member datang, jadi pembungkusnya yang disembunyikan sampai giliran.
-        .fromTo("[data-i='pickwrap']", { opacity: 0 }, { opacity: 1, duration: 0.01 }, 3.25)
-        .from("[data-i='pick']", { yPercent: 110, duration: 0.45, stagger: 0.025, ease: "back.out(2)" }, 3.25)
-        .from("[data-i='picklabel']", { opacity: 0, y: 10, duration: 0.3 }, 3.2)
-        .addLabel("out", 4.2)
+        .fromTo("[data-i='pickwrap']", { opacity: 0 }, { opacity: 1, duration: 0.01 }, 2.4)
+        .from("[data-i='pick']", { yPercent: 110, duration: 0.45, stagger: 0.025, ease: "back.out(2)" }, 2.4)
+        .from("[data-i='picklabel']", { opacity: 0, y: 10, duration: 0.3 }, 2.35)
+        .addLabel("out", 3.35)
         // Keluar: kartu terlempar, layar terbelah.
         .to(cards, {
           x: () => gsap.utils.random(-500, 500),
@@ -124,9 +146,38 @@ function SignalIntro({ onDone }: { onDone: () => void }) {
         .set("[data-i='bg']", { opacity: 0 }, "out+=0.45")
         .to("[data-i='top']", { yPercent: -100, duration: 0.65, ease: "expo.inOut" }, "out+=0.45")
         .to("[data-i='bottom']", { yPercent: 100, duration: 0.65, ease: "expo.inOut" }, "out+=0.45");
+
+      const wait = "[data-i='wait']";
+      start.current = () => {
+        const g = gate.current;
+        if (g.started || !g.opening) return;
+        if (!g.photos && !g.timedOut) {
+          // Foto belum siap: tampilkan "memuat lineup" sambil menunggu.
+          gsap.to(wait, { opacity: 1, y: 0, duration: 0.3 });
+          return;
+        }
+        g.started = true;
+        gsap.to(wait, { opacity: 0, duration: 0.2 });
+        main.play();
+      };
+
+      // Pembuka: HUD, bar sinyal, hitung mundur 3-2-1.
+      gsap
+        .timeline({ defaults: { ease: "power3.out" }, onComplete: () => ((gate.current.opening = true), start.current()) })
+        .from("[data-i='hud']", { opacity: 0, duration: 0.03, stagger: 0.01 }, 0)
+        .from("[data-i='bar']", { scaleY: 0, transformOrigin: "50% 100%", duration: 0.3, stagger: 0.12 }, 0.1)
+        .fromTo("[data-i='count']", { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.18, stagger: 0.28, ease: "back.out(2)" }, 0.05)
+        .to("[data-i='count']", { scale: 0.4, opacity: 0, duration: 0.14, stagger: 0.28, ease: "power2.in" }, 0.25);
     }, root);
 
+    // Batas tunggu foto: jaringan sangat lambat → tetap lanjut dengan kartu yang ada.
+    const limit = window.setTimeout(() => {
+      gate.current.timedOut = true;
+      start.current();
+    }, 4500);
+
     return () => {
+      clearTimeout(limit);
       document.body.classList.remove("is-locked");
       ctx.revert();
     };
@@ -157,6 +208,18 @@ function SignalIntro({ onDone }: { onDone: () => void }) {
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-[9%] overflow-hidden font-extrabold uppercase leading-none" style={{ fontStretch: "75%", fontSize: "clamp(4rem, 14vw, 12rem)" }}>
         {row("row-b", [...WORDS].reverse())}
+      </div>
+
+      {/* Menunggu foto lineup (hanya muncul bila API/jaringan lambat) */}
+      <div data-i="wait" className="pointer-events-none absolute inset-x-0 top-1/2 -mt-6 text-center opacity-0">
+        <p className="inline-flex items-center gap-3 rounded-full bg-black/15 px-5 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-white sm:text-[12px]">
+          <span className="flex h-4 items-end gap-[3px]">
+            {[0.4, 0.7, 1].map((h, i) => (
+              <span key={i} className="w-[3px] animate-pulse rounded-[1px] bg-white" style={{ height: `${h * 100}%`, animationDelay: `${i * 150}ms` }} />
+            ))}
+          </span>
+          Memuat lineup…
+        </p>
       </div>
 
       {/* Hitung mundur */}
