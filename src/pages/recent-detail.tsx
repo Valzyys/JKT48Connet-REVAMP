@@ -3,16 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { BackLink } from "@/components/back-link";
 import { Page } from "@/components/page";
 import { Replay } from "@/components/replay";
+import { ScreenshotGallery } from "@/components/screenshots";
 import { ErrorState, Img, PlatformTag, Skeleton } from "@/components/ui";
 import { fmtDate, fmtDuration, fmtNumber, fmtTime } from "@/lib/format";
 import { pointLabel } from "@/lib/jkt48";
 import { q } from "@/lib/queries";
-
-/** Ambil beberapa momen (awal, tengah, akhir) dari daftar screenshot, sesuai saran docs. */
-function pickMoments(list: string[], n = 6) {
-  if (list.length <= n) return list;
-  return Array.from({ length: n }, (_, i) => list[Math.round((i * (list.length - 1)) / (n - 1))]);
-}
 
 function H2({ children }: { children: React.ReactNode }) {
   return <h2 className="condensed mb-3 text-[28px] uppercase leading-none">{children}</h2>;
@@ -88,7 +83,7 @@ export function RecentDetailPage() {
                   recordings={r.recordings}
                   unlockAt={r.replayUnlockAt}
                   vertical={r.platform === "idn"}
-                  poster={r.screenshots[Math.floor(r.screenshots.length / 2)]}
+                  poster={r.screenshots[Math.floor(r.screenshots.length / 2)]?.url}
                 />
               </div>
             )}
@@ -134,14 +129,9 @@ export function RecentDetailPage() {
                 )}
 
                 {r.screenshots.length > 0 && (
-                  <section data-reveal>
-                    <H2>Cuplikan</H2>
-                    <div className={`grid gap-2 pt-3 ${r.platform === "idn" ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-2 sm:grid-cols-3"}`}>
-                      {pickMoments(r.screenshots).map((src) => (
-                        <Img key={src} src={src} alt={`Cuplikan live ${r.name}`} className={`${r.platform === "idn" ? "aspect-[9/16]" : "aspect-video"} w-full rounded object-cover`} />
-                      ))}
-                    </div>
-                  </section>
+                  <div data-reveal>
+                    <ScreenshotGallery shots={r.screenshots} start={r.start} name={r.name} vertical={r.platform === "idn"} />
+                  </div>
                 )}
               </div>
 
