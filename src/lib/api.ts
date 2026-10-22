@@ -65,7 +65,8 @@ const FETCH_TIMEOUT_MS = 20_000;
 function timedFetch(input: string, init: RequestInit): Promise<Response> {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
-  return fetch(input, { ...init, signal: ctl.signal })
+  // no-store: jangan pernah memakai respons tersimpan (cache browser / Service Worker lama).
+  return fetch(input, { ...init, cache: "no-store", signal: ctl.signal })
     .catch((err) => {
       diag(`fetch ${input.split("?")[0]}: ${ctl.signal.aborted ? "timeout" : String(err)}`);
       throw new ApiError(0, "Koneksi terputus");
@@ -287,7 +288,8 @@ export async function apiGet<T = unknown>(path: string, query: Query = {}): Prom
     }
     if (!res.ok) throw errorOf(res, body, `HTTP ${res.status}`);
     if (!isSealed(body)) {
-      diag(`${pathAndQuery}: respons tidak terenkripsi`);
+      const sw = typeof navigator !== "undefined" && !!navigator.serviceWorker?.controller;
+      diag(`${pathAndQuery}: respons tidak terenkripsi (HTTP ${res.status}, sw=${sw}, ${JSON.stringify(body).slice(0, 60)})`);
       throw new ApiError(502, "Respons tidak valid");
     }
 
