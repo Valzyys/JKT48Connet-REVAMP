@@ -38,6 +38,7 @@ tema `jkt48connect`, bukan photobook.
 | `/recent`, `/recent/:id` | Rekap live: durasi, penonton, gold/poin, top supporter, gift, semua cuplikan (grid / daftar rinci + penampil), leaderboard, replay yang diputar langsung di situs (terbuka 72 jam setelah live) | `GET /api/recent`, `/api/recent/:id` |
 | `/news`, `/news/:id` | Berita resmi (HTML disanitasi DOMPurify) | `GET /api/news`, `/api/news/:id` |
 | `/video` | Upload terbaru JKT48 & JKT48 TV | `GET /api/jkt48_youtube` |
+| `/developer` | Info JKT48Connect API untuk developer: terminal dengan angka hidup dari API, daftar endpoint yang dipakai situs, tiga langkah mulai, contoh kode (cURL/JavaScript/Python), ide pemakaian, tautan docs & dashboard key | beberapa (lewat proxy situs) |
 | `/about`, `/disclaimer`, `/terms`, `/privacy` | Statis | — |
 
 Bentuk respons sudah dicocokkan dengan output asli API (Oktober 2026) di [`src/lib/shape.ts`](src/lib/shape.ts) (dijalankan di server).
@@ -220,7 +221,8 @@ Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 | ![Recent](docs/screenshots/11-recent.jpg) | ![Detail recent](docs/screenshots/12-recent-detail.jpg) |
 | ![Replay terkunci 72 jam](docs/screenshots/22-replay-locked.jpg) | ![Pemutar replay custom](docs/screenshots/22b-replay-player.jpg) |
 | ![Cuplikan: daftar rinci](docs/screenshots/23-cuplikan-daftar.jpg) | ![Cuplikan: grid](docs/screenshots/23b-cuplikan-grid.jpg) |
-| ![Transisi halaman](docs/screenshots/24-transisi-halaman.jpg) | |
+| ![Transisi halaman](docs/screenshots/24-transisi-halaman.jpg) | ![API untuk developer (HP)](docs/screenshots/25b-developer-mobile.jpg) |
+| ![API untuk developer](docs/screenshots/25-developer.jpg) | |
 | ![Berita](docs/screenshots/13-news.jpg) | ![Detail berita](docs/screenshots/14-news-detail.jpg) |
 | ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu layar penuh mobile](docs/screenshots/19-mobile-menu.jpg) |
 | ![Footer mobile](docs/screenshots/20-footer-mobile.jpg) | ![Sidebar desktop diciutkan](docs/screenshots/21-sidebar-collapsed.jpg) |

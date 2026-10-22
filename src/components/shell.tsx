@@ -558,6 +558,7 @@ const FOOTER_COLS: { title: string; links: { label: string; to: string }[] }[] =
   {
     title: "Info",
     links: [
+      { label: "API untuk developer", to: "/developer" },
       { label: "Tentang", to: "/about" },
       { label: "Disclaimer", to: "/disclaimer" },
       { label: "Ketentuan", to: "/terms" },
@@ -657,6 +658,9 @@ export function Footer() {
           © {new Date().getFullYear()} JKT48Connect
         </span>
         <span>Proyek komunitas, bukan situs resmi JKT48</span>
+        <Link to="/developer" className="transition-colors hover:text-white">
+          Data: <span className="text-white/75">api.jkt48connect.app</span>
+        </Link>
         <span className="ml-auto flex items-center gap-4">
           <span className="num">WIB {clock}</span>
           <button
