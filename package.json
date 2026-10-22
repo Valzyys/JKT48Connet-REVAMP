@@ -12,6 +12,7 @@
     "cf:secret": "wrangler secret put JKT48CONNECT_API_KEY",
     "cf:dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "deploy:auto": "node scripts/deploy.mjs",
     "deploy:pages": "vite build && wrangler pages deploy dist --project-name jkt48connect"
   },
   "dependencies": {

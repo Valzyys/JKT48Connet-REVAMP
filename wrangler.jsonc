@@ -25,11 +25,14 @@
     // Per sesi: semua permintaan data, gambar, dan potongan video replay.
     { "name": "API_LIMITER", "namespace_id": "4801", "simple": { "limit": 300, "period": 60 } },
     // Per IP: pembuatan sesi baru.
-    { "name": "SESSION_LIMITER", "namespace_id": "4802", "simple": { "limit": 20, "period": 60 } }
+    { "name": "SESSION_LIMITER", "namespace_id": "4802", "simple": { "limit": 30, "period": 60 } }
   ],
+  // Penjaga anti-iseng (worker/guard-do.ts): poin curiga & blokir per IP. Dibuat otomatis saat deploy.
+  "durable_objects": { "bindings": [{ "name": "GUARD", "class_name": "Guard" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Guard"] }],
   "observability": { "enabled": true }
-  // Secret TIDAK ditulis di sini:
-  //   npx wrangler secret put JKT48CONNECT_API_KEY
-  //   npx wrangler secret put SESSION_SECRET          (opsional, disarankan; acak ≥ 32 karakter)
-  //   npx wrangler secret put TURNSTILE_SECRET_KEY    (opsional; aktifkan juga VITE_TURNSTILE_SITE_KEY saat build)
+  // Secret TIDAK ditulis di sini. `npm run deploy:auto` mengisinya otomatis:
+  //   JKT48CONNECT_API_KEY   dari env build (wajib, sekali)
+  //   SESSION_SECRET         dibuat acak bila belum ada
+  //   TURNSTILE_SECRET_KEY   dari env build (opsional; pasangkan VITE_TURNSTILE_SITE_KEY)
 }

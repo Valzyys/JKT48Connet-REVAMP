@@ -4,14 +4,19 @@
  * (functions/api/[[path]].ts), dan dev server Vite (vite.config.ts).
  *
  * Lapisan perlindungan (urut):
- *   1. Hanya GET/HEAD (kecuali POST /api/session), hanya dari origin situs sendiri.
- *   2. Wajib cookie sesi bertanda tangan HMAC (dibuat POST /api/session, opsional lewat Turnstile).
- *   3. Rate limit per sesi dan pembuatan sesi per IP.
- *   4. Route & parameter query di-allowlist ketat dan dibatasi; parameter lain ditolak (tidak ada cache-busting).
- *   5. Respons upstream dinormalisasi di server (src/lib/shape.ts): browser tidak pernah melihat JSON mentah.
- *   6. Replay: URL file tidak dikirim selama 72 jam; setelahnya diganti token AES-GCM yang terikat sesi
+ *   1. Penjaga anti-iseng (worker/guard.ts): IP yang sudah terblokir langsung mendapat halaman blokir.
+ *      Setiap upaya mengakali di bawah ini menambah poin curiga; melewati ambang → blokir berjenjang.
+ *   2. Hanya GET/HEAD (kecuali POST /api/session), hanya dari origin situs sendiri.
+ *   3. Wajib cookie sesi bertanda tangan HMAC (dibuat POST /api/session lewat tukar kunci ECDH, opsional Turnstile).
+ *   4. Request data wajib bertanda tangan HMAC per sesi + timestamp + nonce (src/lib/wire.ts): request yang
+ *      disalin/diputar ulang atau dibuat tanpa kunci sesi ditolak.
+ *   5. Rate limit per sesi dan pembuatan sesi per IP.
+ *   6. Route & parameter query di-allowlist ketat dan dibatasi; parameter lain ditolak (tidak ada cache-busting).
+ *   7. Respons upstream dinormalisasi di server (src/lib/shape.ts) lalu DIENKRIPSI AES-256-GCM dengan kunci
+ *      sesi: isi jaringan/HAR tidak terbaca dan tidak bisa dipakai sesi lain.
+ *   8. Replay: URL file tidak dikirim selama 72 jam; setelahnya diganti token AES-GCM yang terikat sesi
  *      dan kedaluwarsa, lalu di-stream lewat `/api/replay`.
- *   7. Pesan error generik; detail hanya di log Worker.
+ *   9. Pesan error generik; detail hanya di log Worker.
  */
 
 import {
@@ -29,19 +34,25 @@ import {
   shapeVideos,
   type RecentDetail,
 } from "../src/lib/shape";
+import { canonical, H, MAX_SKEW_MS, seal, verify, WIRE_VERSION } from "../src/lib/wire";
+import { denyPage, guardFor, maskIp, newIncident, REASON_LABEL, type Block, type GuardNamespace, type Reason } from "./guard";
 import {
   allow,
   API_HEADERS,
   clientIp,
+  exchangeKey,
+  freshNonce,
   issueSession,
   json,
   keys,
   openReplay,
+  originCheck,
   readSession,
-  sameOrigin,
   sealReplay,
+  sessionKeys,
   SESSION_TTL,
   verifyTurnstile,
+  type Keys,
   type SecurityEnv,
   type Session,
 } from "./security";
@@ -51,12 +62,15 @@ export interface ProxyEnv extends SecurityEnv {
   JKT48CONNECT_API_KEY?: string;
   /** Opsional, default https://api.jkt48connect.app */
   API_UPSTREAM?: string;
+  /** Durable Object penjaga (wrangler.jsonc). Tanpa binding (Pages/dev) dipakai penyimpanan per-isolate. */
+  GUARD?: GuardNamespace;
+  /** "1" mematikan pemblokiran otomatis (darurat, mis. salah blokir massal). Pelanggaran tetap ditolak. */
+  GUARD_DISABLED?: string;
   /** Hanya untuk dev server Node (lewat proxy keluar); Workers memakai fetch bawaan. */
   UPSTREAM_FETCH?: typeof fetch;
 }
 
 type Ctx = { waitUntil(p: Promise<unknown>): void };
-type Keys = NonNullable<Awaited<ReturnType<typeof keys>>>;
 
 /* ───────────────────────────── Route ───────────────────────────── */
 
@@ -129,6 +143,51 @@ function edgeCache(): Cache | undefined {
   return (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
 }
 
+/* ───────────────────────────── Konteks & penolakan ───────────────────────────── */
+
+type Call = { request: Request; url: URL; env: ProxyEnv; ctx: Ctx; ip: string; guard: ReturnType<typeof guardFor> };
+
+const te = new TextEncoder();
+
+/** Dibuka langsung sebagai halaman (address bar, tab baru) → balas HTML, bukan JSON. */
+function isNavigation(request: Request) {
+  const mode = request.headers.get("sec-fetch-mode");
+  if (mode) return mode === "navigate";
+  return (request.headers.get("accept") ?? "").includes("text/html");
+}
+
+function html(body: string, status: number) {
+  return new Response(body, {
+    status,
+    headers: {
+      ...API_HEADERS,
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    },
+  });
+}
+
+/** Respons untuk IP yang sedang diblokir: halaman HTML (navigasi) atau JSON `code: "blocked"` (dibaca UI). */
+function blockedResponse(c: Call, b: Block) {
+  if (isNavigation(c.request)) return html(denyPage({ blocked: true, ...b, ip: c.ip }), 403);
+  return json(
+    { status: 403, code: "blocked", message: "Akses diblokir", incident: b.incident, reason: b.reason, reasonLabel: REASON_LABEL[b.reason], at: b.at, until: b.until, ip: maskIp(c.ip) },
+    403,
+    { "retry-after": String(Math.max(1, Math.ceil((b.until - Date.now()) / 1000))) },
+  );
+}
+
+/** Tolak + catat pelanggaran. Bila poin melewati ambang, langsung balas sebagai blokir. */
+async function deny(c: Call, reason: Reason, status: number, message: string, detail = "", extra: Record<string, string> = {}): Promise<Response> {
+  const v = await c.guard.strike(reason, `${c.request.method} ${c.url.pathname}${c.url.search} ${detail}`);
+  if (v.blocked) return blockedResponse(c, v);
+  if (isNavigation(c.request)) return html(denyPage({ blocked: false, incident: newIncident(), reason, ip: c.ip, at: Date.now() }), status);
+  return json({ status, message }, status, extra);
+}
+
+const noGuard: Call["guard"] = { status: async () => ({ blocked: false, score: 0 }), strike: async () => ({ blocked: false, score: 0 }) };
+
 /* ───────────────────────────── Entry ───────────────────────────── */
 
 export async function handleApi(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Response> {
@@ -142,31 +201,47 @@ export async function handleApi(request: Request, env: ProxyEnv, ctx: Ctx): Prom
 
 async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Response> {
   const url = new URL(request.url);
+  const ip = clientIp(request);
+  const c: Call = { request, url, env, ctx, ip, guard: env.GUARD_DISABLED === "1" ? noGuard : guardFor(env.GUARD, ip) };
+
+  const verdict = await c.guard.status();
+  if (verdict.blocked) return blockedResponse(c, verdict);
+
   const k = await keys(env);
   if (!k || !env.JKT48CONNECT_API_KEY) {
     console.error("JKT48CONNECT_API_KEY belum diset (npm run cf:secret)");
     return json({ status: 503, message: "Layanan belum tersedia" }, 503);
   }
 
-  if (url.pathname === "/api/session") return handleSession(request, env, k, url);
+  if (url.pathname === "/api/session") return handleSession(c, k);
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    return json({ status: 405, message: "Method tidak diizinkan" }, 405, { allow: "GET, HEAD" });
+    return deny(c, "bad_method", 405, "Method tidak diizinkan", "", { allow: "GET, HEAD" });
   }
-  if (!sameOrigin(request)) return json({ status: 403, message: "Akses ditolak" }, 403);
+  const origin = originCheck(request);
+  if (origin === "direct") return deny(c, "direct_access", 403, "Akses ditolak");
+  if (origin === "cross") return deny(c, "cross_site", 403, "Akses ditolak", request.headers.get("origin") ?? request.headers.get("referer") ?? "");
 
-  const session = await readSession(k, request);
-  if (!session) return json({ status: 401, code: "session_required", message: "Sesi diperlukan" }, 401);
+  const read = await readSession(k, request);
+  if (!read.ok) {
+    if (read.why === "forged") return deny(c, "forged_session", 401, "Sesi tidak valid");
+    return json({ status: 401, code: "session_required", message: "Sesi diperlukan" }, 401);
+  }
+  const session = read.session;
   if (!(await allow(env.API_LIMITER, `s:${session.sid}`, 300))) {
-    return json({ status: 429, message: "Terlalu banyak permintaan, coba lagi sebentar" }, 429, { "retry-after": "30" });
+    return deny(c, "rate_limit", 429, "Terlalu banyak permintaan, coba lagi sebentar", "", { "retry-after": "30" });
   }
 
   let res: Response;
-  if (url.pathname === "/api/media") res = await handleMedia(url, env, ctx);
-  else if (url.pathname === "/api/replay") res = await handleReplay(request, url, env, k, session);
-  else res = await handleData(url, env, ctx, k, session);
+  // <img>/<video> tidak bisa membawa header tanda tangan; keduanya dilindungi sesi + token/allowlist host.
+  if (url.pathname === "/api/media") res = await handleMedia(c);
+  else if (url.pathname === "/api/replay") res = await handleReplay(c, k, session);
+  else {
+    const bad = await checkSignature(c, k, session);
+    res = bad ?? (await handleData(c, k, session));
+  }
 
-  // Sesi geser: perpanjang cookie bila sisa umurnya < separuh.
+  // Sesi geser: perpanjang cookie bila sisa umurnya < separuh (id sesi & kunci tetap sama).
   if (session.exp - Date.now() / 1000 < SESSION_TTL / 2) {
     const fresh = await issueSession(k, url, session.sid);
     res = new Response(res.body, res);
@@ -175,54 +250,90 @@ async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Respons
   return res;
 }
 
+/* ───────────────────────────── Tanda tangan request ───────────────────────────── */
+
+/** null = sah. Kunci usang/klien lama → 401 tanpa poin (klien membuat ulang kunci); pemalsuan/replay → poin. */
+async function checkSignature(c: Call, k: Keys, session: Session): Promise<Response | null> {
+  const h = c.request.headers;
+  const ts = h.get(H.ts) ?? "";
+  const nonce = h.get(H.nonce) ?? "";
+  const sig = h.get(H.sig) ?? "";
+  const kid = h.get(H.kid) ?? "";
+  if (!ts && !nonce && !sig && !kid) return json({ status: 401, code: "signature_required", message: "Muat ulang halaman" }, 401);
+
+  const ks = await sessionKeys(k, session.sid);
+  if (kid !== ks.kid) return json({ status: 401, code: "key_mismatch", message: "Kunci sesi berganti" }, 401);
+  if (!/^\d{13}$/.test(ts) || !/^[A-Za-z0-9_-]{16,64}$/.test(nonce)) return deny(c, "bad_signature", 401, "Permintaan tidak valid", "format");
+  if (!(await verify(ks.mac, canonical(c.request.method, c.url.pathname + c.url.search, ts, nonce), sig))) {
+    return deny(c, "bad_signature", 401, "Permintaan tidak valid", "sig");
+  }
+  // Tanda tangan sah tapi waktunya jauh / nonce sudah dipakai = request yang disalin lalu diputar ulang.
+  if (Math.abs(Date.now() - Number(ts)) > MAX_SKEW_MS) return deny(c, "replay", 401, "Permintaan kedaluwarsa", "stale");
+  if (!freshNonce(session.sid, nonce, MAX_SKEW_MS * 2)) return deny(c, "replay", 401, "Permintaan diputar ulang", "nonce");
+  return null;
+}
+
 /* ───────────────────────────── Sesi ───────────────────────────── */
 
-async function handleSession(request: Request, env: ProxyEnv, k: Keys, url: URL): Promise<Response> {
-  if (request.method !== "POST") return json({ status: 405, message: "Method tidak diizinkan" }, 405, { allow: "POST" });
-  if (!sameOrigin(request)) return json({ status: 403, message: "Akses ditolak" }, 403);
+async function handleSession(c: Call, k: Keys): Promise<Response> {
+  const { request, url, env, ip } = c;
+  if (request.method !== "POST") return deny(c, "bad_method", 405, "Method tidak diizinkan", "", { allow: "POST" });
+  const origin = originCheck(request);
+  if (origin !== "ok") return deny(c, origin === "direct" ? "direct_access" : "cross_site", 403, "Akses ditolak");
 
-  const existing = await readSession(k, request);
-  if (existing && existing.exp - Date.now() / 1000 > SESSION_TTL / 2) return json({ status: 200, exp: existing.exp }, 200);
+  const text = await request.text();
+  let body: { turnstile?: unknown; pub?: unknown } = {};
+  try {
+    body = text.length <= 4096 ? JSON.parse(text) : {};
+  } catch {
+    /* body kosong → ditolak di bawah */
+  }
+  const pub = typeof body.pub === "string" ? body.pub : "";
+  if (!pub) return json({ status: 400, code: "client_outdated", message: "Muat ulang halaman" }, 400);
 
-  const ip = clientIp(request);
-  if (!(await allow(env.SESSION_LIMITER, `ip:${ip}`, 20))) {
-    return json({ status: 429, message: "Terlalu banyak permintaan, coba lagi sebentar" }, 429, { "retry-after": "60" });
+  const read = await readSession(k, request);
+  if (!read.ok && read.why === "forged") return deny(c, "forged_session", 401, "Sesi tidak valid");
+  const existing = read.ok ? read.session : null;
+
+  // Berlaku juga untuk tukar ulang kunci (ECDH memakan CPU).
+  if (!(await allow(env.SESSION_LIMITER, `ip:${ip}`, 30))) {
+    return deny(c, "rate_limit", 429, "Terlalu banyak permintaan, coba lagi sebentar", "session", { "retry-after": "60" });
   }
 
-  if (env.TURNSTILE_SECRET_KEY) {
-    const text = await request.text();
-    if (text.length > 4096) return json({ status: 400, message: "Permintaan tidak valid" }, 400);
-    let token = "";
-    try {
-      token = String(JSON.parse(text)?.turnstile ?? "");
-    } catch {
-      /* token kosong → ditolak di bawah */
+  let session: Session;
+  let cookie: string | undefined;
+  if (existing && existing.exp - Date.now() / 1000 > SESSION_TTL / 2) {
+    // Sesi masih panjang: hanya tukar ulang kunci (mis. tab baru / penyimpanan kunci dihapus).
+    session = existing;
+  } else {
+    if (env.TURNSTILE_SECRET_KEY && !(await verifyTurnstile(env.TURNSTILE_SECRET_KEY, String(body.turnstile ?? ""), ip))) {
+      return deny(c, "bot_check", 403, "Verifikasi keamanan gagal");
     }
-    if (!(await verifyTurnstile(env.TURNSTILE_SECRET_KEY, token, ip))) {
-      return json({ status: 403, message: "Verifikasi keamanan gagal" }, 403);
-    }
+    ({ session, cookie } = await issueSession(k, url, existing?.sid));
   }
 
-  const { session, cookie } = await issueSession(k, url, existing?.sid);
-  return json({ status: 200, exp: session.exp }, 200, { "set-cookie": cookie });
+  const wrapped = await exchangeKey(k, session.sid, pub);
+  if (!wrapped) return deny(c, "probing", 400, "Permintaan tidak valid", "pub");
+  return json({ status: 200, exp: session.exp, now: Date.now(), ...wrapped }, 200, cookie ? { "set-cookie": cookie } : {});
 }
 
 /* ───────────────────────────── Data JSON ───────────────────────────── */
 
-async function handleData(url: URL, env: ProxyEnv, ctx: Ctx, k: Keys, session: Session): Promise<Response> {
+async function handleData(c: Call, k: Keys, session: Session): Promise<Response> {
+  const { url, env, ctx } = c;
   let match: RegExpExecArray | null = null;
   const r = ROUTES.find((x) => (match = x.re.exec(url.pathname)));
-  if (!r || !match) return json({ status: 404, message: "Endpoint tidak tersedia" }, 404);
+  if (!r || !match) return deny(c, "probing", 404, "Endpoint tidak tersedia");
   const m = (match as RegExpExecArray).slice(1);
 
   // Parameter di luar allowlist ditolak, jadi URL acak tidak bisa memaksa cache miss ke upstream.
   const q: Params = {};
   for (const key of url.searchParams.keys()) {
-    if (!r.query?.[key] || url.searchParams.getAll(key).length > 1) return json({ status: 400, message: "Parameter tidak valid" }, 400);
+    if (!r.query?.[key] || url.searchParams.getAll(key).length > 1) return deny(c, "probing", 400, "Parameter tidak valid");
   }
   for (const [key, check] of Object.entries(r.query ?? {})) {
     const v = check(url.searchParams.get(key));
-    if (v === null) return json({ status: 400, message: "Parameter tidak valid" }, 400);
+    if (v === null) return deny(c, "probing", 400, "Parameter tidak valid");
     q[key] = v;
   }
 
@@ -252,12 +363,16 @@ async function handleData(url: URL, env: ProxyEnv, ctx: Ctx, k: Keys, session: S
     body = JSON.stringify(await gateReplay(JSON.parse(body) as RecentDetail, k, session));
   }
 
-  return new Response(body, {
+  // Isi dienkripsi dengan kunci sesi; AAD = path+query sehingga respons tidak bisa ditukar antar endpoint.
+  const ks = await sessionKeys(k, session.sid);
+  const sealed = { v: WIRE_VERSION, d: await seal(ks.enc, new Uint8Array(te.encode(body)), url.pathname + url.search) };
+
+  return new Response(JSON.stringify(sealed), {
     headers: {
       ...API_HEADERS,
       "content-type": "application/json; charset=utf-8",
-      // Respons privat per sesi: tidak boleh disimpan cache bersama (CDN/proxy). Detail recent membawa token sesi.
-      "cache-control": r.replay ? "private, no-store" : `private, max-age=${Math.min(r.ttl, 60)}`,
+      // Respons privat per sesi: tidak boleh disimpan cache bersama (CDN/proxy).
+      "cache-control": "private, no-store",
       vary: "Cookie",
     },
   });
@@ -274,7 +389,8 @@ async function fetchUpstream(path: string, env: ProxyEnv): Promise<Upstream> {
   try {
     res = await doFetch(`${base}${path}`, {
       headers: { "X-API-Key": env.JKT48CONNECT_API_KEY!, Accept: "application/json" },
-      redirect: "error",
+      // Workers tidak mendukung "error"; redirect tidak diikuti dan status 3xx diperlakukan sebagai gagal di bawah.
+      redirect: "manual",
       cf: { cacheTtl: 0 },
     } as RequestInit);
   } catch (err) {
@@ -314,13 +430,17 @@ async function gateReplay(d: RecentDetail, k: Keys, session: Session): Promise<R
   };
 }
 
-async function handleReplay(request: Request, url: URL, env: ProxyEnv, k: Keys, session: Session): Promise<Response> {
+async function handleReplay(c: Call, k: Keys, session: Session): Promise<Response> {
+  const { request, url, env } = c;
+  // Hanya untuk <video> (atau dibuka di tab dari tombol "Buka file video"); fetch()/skrip ditolak.
+  const dest = request.headers.get("sec-fetch-dest");
+  if (dest && !["video", "audio", "document"].includes(dest)) return deny(c, "probing", 403, "Akses ditolak", `dest=${dest}`);
   const token = url.searchParams.get("t") ?? "";
-  if ([...url.searchParams.keys()].some((x) => x !== "t")) return json({ status: 400, message: "Parameter tidak valid" }, 400);
+  if ([...url.searchParams.keys()].some((x) => x !== "t")) return deny(c, "probing", 400, "Parameter tidak valid");
   const data = await openReplay(k, token);
-  if (!data) return json({ status: 404, message: "Replay tidak ditemukan" }, 404);
+  if (!data) return deny(c, "tampered_token", 404, "Replay tidak ditemukan");
   // Tautan yang disalin ke browser/orang lain tidak berlaku (sesi berbeda).
-  if (data.s !== session.sid) return json({ status: 403, message: "Replay hanya bisa diputar dari halaman situs" }, 403);
+  if (data.s !== session.sid) return deny(c, "shared_token", 403, "Replay hanya bisa diputar dari halaman situs");
   if (data.e < Date.now() / 1000) return json({ status: 410, message: "Tautan replay kedaluwarsa, muat ulang halaman" }, 410);
 
   const target = new URL(data.u);
@@ -372,15 +492,19 @@ const mediaAllowed = (u: URL) => u.protocol === "https:" && MEDIA_HOSTS.test(u.h
  * dan dikirim dengan `Cross-Origin-Resource-Policy: same-site`, sehingga browser tidak mau menampilkannya.
  * Worker mengambilnya dari server tanpa Referer lalu menyajikannya dari domain situs sendiri.
  */
-async function handleMedia(url: URL, env: ProxyEnv, ctx: Ctx): Promise<Response> {
-  if ([...url.searchParams.keys()].some((x) => x !== "url")) return json({ status: 400, message: "Parameter tidak valid" }, 400);
+async function handleMedia(c: Call): Promise<Response> {
+  const { url, env, ctx } = c;
+  // Hanya untuk <img>; diambil lewat fetch()/skrip = penyalahgunaan proxy.
+  const dest = c.request.headers.get("sec-fetch-dest");
+  if (dest && dest !== "image") return deny(c, "media_abuse", 403, "Akses ditolak", `dest=${dest}`);
+  if ([...url.searchParams.keys()].some((x) => x !== "url")) return deny(c, "probing", 400, "Parameter tidak valid");
   let target: URL;
   try {
     target = new URL(url.searchParams.get("url") ?? "");
   } catch {
     return json({ status: 400, message: "Parameter url tidak valid" }, 400);
   }
-  if (!mediaAllowed(target) || target.href.length > 2048) return json({ status: 403, message: "Host gambar tidak diizinkan" }, 403);
+  if (!mediaAllowed(target) || target.href.length > 2048) return deny(c, "media_abuse", 403, "Host gambar tidak diizinkan", target.hostname);
 
   const cache = edgeCache();
   const key = new Request(`${url.origin}/__cache/v2/media?url=${encodeURIComponent(target.href)}`);
