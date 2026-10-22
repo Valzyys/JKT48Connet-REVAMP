@@ -17,6 +17,7 @@
     // /api/* selalu masuk Worker dulu (proxy ber-API key), bukan ke fallback SPA.
     "run_worker_first": ["/api/*"]
   },
+  "d1_databases": [{ "binding": "PM_DB", "database_name": "jkt48connect-pm", "migrations_dir": "migrations" }],
   "vars": {
     "API_UPSTREAM": "https://api.jkt48connect.app"
   },

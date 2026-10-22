@@ -112,6 +112,10 @@ memberi poin curiga seperti percobaan mengakali lainnya, dan endpoint dibatasi 1
 langsung berlaku di isolate yang menerima permintaan; isolate lain menyusul paling lama 30 detik, lalu pengguna cukup
 memuat ulang halaman.
 
+## Private Messages
+
+Area baru `/pm` menyediakan akun, akses berbayar per member, QR MYPG di `/pm/pay/:id`, riwayat transaksi, chat dengan pagination dan polling, serta proxy media dengan pemeriksaan akses. D1 dibuat dan dimigrasikan otomatis melalui `npm run deploy:auto`. Tambahkan secret server `PM_API_KEY` dan `MYPG_API_KEY`; token Cloudflare perlu izin D1 Edit. Panduan lengkap: [docs/pm.md](docs/pm.md).
+
 ## Menjalankan lokal
 
 ```sh

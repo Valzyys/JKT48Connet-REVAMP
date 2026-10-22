@@ -14,7 +14,10 @@
     "deploy": "wrangler deploy",
     "deploy:auto": "node scripts/deploy.mjs",
     "guard:unblock": "node scripts/guard-unblock.mjs",
-    "deploy:pages": "vite build && wrangler pages deploy dist --project-name jkt48connect"
+    "deploy:pages": "vite build && wrangler pages deploy dist --project-name jkt48connect",
+    "pm:setup": "node scripts/pm-setup.mjs",
+    "pm:setup:local": "node scripts/pm-setup.mjs --local",
+    "test:pm": "node --test tests/pm.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
@@ -35,6 +38,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "esbuild": "^0.28.2",
     "https-proxy-agent": "^9.1.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
