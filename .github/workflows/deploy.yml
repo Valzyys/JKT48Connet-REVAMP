@@ -5,7 +5,7 @@ name: Deploy ke Cloudflare
 #   CLOUDFLARE_ACCOUNT_ID
 #   JKT48CONNECT_API_KEY   (jkc_… dari https://api.jkt48connect.app/dashboard/keys)
 # Opsional (Settings → Variables): VITE_TURNSTILE_SITE_KEY untuk mengaktifkan Turnstile di build.
-# SESSION_SECRET & TURNSTILE_SECRET_KEY disimpan sekali lewat `wrangler secret put` (tidak perlu di workflow).
+# Opsional (Secrets): TURNSTILE_SECRET_KEY. SESSION_SECRET dibuat otomatis oleh scripts/deploy.mjs.
 on:
   push:
     branches: [main]
@@ -31,14 +31,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build
-      - name: Deploy Worker + secret API key
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
-          secrets: |
-            JKT48CONNECT_API_KEY
+      # Build + deploy + Durable Object + secret otomatis (scripts/deploy.mjs).
+      - name: Deploy otomatis
+        run: npm run deploy:auto
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           JKT48CONNECT_API_KEY: ${{ secrets.JKT48CONNECT_API_KEY }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}

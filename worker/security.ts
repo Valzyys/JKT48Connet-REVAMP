@@ -4,6 +4,10 @@
  * (tersedia di Workers, Pages Functions, dan Node ≥ 20 untuk dev server).
  */
 
+import { b64url, deriveSessionKeys, ECDH, keyId, seal, unb64url, wrapKey, type SessionKeys } from "../src/lib/wire";
+
+export { b64url, unb64url };
+
 /** Binding rate limit Workers (`ratelimits` di wrangler.jsonc); tidak ada di Pages/dev. */
 export interface Limiter {
   limit(opts: { key: string }): Promise<{ success: boolean }>;
@@ -24,31 +28,12 @@ export interface SecurityEnv {
 /** Umur sesi (detik). Diperpanjang otomatis saat sisa < separuhnya. */
 export const SESSION_TTL = 12 * 60 * 60;
 
-/* ───────────────────────────── base64url ───────────────────────────── */
-
-export function b64url(bytes: ArrayBuffer | Uint8Array): string {
-  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let s = "";
-  for (const b of arr) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-export function unb64url(s: string): Uint8Array<ArrayBuffer> | null {
-  if (!/^[A-Za-z0-9_-]*$/.test(s)) return null;
-  try {
-    const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4));
-    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-  } catch {
-    return null;
-  }
-}
-
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
 /* ───────────────────────────── Kunci ───────────────────────────── */
 
-type Keys = { hmac: CryptoKey; aes: CryptoKey };
+export type Keys = { hmac: CryptoKey; aes: CryptoKey };
 const keyCache = new Map<string, Promise<Keys>>();
 
 /** Dua kunci terpisah (HMAC untuk sesi, AES-GCM untuk token replay) diturunkan dari satu secret lewat HKDF. */
@@ -91,7 +76,10 @@ export async function issueSession(k: Keys, url: URL, sid?: string): Promise<{ s
   };
 }
 
-export async function readSession(k: Keys, request: Request): Promise<Session | null> {
+/** "none" = tidak ada cookie, "expired" = sah tapi kedaluwarsa (normal), "forged" = format/tanda tangan salah (dimanipulasi). */
+export type SessionRead = { ok: true; session: Session } | { ok: false; why: "none" | "expired" | "forged" };
+
+export async function readSession(k: Keys, request: Request): Promise<SessionRead> {
   const url = new URL(request.url);
   const name = cookieName(url);
   const raw = (request.headers.get("cookie") ?? "")
@@ -99,14 +87,73 @@ export async function readSession(k: Keys, request: Request): Promise<Session | 
     .map((c) => c.trim())
     .find((c) => c.startsWith(`${name}=`))
     ?.slice(name.length + 1);
-  const m = raw && /^v1\.([A-Za-z0-9_-]{22})\.(\d{10})\.([A-Za-z0-9_-]{43})$/.exec(raw);
-  if (!m) return null;
-  const sig = unb64url(m[3]);
+  if (!raw) return { ok: false, why: "none" };
+  const m = /^v1\.([A-Za-z0-9_-]{22})\.(\d{10})\.([A-Za-z0-9_-]{43})$/.exec(raw);
+  const sig = m && unb64url(m[3]);
   // crypto.subtle.verify membandingkan dalam waktu konstan.
-  if (!sig || !(await crypto.subtle.verify("HMAC", k.hmac, sig, enc.encode(`v1.${m[1]}.${m[2]}`)))) return null;
+  if (!m || !sig || !(await crypto.subtle.verify("HMAC", k.hmac, sig, enc.encode(`v1.${m[1]}.${m[2]}`)))) return { ok: false, why: "forged" };
   const exp = Number(m[2]);
-  if (exp <= Date.now() / 1000) return null;
-  return { sid: m[1], exp };
+  if (exp <= Date.now() / 1000) return { ok: false, why: "expired" };
+  return { ok: true, session: { sid: m[1], exp } };
+}
+
+/* ───────────────────────────── Kunci per sesi ───────────────────────────── */
+
+/** Rahasia sesi 32 byte, deterministik dari secret server + id sesi (tidak perlu disimpan). */
+async function sessionSecret(k: Keys, sid: string): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k.hmac, enc.encode(`wire-v1:${sid}`)));
+}
+
+const sessionKeyCache = new Map<string, Promise<SessionKeys & { kid: string }>>();
+
+export function sessionKeys(k: Keys, sid: string): Promise<SessionKeys & { kid: string }> {
+  let v = sessionKeyCache.get(sid);
+  if (!v) {
+    if (sessionKeyCache.size > 5000) sessionKeyCache.clear();
+    v = sessionSecret(k, sid).then(async (raw) => ({ ...(await deriveSessionKeys(raw)), kid: await keyId(raw) }));
+    sessionKeyCache.set(sid, v);
+  }
+  return v;
+}
+
+/**
+ * Bungkus rahasia sesi untuk browser lewat ECDH: hanya pemegang kunci privat ECDH browser (tidak bisa
+ * diekspor) yang bisa membukanya. Isi jaringan/HAR saja tidak cukup untuk mendapatkan kunci sesi.
+ */
+export async function exchangeKey(k: Keys, sid: string, clientPub: string): Promise<{ spk: string; wk: string; kid: string } | null> {
+  const pub = clientPub.length <= 128 ? unb64url(clientPub) : null;
+  if (!pub || pub.length !== 65) return null;
+  let peer: CryptoKey;
+  try {
+    peer = await crypto.subtle.importKey("raw", pub, ECDH, false, []);
+  } catch {
+    return null;
+  }
+  const eph = (await crypto.subtle.generateKey(ECDH, true, ["deriveBits"])) as CryptoKeyPair;
+  const bits = await crypto.subtle.deriveBits(// Workers menamai field ini `$public` di tipe, Node/browser `public`; keduanya diisi.
+    { name: "ECDH", public: peer, $public: peer } as never, eph.privateKey, 256);
+  const raw = await sessionSecret(k, sid);
+  return {
+    spk: b64url((await crypto.subtle.exportKey("raw", eph.publicKey)) as ArrayBuffer),
+    wk: await seal(await wrapKey(bits), raw, "session-wrap"),
+    kid: await keyId(raw),
+  };
+}
+
+/* ───────────────────────────── Nonce (anti-replay) ───────────────────────────── */
+
+const nonces = new Map<string, number>();
+
+/** true bila nonce baru; false bila sudah pernah dipakai dalam jendela waktu (per isolate). */
+export function freshNonce(sid: string, nonce: string, ttlMs: number): boolean {
+  const now = Date.now();
+  if (nonces.size > 50_000) for (const [n, exp] of nonces) if (exp < now) nonces.delete(n);
+  if (nonces.size > 100_000) nonces.clear();
+  const key = `${sid}:${nonce}`;
+  const seen = nonces.get(key);
+  if (seen && seen > now) return false;
+  nonces.set(key, now + ttlMs);
+  return true;
 }
 
 /* ───────────────────────────── Token replay ───────────────────────────── */
@@ -157,6 +204,13 @@ export async function verifyTurnstile(secret: string, token: string, ip: string)
  * Browser modern mengirim `Sec-Fetch-Site`; browser lama dicek lewat Origin/Referer.
  * Ini bukan autentikasi (klien non-browser bisa memalsukan header), tapi menutup penyalahgunaan dari situs lain.
  */
+/** "ok" | "direct" (dibuka langsung di address bar) | "cross" (dari situs lain / tanpa asal). */
+export function originCheck(request: Request): "ok" | "direct" | "cross" {
+  const site = request.headers.get("sec-fetch-site");
+  if (site === "none") return "direct";
+  return sameOrigin(request) ? "ok" : "cross";
+}
+
 export function sameOrigin(request: Request): boolean {
   const url = new URL(request.url);
   const site = request.headers.get("sec-fetch-site");

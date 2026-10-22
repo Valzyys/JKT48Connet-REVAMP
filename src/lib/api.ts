@@ -1,12 +1,17 @@
 /**
  * Klien HTTP untuk proxy `/api/*` milik situs ini (worker/proxy.ts).
  *
- * Browser TIDAK memanggil api.jkt48connect.app langsung dan tidak pernah memegang API key.
- * Semua `/api/*` bersifat privat: proxy hanya melayani browser yang punya cookie sesi
- * (HttpOnly, ditandatangani HMAC, SameSite=Strict) dari `POST /api/session`. Bila
- * `VITE_TURNSTILE_SITE_KEY` diisi, sesi baru hanya diberikan setelah lolos Cloudflare Turnstile.
+ * Browser TIDAK memanggil api.jkt48connect.app langsung dan tidak pernah memegang API key. Semua `/api/*` privat:
+ * - Sesi: `POST /api/session` memberi cookie HttpOnly (HMAC, SameSite=Strict) dan, lewat tukar kunci ECDH,
+ *   kunci sesi yang disimpan sebagai CryptoKey tidak bisa diekspor (memori + IndexedDB). Bila
+ *   `VITE_TURNSTILE_SITE_KEY` diisi, sesi baru hanya diberikan setelah lolos Cloudflare Turnstile.
+ * - Setiap request ditandatangani (HMAC + timestamp + nonce), setiap respons datang terenkripsi AES-256-GCM.
+ *   Format ada di src/lib/wire.ts.
+ * - Bila server memblokir IP ini, layar blokir ditampilkan (src/lib/blocked.ts).
  * Proxy harus berada di origin yang sama (cookie SameSite=Strict).
  */
+import { isBlockBody, setBlocked } from "./blocked";
+import { b64url, canonical, deriveSessionKeys, ECDH, H, isSealed, keyId, sign, unb64url, unseal, wrapKey, type SessionKeys } from "./wire";
 
 export class ApiError extends Error {
   constructor(
@@ -72,51 +77,140 @@ async function turnstileToken(): Promise<string> {
   }
 }
 
-/* ───────────────────────────── Sesi ───────────────────────────── */
+/* ───────────────────────────── Penyimpanan kunci ───────────────────────────── */
 
-let session: Promise<void> | null = null;
-let sessionExp = 0;
+type Wire = SessionKeys & { kid: string; exp: number; offset: number };
 
-async function startSession(): Promise<void> {
+const DB = "jc-wire";
+
+/** IndexedDB menyimpan CryptoKey tanpa bisa diekspor; gagal (mode privat, dsb.) → hanya memori. */
+function idb<T>(mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    try {
+      const open = indexedDB.open(DB, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore("k");
+      open.onerror = () => resolve(undefined);
+      open.onsuccess = () => {
+        const tx = open.result.transaction("k", mode);
+        const req = op(tx.objectStore("k"));
+        req.onsuccess = () => resolve(req.result as T);
+        req.onerror = () => resolve(undefined);
+        tx.oncomplete = () => open.result.close();
+      };
+    } catch {
+      resolve(undefined);
+    }
+  });
+}
+
+const saveWire = (w: Wire) => idb("readwrite", (s) => s.put(w, "current"));
+const loadWire = () => idb<Wire>("readonly", (s) => s.get("current"));
+
+/* ───────────────────────────── Sesi & tukar kunci ───────────────────────────── */
+
+async function readBody(res: Response): Promise<unknown> {
+  const body = await res.json().catch(() => null);
+  if (res.status === 403 && isBlockBody(body)) {
+    setBlocked(body);
+    throw new ApiError(403, "Akses diblokir");
+  }
+  return body;
+}
+
+function errorOf(res: Response, body: unknown, fallback: string) {
+  const message = body && typeof body === "object" && "message" in body ? String(body.message) : "";
+  const msg = message || res.statusText || fallback;
+  return new ApiError(res.status, msg);
+}
+
+async function startSession(): Promise<Wire> {
   const token = TURNSTILE_SITE_KEY ? await turnstileToken() : "";
+  // Kunci privat ECDH tidak bisa diekspor; hanya kunci publik yang dikirim.
+  const pair = (await crypto.subtle.generateKey(ECDH, false, ["deriveBits"])) as CryptoKeyPair;
+  const pub = b64url(await crypto.subtle.exportKey("raw", pair.publicKey));
+  const sent = Date.now();
   const res = await fetch("/api/session", {
     method: "POST",
     credentials: "same-origin",
     headers: { "content-type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ turnstile: token }),
+    body: JSON.stringify({ turnstile: token, pub }),
   });
-  const body = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(res.status, (body && typeof body.message === "string" && body.message) || "Sesi gagal dibuat");
-  sessionExp = Number(body?.exp) * 1000 || Date.now() + 5 * 60_000;
+  const body = (await readBody(res)) as { exp?: number; now?: number; spk?: string; wk?: string; kid?: string } | null;
+  if (!res.ok || !body?.spk || !body.wk || !body.kid) throw errorOf(res, body, "Sesi gagal dibuat");
+
+  const spk = unb64url(body.spk);
+  if (!spk) throw new ApiError(502, "Sesi tidak valid");
+  const peer = await crypto.subtle.importKey("raw", spk, ECDH, false, []);
+  const bits = await crypto.subtle.deriveBits({ name: "ECDH", public: peer }, pair.privateKey, 256);
+  const secret = await unseal(await wrapKey(bits), body.wk, "session-wrap");
+  if (!secret || (await keyId(secret)) !== body.kid) throw new ApiError(502, "Kunci sesi tidak valid");
+  const keys = await deriveSessionKeys(secret);
+  secret.fill(0);
+
+  // Selisih jam perangkat vs server (dihitung di tengah perjalanan request) untuk timestamp tanda tangan.
+  const offset = Number(body.now) ? Number(body.now) - Math.round((sent + Date.now()) / 2) : 0;
+  const wire: Wire = { ...keys, kid: body.kid, exp: Number(body.exp) * 1000 || Date.now() + 5 * 60_000, offset };
+  void saveWire(wire);
+  return wire;
 }
 
-/** Satu permintaan sesi untuk semua query yang berjalan bersamaan; diperbarui sebelum kedaluwarsa. */
-function ensureSession(force = false): Promise<void> {
-  if (force || !session || Date.now() > sessionExp - 60_000) {
-    session = startSession().catch((err) => {
-      session = null;
+let wire: Promise<Wire> | null = null;
+
+/** Satu proses sesi untuk semua query yang berjalan bersamaan; diperbarui sebelum kedaluwarsa. */
+function ensureWire(force = false): Promise<Wire> {
+  if (force || !wire) {
+    const next = (async () => {
+      if (!force) {
+        const stored = await loadWire();
+        if (stored && stored.exp - Date.now() > 60_000 && stored.enc && stored.mac) return stored;
+      }
+      return startSession();
+    })();
+    wire = next.catch((err) => {
+      wire = null;
       throw err;
     });
   }
-  return session;
+  return wire.then((w) => (Date.now() > w.exp - 60_000 ? ensureWire(true) : w));
+}
+
+/* ───────────────────────────── Request ───────────────────────────── */
+
+const RETRY_CODES = new Set(["session_required", "key_mismatch", "signature_required"]);
+
+async function signedFetch(w: Wire, pathAndQuery: string) {
+  const ts = String(Date.now() + w.offset);
+  const nonce = b64url(crypto.getRandomValues(new Uint8Array(18)));
+  const sig = await sign(w.mac, canonical("GET", pathAndQuery, ts, nonce));
+  return fetch(pathAndQuery, {
+    credentials: "same-origin",
+    headers: { Accept: "application/json", [H.ts]: ts, [H.nonce]: nonce, [H.sig]: sig, [H.kid]: w.kid },
+  });
 }
 
 export async function apiGet<T = unknown>(path: string, query: Query = {}): Promise<T> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") qs.set(k, String(v));
-  const url = `${path}${qs.size ? `?${qs}` : ""}`;
+  // Path+query persis seperti yang dilihat server (sudah dinormalisasi parser URL) — dipakai untuk tanda tangan & AAD.
+  const u = new URL(`${path}${qs.size ? `?${qs}` : ""}`, location.origin);
+  const pathAndQuery = u.pathname + u.search;
 
-  await ensureSession();
-  let res = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
-  if (res.status === 401) {
-    // Cookie hilang/kedaluwarsa (mis. tab dibiarkan lama): buat sesi baru lalu ulangi sekali.
-    await ensureSession(true);
-    res = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
+  for (let attempt = 0; ; attempt++) {
+    const w = await ensureWire(attempt > 0);
+    const res = await signedFetch(w, pathAndQuery);
+    const body = await readBody(res);
+
+    if (res.status === 401 && attempt === 0 && body && typeof body === "object" && RETRY_CODES.has(String((body as { code?: unknown }).code))) {
+      // Cookie/kunci kedaluwarsa atau berganti (mis. tab lain membuat sesi baru): tukar kunci lalu ulangi sekali.
+      continue;
+    }
+    if (!res.ok) throw errorOf(res, body, `HTTP ${res.status}`);
+    if (!isSealed(body)) throw new ApiError(502, "Respons tidak valid");
+
+    const plain = await unseal(w.enc, body.d, pathAndQuery);
+    if (plain) return JSON.parse(new TextDecoder().decode(plain)) as T;
+    // Kunci tersimpan tidak cocok dengan cookie: tukar kunci lalu ulangi sekali.
+    if (attempt === 0) continue;
+    throw new ApiError(502, "Respons tidak bisa dibuka");
   }
-  const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    const msg = (body && typeof body === "object" && "message" in body && String(body.message)) || res.statusText;
-    throw new ApiError(res.status, msg || `HTTP ${res.status}`);
-  }
-  return body as T;
 }

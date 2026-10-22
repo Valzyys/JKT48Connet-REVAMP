@@ -1,5 +1,7 @@
 import { handleApi, type ProxyEnv } from "./proxy";
 
+export { Guard } from "./guard-do";
+
 interface Env extends ProxyEnv {
   ASSETS: Fetcher;
 }

@@ -59,10 +59,14 @@ menerapkan lapisan berikut:
 
 | Lapisan | Detail |
 | --- | --- |
+| Penjaga anti-iseng | Setiap upaya mengakali (cookie/tanda tangan dipalsukan, request diputar ulang, probing endpoint/parameter, token replay milik orang lain, banjir request, akses dari situs lain atau langsung di address bar) memberi poin curiga ke IP ([`worker/guard.ts`](worker/guard.ts)). ≥ 10 poin dalam 15 menit → IP diblokir 1 jam (berulang: 6 jam, 24 jam). Seluruh situs lalu menampilkan **halaman blokir** berisi ID insiden, alasan, waktu, dan ajakan screenshot untuk dikirim ke admin. State disimpan di Durable Object `Guard` (dibuat otomatis saat deploy); setiap pelanggaran tercatat di log Worker (`{"guard":"strike",…}`) sehingga ID insiden bisa dicari. Darurat: variabel `GUARD_DISABLED=1` mematikan pemblokiran. |
 | Sesi wajib | `POST /api/session` memberi cookie `__Host-jc_s` (HttpOnly, Secure, SameSite=Strict, ditandatangani HMAC-SHA256, 12 jam, diperpanjang otomatis). Tanpa cookie valid semua `/api/*` membalas 401. |
+| Tukar kunci ECDH | Saat membuat sesi browser mengirim kunci publik ECDH P-256 (kunci privat tidak bisa diekspor). Server membungkus rahasia sesi dengan kunci hasil ECDH, sehingga kunci sesi tidak pernah lewat jaringan dalam bentuk terbaca dan disimpan browser sebagai `CryptoKey` yang tidak bisa diekspor ([`src/lib/wire.ts`](src/lib/wire.ts)). |
+| Request bertanda tangan | Setiap request data membawa HMAC-SHA256 atas method, path+query, timestamp, dan nonce acak. Tanda tangan salah, timestamp > 60 detik, atau nonce yang dipakai ulang ditolak (dan diberi poin) → request yang disalin ("Copy as cURL") tidak bisa diputar ulang, dan request tanpa kunci sesi tidak bisa dibuat. |
+| Respons terenkripsi | Isi setiap respons data dienkripsi AES-256-GCM dengan kunci sesi (AAD = path+query). Di tab Network/HAR hanya terlihat `{"v":1,"d":"…"}`; respons tidak bisa dibuka sesi lain, diubah, atau ditukar antar endpoint. |
 | Turnstile (opsional) | Bila `TURNSTILE_SECRET_KEY` (server) dan `VITE_TURNSTILE_SITE_KEY` (build) diisi, sesi baru hanya diberikan setelah lolos Cloudflare Turnstile, sehingga bot/skrip tidak bisa membuat sesi. |
 | Same-origin | Permintaan lintas situs ditolak 403 (`Sec-Fetch-Site`, cadangan Origin/Referer): tidak bisa di-embed/hotlink dari domain lain, tidak ada CSRF. |
-| Rate limit | Binding Workers `API_LIMITER` (300/menit per sesi) dan `SESSION_LIMITER` (20 sesi/menit per IP), lihat `wrangler.jsonc`. |
+| Rate limit | Binding Workers `API_LIMITER` (300/menit per sesi) dan `SESSION_LIMITER` (30 sesi/menit per IP), lihat `wrangler.jsonc`. |
 | Allowlist ketat | Hanya route yang dipakai UI, ID divalidasi, parameter query di-allowlist & dibatasi (`perpage` ≤ 40). Parameter lain → 400, jadi URL acak tidak bisa memaksa cache miss dan menghabiskan kuota API key. |
 | Normalisasi di server | Respons upstream dibentuk ulang di server ([`src/lib/shape.ts`](src/lib/shape.ts)); browser hanya menerima field yang dipakai UI, URL selain http(s) dibuang. |
 | Replay dikunci server | Selama 72 jam setelah live, server **tidak mengirim URL rekaman apa pun**. Setelahnya URL MP4 asli diganti `/api/replay?t=…`: token AES-256-GCM (URL asli tidak terbaca), terikat ke sesi (tautan yang dibagikan tidak berlaku di browser lain), kedaluwarsa 6 jam, dan video di-stream lewat Worker (mendukung Range/seek). |
@@ -78,7 +82,10 @@ Secret Worker:
 | `SESSION_SECRET` | disarankan | String acak ≥ 32 karakter untuk menandatangani sesi & token replay. Bila kosong diturunkan (HKDF) dari API key. Mengganti nilainya membatalkan semua sesi. |
 | `TURNSTILE_SECRET_KEY` | opsional | Secret key Turnstile; pasangkan dengan variabel build `VITE_TURNSTILE_SITE_KEY`. |
 
-Batasan yang perlu diketahui: tanpa Turnstile, skrip yang meniru browser tetap bisa membuat sesi (dibatasi rate limit).
+Batasan yang perlu diketahui: semua yang ditampilkan di layar pada akhirnya dibuka oleh browser pengunjung sendiri, jadi
+pemilik browser yang sangat niat tetap bisa membaca data miliknya lewat DevTools; enkripsi & tanda tangan mencegah data
+dibaca dari jaringan/HAR, dipakai sesi lain, diputar ulang, atau di-scrape massal. Tanpa Turnstile, skrip yang meniru
+browser penuh tetap bisa membuat sesi (dibatasi rate limit dan penjaga).
 Gambar (foto member, desain jadwal, cuplikan) memakai URL CDN dari API yang memang publik di sisi upstream. Rekaman
 yang sudah terbuka tetap bisa direkam layar; perlindungan penuh butuh DRM (mis. Cloudflare Stream dengan signed token)
 dan URL bertanda tangan dari upstream.
@@ -117,22 +124,40 @@ npm run cf:secret           # = wrangler secret put JKT48CONNECT_API_KEY
 
 Uji Worker hasil build secara lokal: `npm run cf:dev`.
 
-### Workers Builds (hubungkan repo dari dashboard Cloudflare)
+### Workers Builds (hubungkan repo dari dashboard Cloudflare) — auto setup
 
 Nama Worker di dashboard harus sama dengan `name` di `wrangler.jsonc` (sekarang `jkt48connet-revamp`). Pengaturan
-build:
+**Settings → Build**:
 
 | Field | Isi |
 | --- | --- |
-| Build command | kosongkan (wrangler menjalankan `npm run build` sendiri lewat `build.command`) |
-| Deploy command | `npx wrangler deploy` |
+| Build command | *(kosongkan)* — `wrangler deploy` menjalankan `npm run build` sendiri |
+| Deploy command | `npm run deploy:auto` |
 | Non-production branch deploy command | `npx wrangler versions upload` |
+| Root directory | `/` |
 
-Lalu tambahkan secret `JKT48CONNECT_API_KEY` di **Worker → Settings → Variables and Secrets**.
+**Build variables and secrets** (Settings → Build → Variables):
+
+| Nama | Jenis | Isi |
+| --- | --- | --- |
+| `JKT48CONNECT_API_KEY` | Secret | Key `jkc_…` (wajib) |
+| `TURNSTILE_SECRET_KEY` | Secret | Opsional |
+| `VITE_TURNSTILE_SITE_KEY` | Text | Opsional, pasangan Turnstile |
+
+`npm run deploy:auto` ([`scripts/deploy.mjs`](scripts/deploy.mjs)) melakukan semuanya: build, deploy Worker + aset,
+membuat Durable Object `Guard` dan binding rate limit, menyimpan `JKT48CONNECT_API_KEY`/`TURNSTILE_SECRET_KEY` sebagai
+secret Worker, dan membuat `SESSION_SECRET` acak bila belum ada (tidak pernah ditimpa). Perintah yang sama bisa
+dijalankan lokal setelah `npx wrangler login`:
+
+```sh
+JKT48CONNECT_API_KEY=jkc_… npm run deploy:auto
+```
 
 ### Cloudflare Pages
 
-Folder [`functions/api/[[path]].ts`](functions/api/%5B%5Bpath%5D%5D.ts) memakai proxy yang sama.
+Folder [`functions/api/[[path]].ts`](functions/api/%5B%5Bpath%5D%5D.ts) memakai proxy yang sama. Pages tidak mendukung
+Durable Object dan binding rate limit, jadi poin curiga & batas request di Pages hanya per-isolate (kurang kuat);
+untuk perlindungan penuh gunakan Workers.
 
 ```sh
 npm run cf:setup -- --pages     # buat project "jkt48connect" + simpan secret
@@ -144,8 +169,8 @@ secret `JKT48CONNECT_API_KEY` di **Settings → Variables and Secrets**.
 
 ### Auto deploy dari GitHub
 
-[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) men-deploy Worker setiap push ke `main`. Tambahkan
-repository secrets berikut:
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) menjalankan `npm run deploy:auto` setiap push ke `main`
+(jangan aktifkan bersamaan dengan Workers Builds agar tidak deploy dua kali). Tambahkan repository secrets berikut:
 
 | Secret | Isi |
 | --- | --- |
@@ -164,6 +189,7 @@ repository secrets berikut:
 | `npm run typecheck` | Typecheck app & Worker |
 | `npm run cf:setup` | Setup Cloudflare interaktif |
 | `npm run cf:dev` | Build + `wrangler dev` |
+| `npm run deploy:auto` | Deploy Workers + setup otomatis (Durable Object, rate limit, secret) |
 | `npm run deploy` / `deploy:pages` | Deploy ke Workers / Pages |
 
 ## Struktur
@@ -172,9 +198,9 @@ repository secrets berikut:
 src/
   components/   intro, shell (sidebar kiri, topbar, sidebar kanan, footer, dock + menu HP), carousel, motion (GSAP), kartu
   pages/        satu file per halaman (lazy-loaded)
-  lib/          api.ts (klien + sesi), shape.ts (normalisasi respons, dipakai Worker), jkt48.ts, queries, format, gsap
+  lib/          api.ts (klien: sesi, tanda tangan, dekripsi), wire.ts (protokol kripto bersama), shape.ts (normalisasi, dipakai Worker), blocked.ts, jkt48.ts, queries, format, gsap
   hooks/        use-reveal (ScrollTrigger), use-member-index, use-theme, use-clock
-worker/         Cloudflare Worker: proxy API privat (proxy.ts) + primitif keamanan (security.ts)
+worker/         Cloudflare Worker: proxy API privat (proxy.ts), keamanan (security.ts), penjaga anti-iseng (guard.ts, guard-do.ts)
 functions/      Cloudflare Pages Functions
 scripts/        cf-setup.mjs
 docs/screenshots/
