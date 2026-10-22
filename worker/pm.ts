@@ -95,25 +95,60 @@ async function limit(
   if (!row || row.count > max)
     fail(429, "Terlalu banyak permintaan. Coba lagi sebentar.");
 }
+// workerd supports "manual" and "follow", but rejects "error" before sending.
+// Do not follow redirects: these requests carry private API credentials.
+async function externalFetch(url: string, init: RequestInit, error: string) {
+  try {
+    return await fetch(url, { ...init, redirect: "manual" });
+  } catch {
+    return fail(502, error);
+  }
+}
+async function externalJson(response: Response, error: string): Promise<any> {
+  try {
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object" || Array.isArray(data))
+      fail(502, error);
+    return data;
+  } catch {
+    return fail(502, error);
+  }
+}
 async function upstream(env: PmEnv, path: string) {
   if (!env.PM_API_KEY) fail(503, "Layanan PM belum dikonfigurasi.");
   await limit(env.PM_DB!, "upstream", 100, 60);
-  const res = await fetch(BASE + path, {
-    headers: {
-      "X-API-Key": env.PM_API_KEY!,
-      Accept: "application/json",
-      "User-Agent": "JKT48Connect/1.0",
+  const res = await externalFetch(
+    BASE + path,
+    {
+      headers: {
+        "X-API-Key": env.PM_API_KEY!,
+        Accept: "application/json",
+        "User-Agent": "JKT48Connect/1.0",
+      },
+      signal: AbortSignal.timeout(15000),
     },
-    signal: AbortSignal.timeout(15000),
-    redirect: "error",
-  });
+    "Layanan pesan sedang tidak tersedia.",
+  );
   if (!res.ok)
     fail(
       res.status === 429 ? 429 : 502,
       "Layanan pesan sedang tidak tersedia.",
     );
-  const data = (await res.json()) as any;
+  const data = await externalJson(res, "Respons layanan pesan tidak valid.");
   if (!data.success) fail(502, "Layanan pesan sedang tidak tersedia.");
+  const entries = path === "/api/v1/conversations" ? data.data : data.messages;
+  if (
+    !Array.isArray(entries) ||
+    !entries.every(
+      (entry: any) =>
+        entry &&
+        typeof entry === "object" &&
+        (path === "/api/v1/conversations"
+          ? typeof entry.slug === "string" && typeof entry.member === "string"
+          : typeof entry.message_id === "string"),
+    )
+  )
+    fail(502, "Respons layanan pesan tidak valid.");
   return data;
 }
 async function gateway(
@@ -122,15 +157,23 @@ async function gateway(
   values: Record<string, string | number>,
 ) {
   if (!env.MYPG_API_KEY) fail(503, "Pembayaran belum dikonfigurasi.");
-  const res = await fetch(`https://yobasepay.net/api_my?action=${action}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_key: env.MYPG_API_KEY, ...values }),
-    signal: AbortSignal.timeout(20000),
-    redirect: "error",
-  });
-  const data = (await res.json()) as any;
-  if (!res.ok || data.status !== true || !data.data)
+  const res = await externalFetch(
+    `https://yobasepay.net/api_my?action=${action}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: env.MYPG_API_KEY, ...values }),
+      signal: AbortSignal.timeout(20000),
+    },
+    "Gateway pembayaran belum dapat memproses permintaan.",
+  );
+  if (!res.ok)
+    fail(502, "Gateway pembayaran belum dapat memproses permintaan.");
+  const data = await externalJson(
+    res,
+    "Respons gateway pembayaran tidak valid.",
+  );
+  if (data.status !== true || !data.data)
     fail(502, "Gateway pembayaran belum dapat memproses permintaan.");
   return data.data;
 }
@@ -488,9 +531,10 @@ export async function handlePm(
       if (request.headers.has("Range"))
         headers.set("Range", request.headers.get("Range")!);
       await limit(db, "upstream", 100, 60);
-      const res = await fetch(
+      const res = await externalFetch(
         `${BASE}/api/v1/media/${encodeURIComponent(slug)}/${parts[3]}`,
-        { headers, redirect: "error", signal: AbortSignal.timeout(20000) },
+        { headers, signal: AbortSignal.timeout(20000) },
+        "Media belum dapat dimuat.",
       );
       if (![200, 206, 416].includes(res.status))
         fail(502, "Media belum dapat dimuat.");

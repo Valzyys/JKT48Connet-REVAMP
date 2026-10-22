@@ -386,3 +386,212 @@ test("PM account, billing, authorization and media integration with real local D
     await rm(scratch, { recursive: true, force: true });
   }
 });
+
+// Node's fetch accepts redirect: "error"; workerd rejects it before any subrequest.
+// Exercise the handler inside the same runtime as production, with mocked network only.
+test("PM external requests in the Cloudflare runtime", async (t) => {
+  const { Miniflare, convertV4MiniflareOptions } = await import("miniflare");
+  const bundle = await build({
+    stdin: {
+      contents:
+        'import { handlePm } from "./worker/pm.ts"; export default { fetch: handlePm };',
+      resolveDir: process.cwd(),
+    },
+    bundle: true,
+    platform: "browser",
+    format: "esm",
+    write: false,
+  });
+  let mode = "json";
+  const requests = [];
+  const mf = new Miniflare(
+    convertV4MiniflareOptions({
+      modules: true,
+      compatibilityDate: "2026-10-01",
+      script: bundle.outputFiles[0].text,
+      d1Databases: ["PM_DB"],
+      bindings: {
+        PM_API_KEY: "test-pm-secret",
+        MYPG_API_KEY: "test-gateway-secret",
+      },
+      outboundService: async (request) => {
+        const url = new URL(request.url);
+        requests.push(url);
+        if (mode === "redirect")
+          return new Response(null, {
+            status: 302,
+            headers: { Location: "https://untrusted.test/" },
+          });
+        if (mode === "html")
+          return new Response("<html>Service unavailable</html>", {
+            headers: { "Content-Type": "text/html" },
+          });
+        if (mode === "shape")
+          return Response.json({ success: true, data: null, messages: null });
+        if (url.hostname === "yobasepay.net") {
+          const body = await request.json();
+          assert.equal(body.api_key, "test-gateway-secret");
+          if (url.searchParams.get("action") === "createpayment") {
+            assert.equal(body.amount, 3000);
+            return Response.json({
+              status: true,
+              data: {
+                trx_id: `MY-${body.ref_id}`,
+                amount: 3000,
+                qr_image: "https://yobasepay.net/qr_render?payload=test",
+                expired_at: "2026-12-31 23:59:59",
+              },
+            });
+          }
+          return Response.json({
+            status: true,
+            data: { trx_id: body.trxid, amount: 3000, status: "SUCCESS" },
+          });
+        }
+        assert.equal(url.hostname, "privatemessageraffz.my.id");
+        assert.equal(request.headers.get("X-API-Key"), "test-pm-secret");
+        if (url.pathname === "/api/v1/conversations")
+          return Response.json({
+            success: true,
+            data: [
+              {
+                member: "Lily JKT48",
+                slug: "Lily_JKT48",
+                last_message: { text: "PRIVATE" },
+              },
+            ],
+          });
+        if (url.pathname.startsWith("/api/v1/messages/"))
+          return Response.json({
+            success: true,
+            messages: [
+              {
+                message_id: "msg-1",
+                sequence_order: 1,
+                text: "Fixture",
+                media_urls: [],
+              },
+            ],
+            pagination: { has_next: false },
+          });
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: request.headers.has("Range") ? 206 : 200,
+          headers: {
+            "Content-Type": "image/jpeg",
+            "Content-Range": "bytes 0-2/3",
+          },
+        });
+      },
+    }),
+  );
+  try {
+    const db = await mf.getD1Database("PM_DB");
+    await db.exec(await readFile("migrations/0001_pm.sql", "utf8"));
+    let cookie;
+    const call = (path, data, extra = {}) =>
+      mf.dispatchFetch(`https://app.test/api/pm${path}`, {
+        method: data === undefined ? "GET" : "POST",
+        headers: {
+          Origin: "https://app.test",
+          ...(cookie ? { Cookie: cookie } : {}),
+          ...(data === undefined ? {} : { "Content-Type": "application/json" }),
+          ...extra,
+        },
+        ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+      });
+    const registered = await call("/auth/register", {
+      name: "Runtime Test",
+      email: "runtime@example.test",
+      password: "runtime-test-password",
+    });
+    assert.equal(registered.status, 200);
+    cookie = registered.headers.get("Set-Cookie").split(";")[0];
+    const user = (await registered.json()).user;
+    await db
+      .prepare(
+        "INSERT INTO pm_orders(id,user_id,member,member_name,plan,days,price,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+      )
+      .bind(
+        "seed-order",
+        user.id,
+        "Lily_JKT48",
+        "Lily JKT48",
+        "daily",
+        2,
+        3000,
+        "SUCCESS",
+        1,
+      )
+      .run();
+    await db
+      .prepare("INSERT INTO pm_grants VALUES (?,?,?,?)")
+      .bind(
+        "seed-order",
+        user.id,
+        "Lily_JKT48",
+        Math.floor(Date.now() / 1000) + 86400,
+      )
+      .run();
+    await t.test(
+      "catalog, history, polling and media make valid runtime subrequests",
+      async () => {
+        for (const path of [
+          "/conversations",
+          "/messages/Lily_JKT48",
+          "/messages/Lily_JKT48/latest?afterId=msg-1",
+          "/media/Lily_JKT48/photo.jpg",
+        ]) {
+          const result = await call(path);
+          assert.equal(result.status, 200, `${path}: ${await result.text()}`);
+        }
+        assert.equal(
+          (
+            await call("/media/Lily_JKT48/photo.jpg", undefined, {
+              Range: "bytes=0-2",
+            })
+          ).status,
+          206,
+        );
+      },
+    );
+    await t.test(
+      "MYPG creation and verification work inside workerd",
+      async () => {
+        const created = await call("/orders", {
+          member: "Lily_JKT48",
+          plan: "daily",
+        });
+        const data = await created.json();
+        assert.equal(created.status, 201, JSON.stringify(data));
+        const verified = await call(`/orders/${data.id}/check`, {});
+        assert.equal(verified.status, 200);
+        assert.equal((await verified.json()).data.status, "SUCCESS");
+      },
+    );
+    await t.test(
+      "upstream redirects never forward API credentials to another host",
+      async () => {
+        mode = "redirect";
+        const count = requests.length;
+        assert.equal((await call("/conversations")).status, 502);
+        assert.equal((await call("/media/Lily_JKT48/photo.jpg")).status, 502);
+        assert.equal(requests.length, count + 2);
+        assert.ok(requests.every((url) => url.hostname !== "untrusted.test"));
+        mode = "json";
+      },
+    );
+    await t.test(
+      "non-JSON and malformed upstream payloads return gateway errors",
+      async () => {
+        for (const variant of ["html", "shape"]) {
+          mode = variant;
+          assert.equal((await call("/conversations")).status, 502);
+          assert.equal((await call("/messages/Lily_JKT48")).status, 502);
+        }
+        mode = "json";
+      },
+    );
+  } finally {
+    await mf.dispose();
+  }
+});
