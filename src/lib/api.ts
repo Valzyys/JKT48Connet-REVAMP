@@ -24,6 +24,55 @@ export class ApiError extends Error {
 
 export type Query = Record<string, string | number | undefined>;
 
+/* ───────────────────────────── Diagnostik ───────────────────────────── */
+
+/** Catatan langkah terakhir (tanpa data/kunci) untuk panel `?diag=1` — membantu melacak masalah di perangkat pengguna. */
+export const diagLog: string[] = [];
+const diagListeners = new Set<() => void>();
+
+export function diag(msg: string) {
+  const t = new Date().toLocaleTimeString("id-ID", { hour12: false });
+  diagLog.push(`${t} ${msg}`);
+  if (diagLog.length > 60) diagLog.shift();
+  diagListeners.forEach((l) => l());
+}
+
+export function onDiag(cb: () => void) {
+  diagListeners.add(cb);
+  return () => void diagListeners.delete(cb);
+}
+
+/** Batas waktu supaya langkah yang macet (jaringan, IndexedDB) tidak membuat halaman menunggu selamanya. */
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: () => T, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      diag(`${label}: timeout ${ms} ms`);
+      try {
+        resolve(fallback());
+      } catch (err) {
+        reject(err);
+      }
+    }, ms);
+    p.then(
+      (v) => (clearTimeout(t), resolve(v)),
+      (e) => (clearTimeout(t), reject(e)),
+    );
+  });
+}
+
+const FETCH_TIMEOUT_MS = 20_000;
+
+function timedFetch(input: string, init: RequestInit): Promise<Response> {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+  return fetch(input, { ...init, signal: ctl.signal })
+    .catch((err) => {
+      diag(`fetch ${input.split("?")[0]}: ${ctl.signal.aborted ? "timeout" : String(err)}`);
+      throw new ApiError(0, "Koneksi terputus");
+    })
+    .finally(() => clearTimeout(t));
+}
+
 const TURNSTILE_SITE_KEY = String(import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "");
 
 /* ───────────────────────────── Turnstile (opsional) ───────────────────────────── */
@@ -83,24 +132,37 @@ type Wire = SessionKeys & { kid: string; exp: number; offset: number };
 
 const DB = "jc-wire";
 
-/** IndexedDB menyimpan CryptoKey tanpa bisa diekspor; gagal (mode privat, dsb.) → hanya memori. */
+/**
+ * IndexedDB menyimpan CryptoKey tanpa bisa diekspor. Gagal, diblokir, atau macet (bisa terjadi di Chrome
+ * dengan banyak tab / penyimpanan bermasalah) → dianggap kosong setelah 1,5 detik dan kunci hanya di memori.
+ */
 function idb<T>(mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest): Promise<T | undefined> {
-  return new Promise((resolve) => {
+  const run = new Promise<T | undefined>((resolve) => {
     try {
       const open = indexedDB.open(DB, 1);
       open.onupgradeneeded = () => open.result.createObjectStore("k");
-      open.onerror = () => resolve(undefined);
+      open.onerror = () => (diag("idb: error"), resolve(undefined));
+      open.onblocked = () => (diag("idb: blocked"), resolve(undefined));
       open.onsuccess = () => {
-        const tx = open.result.transaction("k", mode);
-        const req = op(tx.objectStore("k"));
-        req.onsuccess = () => resolve(req.result as T);
-        req.onerror = () => resolve(undefined);
-        tx.oncomplete = () => open.result.close();
+        try {
+          const tx = open.result.transaction("k", mode);
+          const req = op(tx.objectStore("k"));
+          req.onsuccess = () => resolve(req.result as T);
+          req.onerror = () => resolve(undefined);
+          tx.oncomplete = () => open.result.close();
+          tx.onabort = () => (open.result.close(), resolve(undefined));
+        } catch (err) {
+          diag(`idb: ${String(err)}`);
+          open.result.close();
+          resolve(undefined);
+        }
       };
-    } catch {
+    } catch (err) {
+      diag(`idb: ${String(err)}`);
       resolve(undefined);
     }
   });
+  return withTimeout(run, 1500, () => undefined, "idb");
 }
 
 const saveWire = (w: Wire) => idb("readwrite", (s) => s.put(w, "current"));
@@ -129,14 +191,18 @@ async function startSession(): Promise<Wire> {
   const pair = (await crypto.subtle.generateKey(ECDH, false, ["deriveBits"])) as CryptoKeyPair;
   const pub = b64url(await crypto.subtle.exportKey("raw", pair.publicKey));
   const sent = Date.now();
-  const res = await fetch("/api/session", {
+  diag("session: tukar kunci");
+  const res = await timedFetch("/api/session", {
     method: "POST",
     credentials: "same-origin",
     headers: { "content-type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ turnstile: token, pub }),
   });
   const body = (await readBody(res)) as { exp?: number; now?: number; spk?: string; wk?: string; kid?: string } | null;
-  if (!res.ok || !body?.spk || !body.wk || !body.kid) throw errorOf(res, body, "Sesi gagal dibuat");
+  if (!res.ok || !body?.spk || !body.wk || !body.kid) {
+    diag(`session: HTTP ${res.status} ${JSON.stringify(body).slice(0, 80)}`);
+    throw errorOf(res, body, "Sesi gagal dibuat");
+  }
 
   const spk = unb64url(body.spk);
   if (!spk) throw new ApiError(502, "Sesi tidak valid");
@@ -151,6 +217,7 @@ async function startSession(): Promise<Wire> {
   const offset = Number(body.now) ? Number(body.now) - Math.round((sent + Date.now()) / 2) : 0;
   const wire: Wire = { ...keys, kid: body.kid, exp: Number(body.exp) * 1000 || Date.now() + 5 * 60_000, offset };
   void saveWire(wire);
+  diag(`session: ok, offset jam ${offset} ms`);
   return wire;
 }
 
@@ -158,6 +225,7 @@ let wire: Promise<Wire> | null = null;
 
 function guarded(p: Promise<Wire>): Promise<Wire> {
   const out = p.catch((err) => {
+    diag(`session gagal: ${err instanceof Error ? err.message : String(err)}`);
     if (wire === out) wire = null;
     throw err;
   });
@@ -192,7 +260,7 @@ async function signedFetch(w: Wire, pathAndQuery: string) {
   const ts = String(Date.now() + w.offset);
   const nonce = b64url(crypto.getRandomValues(new Uint8Array(18)));
   const sig = await sign(w.mac, canonical("GET", pathAndQuery, ts, nonce));
-  return fetch(pathAndQuery, {
+  return timedFetch(pathAndQuery, {
     credentials: "same-origin",
     headers: { Accept: "application/json", [H.ts]: ts, [H.nonce]: nonce, [H.sig]: sig, [H.kid]: w.kid },
   });
@@ -211,17 +279,22 @@ export async function apiGet<T = unknown>(path: string, query: Query = {}): Prom
     rejected = w;
     const res = await signedFetch(w, pathAndQuery);
     const body = await readBody(res);
+    if (!res.ok) diag(`${pathAndQuery} → ${res.status} ${String((body as { code?: unknown } | null)?.code ?? "")}`);
 
     if (res.status === 401 && attempt === 0 && body && typeof body === "object" && RETRY_CODES.has(String((body as { code?: unknown }).code))) {
       // Cookie/kunci kedaluwarsa atau berganti (mis. tab lain membuat sesi baru): tukar kunci lalu ulangi sekali.
       continue;
     }
     if (!res.ok) throw errorOf(res, body, `HTTP ${res.status}`);
-    if (!isSealed(body)) throw new ApiError(502, "Respons tidak valid");
+    if (!isSealed(body)) {
+      diag(`${pathAndQuery}: respons tidak terenkripsi`);
+      throw new ApiError(502, "Respons tidak valid");
+    }
 
     const plain = await unseal(w.enc, body.d, pathAndQuery);
     if (plain) return JSON.parse(new TextDecoder().decode(plain)) as T;
     // Kunci tersimpan tidak cocok dengan cookie: tukar kunci lalu ulangi sekali.
+    diag(`${pathAndQuery}: gagal dekripsi (percobaan ${attempt + 1})`);
     if (attempt === 0) continue;
     throw new ApiError(502, "Respons tidak bisa dibuka");
   }
