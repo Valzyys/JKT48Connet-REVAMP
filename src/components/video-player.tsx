@@ -46,7 +46,7 @@ type Feedback = { icon: ReactNode; label?: string; key: number };
  * volume (diingat), kecepatan, picture-in-picture, layar penuh, kontrol yang menghilang sendiri,
  * pintasan keyboard (spasi/K, J/L, ←/→, ↑/↓, M, F, 0–9), dan ketuk dua kali kiri/kanan di layar sentuh.
  */
-export function VideoPlayer({ src, poster, initialRatio = 16 / 9 }: { src: string; poster?: string; initialRatio?: number }) {
+export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: string; hls?: string; poster?: string; initialRatio?: number }) {
   const wrap = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const bar = useRef<HTMLDivElement>(null);
@@ -78,6 +78,61 @@ export function VideoPlayer({ src, poster, initialRatio = 16 / 9 }: { src: strin
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   const v = () => video.current;
+
+  // Sumber: playlist HLS (indeks potongan → mulai & seek langsung) bila ada, diputar lewat hls.js (dimuat
+  // terpisah; termasuk Safari/iOS lewat MediaSource). Tanpa MediaSource → HLS bawaan browser.
+  // Gagal di tengah jalan → kembali ke file MP4 biasa.
+  useEffect(() => {
+    const el = video.current;
+    if (!el) return;
+    let player: import("hls.js").default | undefined;
+    let cancelled = false;
+    const fallback = () => {
+      player?.destroy();
+      player = undefined;
+      if (!cancelled && el.getAttribute("src") !== src) el.src = src;
+    };
+    const native = () => {
+      if (cancelled) return;
+      if (!el.canPlayType("application/vnd.apple.mpegurl")) return fallback();
+      el.src = hls!;
+      el.addEventListener("error", fallback, { once: true });
+    };
+    if (!hls) el.src = src;
+    else
+      void import("hls.js/light")
+        .then(({ default: Hls }) => {
+          if (cancelled) return;
+          if (!Hls.isSupported()) return native();
+          let retried = false;
+          player = new Hls({
+            // Sebelum diputar cukup siapkan beberapa detik awal; setelah main, tampung lebih jauh ke depan.
+            maxBufferLength: 12,
+            maxMaxBufferLength: 90,
+            backBufferLength: 30,
+            startFragPrefetch: true,
+            fragLoadPolicy: { default: { maxTimeToFirstByteMs: 15000, maxLoadTimeMs: 60000, timeoutRetry: { maxNumRetry: 3, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: 4, retryDelayMs: 800, maxRetryDelayMs: 6000 } } },
+          });
+          player.on(Hls.Events.ERROR, (_e, data) => {
+            if (!data.fatal) return;
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !retried) {
+              retried = true;
+              player?.startLoad();
+            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !retried) {
+              retried = true;
+              player?.recoverMediaError();
+            } else fallback();
+          });
+          el.addEventListener("play", () => player && (player.config.maxBufferLength = 45), { once: true });
+          player.loadSource(hls);
+          player.attachMedia(el);
+        })
+        .catch(native);
+    return () => {
+      cancelled = true;
+      player?.destroy();
+    };
+  }, [src, hls]);
 
   const flash = useCallback((icon: ReactNode, label?: string) => setFeedback({ icon, label, key: Date.now() }), []);
 
@@ -331,7 +386,6 @@ export function VideoPlayer({ src, poster, initialRatio = 16 / 9 }: { src: strin
     >
       <video
         ref={video}
-        src={src}
         poster={poster}
         playsInline
         preload="metadata"

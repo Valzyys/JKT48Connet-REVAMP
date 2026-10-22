@@ -316,7 +316,8 @@ export type Screenshot = { url: string; at: string };
  * `url` di sini adalah URL `/api/replay?t=…` milik situs (token terenkripsi, terikat sesi, kedaluwarsa),
  * bukan URL file asli. Diisi server hanya setelah masa kunci lewat.
  */
-export type Recording = { url: string; durationMs: number; startedAt: string; partial: boolean };
+/** `hls`: playlist byte-range dari upstream (indeks potongan untuk seek cepat); diganti token oleh worker. */
+export type Recording = { url: string; hls?: string; durationMs: number; startedAt: string; partial: boolean };
 
 /** Replay baru boleh diputar di situs setelah jeda ini sejak live selesai. Ditegakkan di server. */
 export const REPLAY_LOCK_HOURS = 72;
@@ -374,7 +375,16 @@ export function shapeRecent(r: Raw, id: string): RecentDetail {
   const shotBase = httpUrl(shot?.base_url).replace(/\/+$/, "");
   const shotFormat = /^[a-z0-9]{2,5}$/i.test(str(shot?.format)) ? str(shot?.format) : "jpg";
   const files = recordings
-    .map((x) => ({ url: httpUrl(x.url), durationMs: num(x.duration_ms) ?? 0, startedAt: str(x.started_at), partial: !!x.partial }))
+    .map((x) => {
+      const hls = httpUrl(x.stream_url);
+      return {
+        url: httpUrl(x.url),
+        ...(new URL(hls || "https://x.invalid").pathname.endsWith(".m3u8") ? { hls } : {}),
+        durationMs: num(x.duration_ms) ?? 0,
+        startedAt: str(x.started_at),
+        partial: !!x.partial,
+      };
+    })
     .filter((x) => new URL(x.url || "https://x.invalid").pathname.endsWith(".mp4"));
   return {
     ...base,

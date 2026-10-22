@@ -245,6 +245,7 @@ async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Respons
   // <img>/<video> tidak bisa membawa header tanda tangan; keduanya dilindungi sesi + token/allowlist host.
   if (url.pathname === "/api/media") res = await handleMedia(c);
   else if (url.pathname === "/api/replay") res = await handleReplay(c, k, session);
+  else if (url.pathname === "/api/replay/hls") res = await handleReplayHls(c, k, session);
   else {
     const bad = await checkSignature(c, k, session);
     res = bad ?? (await handleData(c, k, session));
@@ -522,25 +523,23 @@ async function gateReplay(d: RecentDetail, k: Keys, session: Session): Promise<R
   return {
     ...d,
     recordings: await Promise.all(
-      d.recordings.map(async (r) => ({ ...r, url: `/api/replay?t=${await sealReplay(k, { u: r.url, s: session.sid, e })}` })),
+      d.recordings.map(async (r) => ({
+        ...r,
+        url: `/api/replay?t=${await sealReplay(k, { u: r.url, s: session.sid, e })}`,
+        ...(r.hls ? { hls: `/api/replay/hls?t=${await sealReplay(k, { u: r.hls, s: session.sid, e })}` } : {}),
+      })),
     ),
   };
 }
 
 async function handleReplay(c: Call, k: Keys, session: Session): Promise<Response> {
-  const { request, url, env } = c;
-  // Hanya untuk <video> (atau dibuka di tab dari tombol "Buka file video"); fetch()/skrip ditolak.
-  const dest = request.headers.get("sec-fetch-dest");
-  if (dest && !["video", "audio", "document"].includes(dest)) return deny(c, "probing", 403, "Akses ditolak", `dest=${dest}`);
-  const token = url.searchParams.get("t") ?? "";
-  if ([...url.searchParams.keys()].some((x) => x !== "t")) return deny(c, "probing", 400, "Parameter tidak valid");
-  const data = await openReplay(k, token);
-  if (!data) return deny(c, "tampered_token", 404, "Replay tidak ditemukan");
-  // Tautan yang disalin ke browser/orang lain tidak berlaku (sesi berbeda).
-  if (data.s !== session.sid) return deny(c, "shared_token", 403, "Replay hanya bisa diputar dari halaman situs");
-  if (data.e < Date.now() / 1000) return json({ status: 410, message: "Tautan replay kedaluwarsa, muat ulang halaman" }, 410);
+  const { request, env } = c;
+  // <video>, tab dari tombol "Buka file video", atau potongan HLS yang diambil hls.js (fetch/XHR = "empty").
+  // Gambar/iframe/skrip ditolak; token tetap terikat sesi.
+  const opened = await openReplayToken(c, k, session, ["video", "audio", "document", "empty"]);
+  if (opened instanceof Response) return opened;
 
-  const target = new URL(data.u);
+  const target = new URL(opened.u);
   if (target.protocol !== "https:" || !target.pathname.endsWith(".mp4")) return json({ status: 404, message: "Replay tidak ditemukan" }, 404);
 
   const range = request.headers.get("range");
@@ -571,6 +570,143 @@ async function handleReplay(c: Call, k: Keys, session: Session): Promise<Respons
     if (v) out.set(h, v);
   }
   return new Response(upstream.body, { status: upstream.status, headers: out });
+}
+
+/** Validasi bersama token replay (MP4 maupun playlist HLS). */
+async function openReplayToken(c: Call, k: Keys, session: Session, dests: string[]): Promise<{ u: string; s: string; e: number } | Response> {
+  const { request, url } = c;
+  const dest = request.headers.get("sec-fetch-dest");
+  if (dest && !dests.includes(dest)) return deny(c, "probing", 403, "Akses ditolak", `dest=${dest}`);
+  const token = url.searchParams.get("t") ?? "";
+  if ([...url.searchParams.keys()].some((x) => x !== "t")) return deny(c, "probing", 400, "Parameter tidak valid");
+  const data = await openReplay(k, token);
+  if (!data) return deny(c, "tampered_token", 404, "Replay tidak ditemukan");
+  // Tautan yang disalin ke browser/orang lain tidak berlaku (sesi berbeda).
+  if (data.s !== session.sid) return deny(c, "shared_token", 403, "Replay hanya bisa diputar dari halaman situs");
+  if (data.e < Date.now() / 1000) return json({ status: 410, message: "Tautan replay kedaluwarsa, muat ulang halaman" }, 410);
+  return data;
+}
+
+/**
+ * Potongan HLS digabung sampai ±8 detik: tiap permintaan ke file upstream punya jeda awal ±1 detik.
+ * Potongan pertama cukup ±4 detik supaya video cepat mulai.
+ */
+const HLS_CHUNK_SECONDS = 8;
+const HLS_FIRST_CHUNK_SECONDS = 4;
+
+/**
+ * Rekaman upstream berupa MP4 ter-fragmentasi tanpa indeks (tanpa sidx/mfra). Diputar langsung lewat
+ * <video src>, Chrome membaca file fragmen demi fragmen (ratusan permintaan Range berurutan) sebelum bisa
+ * mulai/seek. Playlist HLS upstream memuat byte-range setiap fragmen, jadi pemutar bisa langsung meminta
+ * potongan di posisi mana pun. Di sini playlist ditulis ulang: potongan berurutan digabung (lebih sedikit
+ * permintaan) dan setiap URL file diganti `/api/replay?t=…` milik sesi ini; Range diteruskan seperti biasa.
+ */
+export function rewriteHlsPlaylist(text: string, base: string, tokenFor: (u: string) => string): string | null {
+  const lines = text.replace(/\r/g, "").split("\n");
+  if (lines[0]?.trim() !== "#EXTM3U" || !lines.some((l) => l.trim() === "#EXT-X-ENDLIST")) return null;
+  const resolve = (u: string) => {
+    const t = new URL(u, base);
+    return t.protocol === "https:" && t.pathname.endsWith(".mp4") ? t.href : null;
+  };
+  type Seg = { dur: number; uri: string; len?: number; off?: number };
+  const head: string[] = [];
+  const body: string[] = [];
+  let group: Seg | null = null;
+  let pending: { dur?: number; len?: number; off?: number } = {};
+  const ends = new Map<string, number>();
+  let maxDur = 1;
+  let emitted = 0;
+  const flush = () => {
+    if (!group) return;
+    emitted++;
+    maxDur = Math.max(maxDur, group.dur);
+    body.push(`#EXTINF:${group.dur.toFixed(3)},`);
+    if (group.len !== undefined) body.push(`#EXT-X-BYTERANGE:${group.len}@${group.off}`);
+    body.push(tokenFor(group.uri));
+    group = null;
+  };
+  for (const raw of lines.slice(1)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("#EXTINF:")) pending.dur = parseFloat(line.slice(8));
+    else if (line.startsWith("#EXT-X-BYTERANGE:")) {
+      const [len, off] = line.slice(17).split("@");
+      pending.len = Number(len);
+      if (off !== undefined) pending.off = Number(off);
+    } else if (line.startsWith("#EXT-X-MAP:")) {
+      const m = line.match(/URI="([^"]+)"/);
+      const uri = m && resolve(m[1]);
+      if (!uri) return null;
+      flush();
+      (body.length || head.some((h) => h.startsWith("#EXT-X-MAP")) ? body : head).push(line.replace(m![0], `URI="${tokenFor(uri)}"`));
+    } else if (/^#EXT-X-(TARGETDURATION|VERSION|PLAYLIST-TYPE|MEDIA-SEQUENCE|INDEPENDENT-SEGMENTS|ENDLIST)/.test(line)) {
+      if (line.startsWith("#EXT-X-ENDLIST")) flush();
+      if (!line.startsWith("#EXT-X-TARGETDURATION")) (line.startsWith("#EXT-X-ENDLIST") ? body : head).push(line);
+    } else if (line.startsWith("#")) {
+      flush(); // tag lain (mis. DISCONTINUITY) memutus penggabungan dan diteruskan apa adanya
+      body.push(line);
+    } else {
+      const uri = resolve(line);
+      const dur = pending.dur;
+      if (!uri || dur === undefined || !Number.isFinite(dur)) return null;
+      let len = pending.len,
+        off = pending.off;
+      if (len !== undefined) {
+        if (!Number.isFinite(len) || len <= 0) return null;
+        off ??= ends.get(uri) ?? 0;
+        if (!Number.isFinite(off) || off < 0) return null;
+        ends.set(uri, off + len);
+      }
+      const joinable = group && len !== undefined && group.len !== undefined && group.uri === uri && group.off! + group.len === off && group.dur < (emitted ? HLS_CHUNK_SECONDS : HLS_FIRST_CHUNK_SECONDS);
+      if (joinable) {
+        group!.dur += dur;
+        group!.len! += len!;
+      } else {
+        flush();
+        group = { dur, uri, len, off };
+      }
+      pending = {};
+    }
+  }
+  flush();
+  return ["#EXTM3U", `#EXT-X-TARGETDURATION:${Math.ceil(maxDur)}`, ...head, ...body, ""].join("\n");
+}
+
+async function handleReplayHls(c: Call, k: Keys, session: Session): Promise<Response> {
+  const opened = await openReplayToken(c, k, session, ["empty", "video", "audio"]);
+  if (opened instanceof Response) return opened;
+  const target = new URL(opened.u);
+  if (target.protocol !== "https:" || !target.pathname.endsWith(".m3u8")) return json({ status: 404, message: "Replay tidak ditemukan" }, 404);
+
+  let text: string;
+  try {
+    const res = await (c.env.UPSTREAM_FETCH ?? fetch)(target.href, {
+      headers: { Accept: "application/vnd.apple.mpegurl,*/*;q=0.5" },
+      redirect: "manual",
+      signal: AbortSignal.timeout(15000),
+    } as RequestInit);
+    if (res.status !== 200) throw new Error(`status ${res.status}`);
+    text = await res.text();
+  } catch (err) {
+    console.error("replay playlist failed", err);
+    return json({ status: 502, message: "Replay tidak bisa diambil" }, 502);
+  }
+
+  // Satu token per file (biasanya seluruh potongan menunjuk ke satu MP4 yang sama).
+  const tokens = new Map<string, string>();
+  for (const m of text.matchAll(/^(?!#)(\S+)$|URI="([^"]+)"/gm)) {
+    try {
+      const u = new URL(m[1] ?? m[2], target).href;
+      if (!tokens.has(u)) tokens.set(u, `/api/replay?t=${await sealReplay(k, { u, s: session.sid, e: opened.e })}`);
+    } catch {
+      /* baris tak valid ditolak oleh rewriteHlsPlaylist */
+    }
+  }
+  const out = rewriteHlsPlaylist(text, target.href, (u) => tokens.get(u) ?? "");
+  if (!out || out.includes("\n\n") || [...tokens.values()].some((t) => !t)) return json({ status: 502, message: "Replay tidak bisa diambil" }, 502);
+  return new Response(out, {
+    headers: { ...API_HEADERS, "content-type": "application/vnd.apple.mpegurl", "cache-control": "private, no-store" },
+  });
 }
 
 /* ───────────────────────────── Media (gambar berita) ───────────────────────────── */

@@ -123,7 +123,7 @@ export function Replay({
         )}
       </div>
       <div data-rp>
-        <VideoPlayer key={rec.url} src={rec.url} poster={poster} initialRatio={vertical ? 3 / 4 : 16 / 9} />
+        <VideoPlayer key={rec.url} src={rec.url} hls={rec.hls} poster={poster} initialRatio={vertical ? 3 / 4 : 16 / 9} />
       </div>
       {rec.partial && <p className="px-2 pt-3 text-[12px] text-white/50">Sebagian rekaman tidak tercatat, jadi ada bagian live yang terlewat.</p>}
     </section>
