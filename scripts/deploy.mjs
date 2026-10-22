@@ -14,11 +14,23 @@
  */
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import { loadEnvFile } from "node:process";
+import { setupPm } from "./pm-setup.mjs";
+
+if (existsSync(".dev.vars")) loadEnvFile(".dev.vars");
 
 const win = process.platform === "win32";
-const run = (args, opts = {}) => spawnSync("npx", ["wrangler", ...args], { shell: win, encoding: "utf8", ...opts });
+const run = (args, opts = {}) =>
+  spawnSync("npx", ["wrangler", ...args], {
+    shell: win,
+    encoding: "utf8",
+    ...opts,
+  });
 
 console.log("\n◆ JKT48Connect · deploy otomatis\n");
+
+setupPm();
 
 const deploy = run(["deploy"], { stdio: "inherit" });
 if (deploy.status !== 0) {
@@ -31,11 +43,16 @@ let existing = new Set();
 try {
   existing = new Set(JSON.parse(list.stdout).map((s) => s.name));
 } catch {
-  console.warn("! Tidak bisa membaca daftar secret (token tanpa izin?). Secret yang sudah ada tidak akan ditimpa.");
+  console.warn(
+    "! Tidak bisa membaca daftar secret (token tanpa izin?). Secret yang sudah ada tidak akan ditimpa.",
+  );
 }
 
 function put(name, value) {
-  const r = run(["secret", "put", name], { input: value, stdio: ["pipe", "inherit", "inherit"] });
+  const r = run(["secret", "put", name], {
+    input: value,
+    stdio: ["pipe", "inherit", "inherit"],
+  });
   if (r.status !== 0) {
     console.error(`✗ Gagal menyimpan secret ${name}`);
     process.exit(r.status ?? 1);
@@ -51,18 +68,32 @@ if (apiKey) {
   }
   put("JKT48CONNECT_API_KEY", apiKey);
 } else if (!existing.has("JKT48CONNECT_API_KEY")) {
-  console.warn("! JKT48CONNECT_API_KEY belum ada. Isi variabel env JKT48CONNECT_API_KEY lalu jalankan ulang, atau `npm run cf:secret`.");
+  console.warn(
+    "! JKT48CONNECT_API_KEY belum ada. Isi variabel env JKT48CONNECT_API_KEY lalu jalankan ulang, atau `npm run cf:secret`.",
+  );
 }
 
-if (list.status === 0 && !existing.has("SESSION_SECRET")) put("SESSION_SECRET", randomBytes(32).toString("base64url"));
+if (list.status === 0 && !existing.has("SESSION_SECRET"))
+  put("SESSION_SECRET", randomBytes(32).toString("base64url"));
 else console.log("✓ SESSION_SECRET sudah ada");
 
-if (process.env.TURNSTILE_SECRET_KEY) put("TURNSTILE_SECRET_KEY", process.env.TURNSTILE_SECRET_KEY);
+for (const name of ["PM_API_KEY", "MYPG_API_KEY"]) {
+  if (process.env[name]) put(name, process.env[name]);
+  else if (!existing.has(name))
+    console.warn(
+      `! ${name} belum diatur. Fitur PM terkait belum bisa dipakai.`,
+    );
+}
+
+if (process.env.TURNSTILE_SECRET_KEY)
+  put("TURNSTILE_SECRET_KEY", process.env.TURNSTILE_SECRET_KEY);
 
 const adminToken = process.env.GUARD_ADMIN_TOKEN ?? "";
 if (adminToken) {
   if (adminToken.length < 24) {
-    console.error("✗ GUARD_ADMIN_TOKEN minimal 24 karakter (contoh: openssl rand -base64 32)");
+    console.error(
+      "✗ GUARD_ADMIN_TOKEN minimal 24 karakter (contoh: openssl rand -base64 32)",
+    );
     process.exit(1);
   }
   put("GUARD_ADMIN_TOKEN", adminToken);

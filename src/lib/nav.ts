@@ -1,5 +1,6 @@
 import {
   Braces,
+  MessageCircle,
   Cake,
   CalendarDays,
   History,
@@ -21,6 +22,7 @@ export const NAV: NavItem[] = [
   { to: "/live", label: "Live", icon: Radio, group: "Utama" },
   { to: "/theater", label: "Theater", icon: Ticket, group: "Utama" },
   { to: "/schedule", label: "Jadwal", icon: CalendarDays, group: "Utama" },
+  { to: "/pm", label: "Private Messages", icon: MessageCircle, group: "Utama" },
   { to: "/member", label: "Member", icon: Users, group: "Utama" },
   { to: "/recent", label: "Recent", icon: History, group: "Arsip" },
   { to: "/news", label: "Berita", icon: Newspaper, group: "Arsip" },

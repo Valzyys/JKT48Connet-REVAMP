@@ -111,6 +111,8 @@ export function RootLayout() {
     };
   }, [path]);
 
+  if (path === "/pm" || path.startsWith("/pm/")) return <Outlet />;
+
   return (
     <IntroProvider>
       <a href="#konten" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2 focus:text-white">

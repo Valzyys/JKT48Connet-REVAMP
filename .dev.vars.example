@@ -9,3 +9,7 @@ JKT48CONNECT_API_KEY=jkc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 # GUARD_ADMIN_TOKEN=
 # Opsional: ganti nilainya untuk mengosongkan semua blokir sekaligus.
 # GUARD_EPOCH=
+
+# Private Messages (server only; never use a VITE_ prefix)
+PM_API_KEY=
+MYPG_API_KEY=

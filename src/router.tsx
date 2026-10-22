@@ -1,4 +1,9 @@
-import { createRootRoute, createRoute, createRouter, lazyRouteComponent } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  lazyRouteComponent,
+} from "@tanstack/react-router";
 import { RootLayout } from "@/components/root-layout";
 import { NotFound } from "@/pages/not-found";
 
@@ -8,7 +13,10 @@ const pageSearch = (s: Record<string, unknown>): { page?: number } => {
   return Number.isInteger(n) && n > 1 ? { page: n } : {};
 };
 
-const rootRoute = createRootRoute({ component: RootLayout, notFoundComponent: NotFound });
+const rootRoute = createRootRoute({
+  component: RootLayout,
+  notFoundComponent: NotFound,
+});
 const parent = () => rootRoute;
 
 // Setiap halaman di-load terpisah (code splitting) supaya bundle awal tetap ringan.
@@ -35,13 +43,19 @@ const theaterRoute = createRoute({
 const theaterDetailRoute = createRoute({
   getParentRoute: parent,
   path: "/theater/$id",
-  component: lazyRouteComponent(() => import("@/pages/theater-detail"), "TheaterDetailPage"),
+  component: lazyRouteComponent(
+    () => import("@/pages/theater-detail"),
+    "TheaterDetailPage",
+  ),
 });
 
 const scheduleRoute = createRoute({
   getParentRoute: parent,
   path: "/schedule",
-  component: lazyRouteComponent(() => import("@/pages/schedule"), "SchedulePage"),
+  component: lazyRouteComponent(
+    () => import("@/pages/schedule"),
+    "SchedulePage",
+  ),
 });
 
 const membersRoute = createRoute({
@@ -53,13 +67,19 @@ const membersRoute = createRoute({
 const memberDetailRoute = createRoute({
   getParentRoute: parent,
   path: "/member/$id",
-  component: lazyRouteComponent(() => import("@/pages/member-detail"), "MemberDetailPage"),
+  component: lazyRouteComponent(
+    () => import("@/pages/member-detail"),
+    "MemberDetailPage",
+  ),
 });
 
 const birthdayRoute = createRoute({
   getParentRoute: parent,
   path: "/birthday",
-  component: lazyRouteComponent(() => import("@/pages/birthday"), "BirthdayPage"),
+  component: lazyRouteComponent(
+    () => import("@/pages/birthday"),
+    "BirthdayPage",
+  ),
 });
 
 const recentRoute = createRoute({
@@ -72,7 +92,10 @@ const recentRoute = createRoute({
 const recentDetailRoute = createRoute({
   getParentRoute: parent,
   path: "/recent/$id",
-  component: lazyRouteComponent(() => import("@/pages/recent-detail"), "RecentDetailPage"),
+  component: lazyRouteComponent(
+    () => import("@/pages/recent-detail"),
+    "RecentDetailPage",
+  ),
 });
 
 const newsRoute = createRoute({
@@ -85,7 +108,10 @@ const newsRoute = createRoute({
 const newsDetailRoute = createRoute({
   getParentRoute: parent,
   path: "/news/$id",
-  component: lazyRouteComponent(() => import("@/pages/news-detail"), "NewsDetailPage"),
+  component: lazyRouteComponent(
+    () => import("@/pages/news-detail"),
+    "NewsDetailPage",
+  ),
 });
 
 const videoRoute = createRoute({
@@ -97,7 +123,10 @@ const videoRoute = createRoute({
 const developerRoute = createRoute({
   getParentRoute: parent,
   path: "/developer",
-  component: lazyRouteComponent(() => import("@/pages/developer"), "DeveloperPage"),
+  component: lazyRouteComponent(
+    () => import("@/pages/developer"),
+    "DeveloperPage",
+  ),
 });
 
 const aboutRoute = createRoute({
@@ -109,7 +138,10 @@ const aboutRoute = createRoute({
 const disclaimerRoute = createRoute({
   getParentRoute: parent,
   path: "/disclaimer",
-  component: lazyRouteComponent(() => import("@/pages/legal"), "DisclaimerPage"),
+  component: lazyRouteComponent(
+    () => import("@/pages/legal"),
+    "DisclaimerPage",
+  ),
 });
 
 const termsRoute = createRoute({
@@ -124,7 +156,25 @@ const privacyRoute = createRoute({
   component: lazyRouteComponent(() => import("@/pages/legal"), "PrivacyPage"),
 });
 
+const pmRoutes = [
+  "/pm",
+  "/pm/login",
+  "/pm/register",
+  "/pm/shop",
+  "/pm/account",
+  "/pm/transactions",
+  "/pm/chat/$slug",
+  "/pm/pay/$id",
+].map((path) =>
+  createRoute({
+    getParentRoute: parent,
+    path,
+    component: lazyRouteComponent(() => import("@/pages/pm"), "PmPage"),
+  }),
+);
+
 const routeTree = rootRoute.addChildren([
+  ...pmRoutes,
   homeRoute,
   liveRoute,
   theaterRoute,
