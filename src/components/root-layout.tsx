@@ -1,18 +1,27 @@
 import { Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { IntroProvider } from "@/components/intro";
+import { PixelCross } from "@/components/logo";
 import { Aside, Dock, Footer, Sidebar, Topbar } from "@/components/shell";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { NAV, navFor } from "@/lib/nav";
 
-const SHUTTERS = 5;
+const PARTICLES = 18;
 
 export function RootLayout() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const wipe = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const first = useRef(true);
+  const tap = useRef({ x: 0, y: 0, t: 0 });
   const dest = navFor(path);
+
+  // Ingat titik klik/tap terakhir: transisi halaman mekar dari situ.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => (tap.current = { x: e.clientX, y: e.clientY, t: Date.now() });
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+  }, []);
 
   // Data API sering datang setelah halaman tampil, sehingga tinggi halaman berubah. Hitung ulang
   // posisi ScrollTrigger setiap kali tinggi konten berubah agar reveal & footer tetap terpicu.
@@ -31,9 +40,11 @@ export function RootLayout() {
     };
   }, []);
 
-  // Transisi antar halaman: rana kolom merah menutup dari bawah, nama halaman tujuan muncul besar,
-  // lalu rana terbuka ke atas dan konten baru naik. Konten baru disembunyikan sebelum paint supaya
-  // pergantian halaman tidak terlihat di balik rana.
+  // Transisi antar halaman "Signal burst", semuanya berpusat di titik yang diklik:
+  // 1. tiga cincin sinyal memancar, pecahan piksel terlempar ke segala arah;
+  // 2. gelombang merah lalu merah tua menutup kolom utama, logo piksel berputar dengan nama halaman tujuan;
+  // 3. halaman baru mekar melingkar dengan tepi cincin kuning yang ikut melebar.
+  // Tanpa klik (keyboard, tombol back) pusatnya tengah kolom utama. Konten tersembunyi oleh clip sebelum paint.
   useLayoutEffect(() => {
     if (first.current) {
       first.current = false;
@@ -44,23 +55,58 @@ export function RootLayout() {
     const w = wipe.current;
     const c = content.current;
     if (!w || !c) return;
-    const cols = w.querySelectorAll("[data-col]");
-    const chars = w.querySelectorAll("[data-ch]");
-    const label = w.querySelector("[data-wl]");
+    const q = (sel: string) => w.querySelectorAll<HTMLElement>(sel);
+
+    gsap.set(w, { display: "block" });
+    const area = w.getBoundingClientRect();
+    const box = c.getBoundingClientRect();
+    const recent = Date.now() - tap.current.t < 1500;
+    // Klik di sidebar/dock berada di luar area: tarik ke tepi terdekat supaya efeknya langsung terlihat.
+    const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+    const x = recent ? clamp(tap.current.x, area.left + 90, area.right - 90) : area.left + area.width / 2;
+    const bottom = window.innerHeight - (window.innerWidth < 1024 ? 150 : 90); // di HP jangan tertutup dock
+    const y = recent ? clamp(tap.current.y, Math.max(area.top, 0) + 90, bottom) : area.top + area.height / 2;
+    const lx = x - area.left;
+    const ly = y - area.top;
+    // Jari-jari yang cukup untuk menutup seluruh area terlihat dari titik awal.
+    const r = Math.hypot(Math.max(lx, area.right - x), Math.max(ly, window.innerHeight - y)) + 40;
+    const at = (el: DOMRect) => `${x - el.left}px ${y - el.top}px`;
+    const ring = Math.min(r, 520);
+    const EDGE = 8;
+
     const tl = gsap.timeline();
-    tl.set(c, { opacity: 0 })
-      .set(w, { display: "block" })
-      .fromTo(cols, { scaleY: 0, transformOrigin: "50% 100%" }, { scaleY: 1, duration: 0.34, ease: "power4.inOut", stagger: 0.04 })
-      .fromTo(label, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.25 }, 0.2)
-      .fromTo(chars, { yPercent: 115 }, { yPercent: 0, duration: 0.4, ease: "expo.out", stagger: 0.022 }, 0.2)
-      .to(chars, { yPercent: -115, duration: 0.24, ease: "power3.in", stagger: 0.012 }, 0.62)
-      .to(label, { opacity: 0, duration: 0.15 }, 0.62)
-      .to(cols, { scaleY: 0, transformOrigin: "50% 0%", duration: 0.42, ease: "power4.inOut", stagger: 0.04 }, 0.72)
-      .fromTo(c, { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", clearProps: "transform,opacity" }, 0.84)
+    tl.set(c, { clipPath: `circle(0px at ${at(box)})` })
+      .set(q("[data-ring]"), { left: lx - ring, top: ly - ring, width: ring * 2, height: ring * 2, scale: 0, opacity: 1 })
+      .set(q("[data-edge]"), { left: lx - r - EDGE, top: ly - r - EDGE, width: (r + EDGE) * 2, height: (r + EDGE) * 2, scale: 0, opacity: 1 })
+      .set(q("[data-bit]"), { left: lx, top: ly, x: 0, y: 0, scale: 1, opacity: 1, rotate: 0 })
+      .set(q("[data-mark]"), { left: lx, top: ly, scale: 0, rotate: -120, opacity: 1 })
+      .set(q("[data-cap]"), { left: lx, top: ly + 58, xPercent: -50, opacity: 0, y: 8 })
+      // 1. Cincin sinyal + pecahan piksel.
+      .to(q("[data-ring]"), { scale: 1, opacity: 0, duration: 0.8, ease: "power2.out", stagger: 0.09 }, 0)
+      .to(q("[data-bit]"), {
+        x: (i) => Math.cos((i / PARTICLES) * Math.PI * 2) * gsap.utils.random(110, 300),
+        y: (i) => Math.sin((i / PARTICLES) * Math.PI * 2) * gsap.utils.random(110, 300),
+        rotate: () => gsap.utils.random(-180, 180),
+        scale: 0,
+        duration: 0.75,
+        ease: "power3.out",
+      }, 0.04)
+      // 2. Gelombang merah dua tingkat + logo dan nama tujuan.
+      .fromTo(q("[data-disc]"), { clipPath: `circle(0px at ${lx}px ${ly}px)` }, { clipPath: `circle(${r}px at ${lx}px ${ly}px)`, duration: 0.48, ease: "power2.inOut", stagger: 0.12 }, 0)
+      .to(q("[data-mark]"), { scale: 1, rotate: 0, duration: 0.42, ease: "back.out(2.5)" }, 0.12)
+      .to(q("[data-cap]"), { opacity: 1, y: 0, duration: 0.3 }, 0.22)
+      .to(q("[data-mark]"), { scale: 0, rotate: 90, opacity: 0, duration: 0.25, ease: "power2.in" }, 0.56)
+      .to(q("[data-cap]"), { opacity: 0, y: -8, duration: 0.2 }, 0.52)
+      // 3. Halaman baru mekar, tepi kuning mengikuti.
+      .to(c, { clipPath: `circle(${r}px at ${at(box)})`, duration: 0.75, ease: "expo.inOut" }, 0.5)
+      .to(q("[data-edge]"), { scale: 1, duration: 0.75, ease: "expo.inOut" }, 0.5)
+      .to(q("[data-edge]"), { opacity: 0, duration: 0.25 }, 1.0)
+      .fromTo(c, { y: 24 }, { y: 0, duration: 0.75, ease: "power3.out" }, 0.5)
+      .set(c, { clearProps: "clipPath,transform" })
       .set(w, { display: "none" });
     return () => {
       tl.kill();
-      gsap.set(c, { clearProps: "transform,opacity" });
+      gsap.set(c, { clearProps: "clipPath,transform" });
       gsap.set(w, { display: "none" });
     };
   }, [path]);
@@ -75,29 +121,25 @@ export function RootLayout() {
         <div className="relative min-w-0 flex-1">
           <Topbar />
           <main id="konten" className="relative z-[1] pb-12">
-            <div ref={content}>
+            <div ref={content} className="relative z-10 bg-bg">
               <Outlet />
             </div>
-            <div ref={wipe} aria-hidden className="pointer-events-none fixed inset-0 z-20 hidden lg:left-[var(--side-pad)] xl:right-[340px]">
-              <div className="absolute inset-0 flex">
-                {Array.from({ length: SHUTTERS }).map((_, i) => (
-                  <div key={i} data-col className={i % 2 ? "-mx-px flex-1 bg-brand-strong" : "-mx-px flex-1 bg-brand"} />
-                ))}
-              </div>
-              <div className="absolute inset-0 grid place-items-center px-6 text-center text-white">
-                <div>
-                  <p data-wl className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-white/80">
-                    {String(NAV.indexOf(dest) + 1).padStart(2, "0")} · JKT48Connect
-                  </p>
-                  <p className="condensed mt-2 flex justify-center overflow-hidden text-[clamp(3.5rem,11vw,8.5rem)] uppercase leading-[0.9]">
-                    {dest.label.split("").map((ch, i) => (
-                      <span key={`${dest.to}-${i}`} data-ch className="inline-block">
-                        {ch}
-                      </span>
-                    ))}
-                  </p>
-                </div>
-              </div>
+            <div ref={wipe} aria-hidden className="pointer-events-none fixed inset-0 z-[5] hidden overflow-hidden lg:left-[var(--side-pad)] xl:right-[340px]">
+              <div data-disc className="absolute inset-0 bg-brand" />
+              <div data-disc className="absolute inset-0 bg-brand-strong" />
+              <span data-ring className="absolute rounded-full border-[3px] border-butter" />
+              <span data-ring className="absolute rounded-full border-2 border-white/80" />
+              <span data-ring className="absolute rounded-full border border-white/50" />
+              {Array.from({ length: PARTICLES }).map((_, i) => (
+                <span key={i} data-bit className={i % 3 ? "absolute -ml-1 -mt-1 h-2 w-2 rounded-[2px] bg-white" : "absolute -ml-1.5 -mt-1.5 h-3 w-3 rounded-[3px] bg-butter"} />
+              ))}
+              <span data-edge className="absolute rounded-full border-[8px] border-butter" />
+              <span data-mark className="absolute -ml-10 -mt-10 block h-20 w-20">
+                <PixelCross className="h-20 w-20" cellClass="fill-white" />
+              </span>
+              <span data-cap className="absolute whitespace-nowrap font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-white">
+                {String(NAV.indexOf(dest) + 1).padStart(2, "0")} → {dest.label}
+              </span>
             </div>
           </main>
           <Footer />
