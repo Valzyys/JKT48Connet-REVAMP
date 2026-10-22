@@ -17,7 +17,7 @@ Remake UI publik JKT48Connect dengan gaya **Fan Signal**, identitas visual yang 
 | Navigasi | Desktop: panel tinta melayang dengan menu berkelompok (Utama/Arsip/Info) dan nomor 01–10, bisa diciutkan jadi rail ikon (tombol di bawah panel atau tombol `[`, pilihan diingat) dengan tooltip label. Pil merah meluncur (elastic) ke menu aktif, sorotan tipis mengikuti kursor, dan kartu "On air" menampilkan member yang live atau hitung mundur show berikutnya. HP: dock tinta, menu aktif melebar jadi pil merah berlabel, tombol kisi membuka menu merah layar penuh yang mekar melingkar. Ticker sinyal di topbar. |
 | Hero | Carousel banner desain **jkt48connect** (kartu notifikasi live + banner jadwal show): wipe, zoom pelan, progress bar per slide, bisa digeser. Show yang desainnya masih *pending* tampil sebagai panel merah. |
 | Isi | Statistik yang menghitung naik, kartu dengan tilt 3D, nomor merah "01" ala lineup, judul "JUDUL / jumlah" yang muncul huruf demi huruf, poster jadwal potret jkt48connect, dan daftar jadwal yang masuk bertahap. |
-| Transisi halaman | Sapuan kotak-kotak merah di kolom utama, lalu konten baru naik. |
+| Transisi halaman | Rana lima kolom merah menutup kolom utama dari bawah, nama halaman tujuan (dengan nomor menunya) tersusun huruf demi huruf di tengah, lalu rana terbuka ke atas dan konten baru naik. Konten baru disembunyikan sebelum paint supaya pergantian tidak terlihat. |
 | Footer | Blok tinta di dasar kolom utama: tagline, kolom tautan, tombol sosial, wordmark raksasa JKT48CONNECT yang tersusun huruf demi huruf saat discroll, jam WIB, dan tombol kembali ke atas. |
 | Latar | Polos (krem / gelap), tanpa pola. |
 
@@ -35,7 +35,7 @@ tema `jkt48connect`, bukan photobook.
 | `/schedule` | Show, exclusive, dan event per hari (WIB) | `GET /api/next_schedule`, `/api/theater` |
 | `/member`, `/member/:id` | Direktori (cari, aktif/graduated) & profil | `GET /api/member`, `/api/member/:id` |
 | `/birthday` | Ulang tahun terdekat + hitung mundur | `GET /api/next_birthday` |
-| `/recent`, `/recent/:id` | Rekap live: durasi, penonton, gold/poin, top supporter, gift, cuplikan, leaderboard, replay yang diputar langsung di situs (terbuka 72 jam setelah live) | `GET /api/recent`, `/api/recent/:id` |
+| `/recent`, `/recent/:id` | Rekap live: durasi, penonton, gold/poin, top supporter, gift, semua cuplikan (grid / daftar rinci + penampil), leaderboard, replay yang diputar langsung di situs (terbuka 72 jam setelah live) | `GET /api/recent`, `/api/recent/:id` |
 | `/news`, `/news/:id` | Berita resmi (HTML disanitasi DOMPurify) | `GET /api/news`, `/api/news/:id` |
 | `/video` | Upload terbaru JKT48 & JKT48 TV | `GET /api/jkt48_youtube` |
 | `/about`, `/disclaimer`, `/terms`, `/privacy` | Statis | — |
@@ -48,6 +48,7 @@ Beberapa hal yang ditangani di sana:
 - `now_live` bisa memuat sesi yang sama dua kali, jadi daftarnya dideduplikasi.
 - Item exclusive/event dari `next_schedule` tidak punya halaman detail (API membalas 502), jadi tampil tanpa link.
 - Replay di `/recent/:id` diputar langsung dari `recordings[].url` (MP4 H.264, CORS terbuka) dengan pemutar custom ([`video-player.tsx`](src/components/video-player.tsx)): bar seek dengan buffer dan pratinjau waktu, lompat ±10 detik, volume (diingat), kecepatan 0.5–2×, picture-in-picture, layar penuh, kontrol yang menghilang sendiri, pintasan keyboard (spasi/K, J/L, ←/→, ↑/↓, M, F, 0–9), dan ketuk dua kali kiri/kanan di HP. Pemutar baru muncul 72 jam setelah `live_info.date.end` (`REPLAY_LOCK_HOURS` di `src/lib/jkt48.ts`); sebelum itu tampil panel terkunci dengan hitung mundur, dan berubah jadi pemutar dengan sendirinya saat waktunya tiba. Rekaman yang terdiri dari beberapa bagian bisa dipilih per bagian.
+- Cuplikan live diambil dari `live_info.screenshot` (nama file = waktu tangkap, epoch ms). Semua cuplikan ditampilkan: grid 18 pertama (bisa dibuka semua) atau daftar rinci berisi nomor, menit ke- (dihitung dari awal live), dan jam WIB. Klik membuka penampil layar penuh dengan filmstrip, panah, keyboard ←/→/Esc, dan geser.
 - Gambar di isi berita jkt48.com menolak hotlink (403 bila Referer dari domain lain, plus `Cross-Origin-Resource-Policy: same-site`), jadi dilewatkan `/api/media?url=…`.
 
 ## API key tetap di server
@@ -173,6 +174,8 @@ Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 | ![Profil member](docs/screenshots/09-member-detail.jpg) | ![Birthday](docs/screenshots/10-birthday.jpg) |
 | ![Recent](docs/screenshots/11-recent.jpg) | ![Detail recent](docs/screenshots/12-recent-detail.jpg) |
 | ![Replay terkunci 72 jam](docs/screenshots/22-replay-locked.jpg) | ![Pemutar replay custom](docs/screenshots/22b-replay-player.jpg) |
+| ![Cuplikan: daftar rinci](docs/screenshots/23-cuplikan-daftar.jpg) | ![Cuplikan: grid](docs/screenshots/23b-cuplikan-grid.jpg) |
+| ![Transisi halaman](docs/screenshots/24-transisi-halaman.jpg) | |
 | ![Berita](docs/screenshots/13-news.jpg) | ![Detail berita](docs/screenshots/14-news-detail.jpg) |
 | ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu layar penuh mobile](docs/screenshots/19-mobile-menu.jpg) |
 | ![Footer mobile](docs/screenshots/20-footer-mobile.jpg) | ![Sidebar desktop diciutkan](docs/screenshots/21-sidebar-collapsed.jpg) |

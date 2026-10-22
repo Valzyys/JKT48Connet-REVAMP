@@ -307,6 +307,9 @@ export type RecentLive = {
 export type Fan = { name: string; avatar: string; amount: number | null };
 export type GiftSummary = { name: string; img: string; num: number | null; users: number | null };
 
+/** Cuplikan layar live; `at` = waktu tangkap (ISO), diambil dari nama file (epoch ms). */
+export type Screenshot = { url: string; at: string };
+
 export type Recording = { url: string; durationMs: number; startedAt: string; partial: boolean };
 
 /** Replay baru boleh diputar di situs setelah jeda ini sejak live selesai. */
@@ -323,7 +326,7 @@ export type RecentDetail = RecentLive & {
   /** Waktu replay terbuka: akhir live + REPLAY_LOCK_HOURS. */
   replayUnlockAt: string;
   recordingPartial: boolean;
-  screenshots: string[];
+  screenshots: Screenshot[];
 };
 
 /** "idn_gold" → "Gold", "showroom_points" → "Poin". */
@@ -382,7 +385,10 @@ export async function getRecent(id: string): Promise<RecentDetail> {
     recordingPartial: r.recording_session?.status === "partial" || recordings.some((x) => x.partial),
     screenshots:
       shot?.base_url && Array.isArray(shot.list)
-        ? shot.list.map((t: unknown) => `${shot.base_url}/${t}.${shot.format || "jpg"}`)
+        ? shot.list.map((t: unknown) => {
+            const ms = Number(t);
+            return { url: `${shot.base_url}/${t}.${shot.format || "jpg"}`, at: Number.isFinite(ms) && ms > 1e12 ? new Date(ms).toISOString() : "" };
+          })
         : [],
   };
 }
