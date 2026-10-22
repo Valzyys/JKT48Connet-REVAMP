@@ -401,18 +401,21 @@ async function handleData(c: Call, k: Keys, session: Session): Promise<Response>
 
   let body = await cache?.match(freshKey).then((h) => h?.text());
   if (body === undefined) {
-    const got = await fetchUpstream(path, env);
-    if (got.ok) {
-      body = JSON.stringify(r.shape(got.data, m, q));
-      if (cache) {
-        const put = (ttl: number) =>
-          new Response(body, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": `public, max-age=${ttl}` } });
-        ctx.waitUntil(Promise.all([cache.put(freshKey, put(r.ttl)), cache.put(staleKey, put(STALE_TTL))]));
-      }
+    // Stale-while-revalidate: salinan lama yang masih cukup baru langsung dikirim, upstream (± 1–3 detik)
+    // diperbarui di latar belakang. Tanpa salinan, tunggu upstream (request identik digabung).
+    const staleRes = await cache?.match(staleKey);
+    const age = Date.now() - Number(staleRes?.headers.get("x-cached-at") ?? 0);
+    if (staleRes && age < swrWindow(r.ttl)) {
+      body = await staleRes.text();
+      ctx.waitUntil(revalidate(path, r, m, q, env, cache, freshKey, staleKey).catch(() => {}));
     } else {
-      const stale = got.status >= 500 ? await cache?.match(staleKey).then((h) => h?.text()) : undefined;
-      if (stale === undefined) return json({ status: got.status, message: got.message }, got.status, got.headers);
-      body = stale;
+      const got = await revalidate(path, r, m, q, env, cache, freshKey, staleKey);
+      if (got.ok) body = got.body;
+      else {
+        const stale = got.status >= 500 ? await staleRes?.text() : undefined;
+        if (stale === undefined) return json({ status: got.status, message: got.message }, got.status, got.headers);
+        body = stale;
+      }
     }
   }
 
@@ -433,6 +436,43 @@ async function handleData(c: Call, k: Keys, session: Session): Promise<Response>
       vary: "Cookie",
     },
   });
+}
+
+/** Batas umur salinan lama yang boleh dikirim sambil memperbarui: data live cepat basi, sisanya lebih longgar. */
+const swrWindow = (ttl: number) => (ttl <= 60 ? 10 * 60_000 : 6 * 60 * 60_000);
+
+/** Request upstream yang sedang berjalan per path (per isolate), supaya banyak pengunjung serentak cukup satu fetch. */
+const inflight = new Map<string, Promise<Fetched>>();
+
+type Fetched = { ok: true; body: string } | { ok: false; status: number; message: string; headers: Record<string, string> };
+
+function revalidate(
+  path: string,
+  r: (typeof ROUTES)[number],
+  m: string[],
+  q: Params,
+  env: ProxyEnv,
+  cache: Cache | undefined,
+  freshKey: Request,
+  staleKey: Request,
+): Promise<Fetched> {
+  const running = inflight.get(path);
+  if (running) return running;
+  const job = (async (): Promise<Fetched> => {
+    const got = await fetchUpstream(path, env);
+    if (!got.ok) return got;
+    const body = JSON.stringify(r.shape(got.data, m, q));
+    if (cache) {
+      const put = (ttl: number) =>
+        new Response(body, {
+          headers: { "content-type": "application/json; charset=utf-8", "cache-control": `public, max-age=${ttl}`, "x-cached-at": String(Date.now()) },
+        });
+      await Promise.all([cache.put(freshKey, put(r.ttl)), cache.put(staleKey, put(STALE_TTL))]).catch(() => {});
+    }
+    return { ok: true, body };
+  })().finally(() => inflight.delete(path));
+  inflight.set(path, job);
+  return job;
 }
 
 type Upstream =
