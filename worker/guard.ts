@@ -1,5 +1,5 @@
 /**
- * Penjaga anti-iseng: setiap upaya mengakali API (cookie dipalsukan, tanda tangan salah, replay,
+ * Penjaga anti-iseng: setiap upaya mengakali API (tanda tangan salah, replay,
  * probing endpoint/parameter, token replay milik orang lain, banjir request, akses dari situs lain)
  * memberi "poin curiga" ke IP pelaku. Melewati ambang → IP diblokir sementara dan seluruh situs
  * menampilkan halaman blokir berisi ID insiden (untuk di-screenshot dan dikirim ke admin).
@@ -9,7 +9,6 @@
  */
 
 export type Reason =
-  | "forged_session"
   | "bad_signature"
   | "replay"
   | "cross_site"
@@ -24,7 +23,6 @@ export type Reason =
 
 /** Label yang ditampilkan di halaman blokir (sama dengan src/components/blocked.tsx). */
 export const REASON_LABEL: Record<Reason, string> = {
-  forged_session: "Cookie sesi dimanipulasi",
   bad_signature: "Tanda tangan permintaan tidak valid",
   replay: "Permintaan lama diputar ulang (replay)",
   cross_site: "Akses API dari situs lain",
@@ -40,7 +38,6 @@ export const REASON_LABEL: Record<Reason, string> = {
 
 /** Poin per pelanggaran. Hal yang bisa terjadi pada pengunjung biasa (sesi kedaluwarsa, 404 data) bernilai 0. */
 export const POINTS: Record<Reason, number> = {
-  forged_session: 5,
   bad_signature: 5,
   replay: 4,
   cross_site: 3,
@@ -134,7 +131,8 @@ const statusCache = new Map<string, { v: Verdict; exp: number }>();
 const STATUS_TTL = 30_000;
 
 export function guardFor(ns: GuardNamespace | undefined, ip: string) {
-  const key = `ip:${ip || "unknown"}`;
+  // Prefix versi: menaikkannya mengosongkan semua blokir lama (v2: reset blokir salah dari cookie sebelum SESSION_SECRET).
+  const key = `v2:ip:${ip || "unknown"}`;
   let stub: GuardStub;
   try {
     stub = ns ? ns.get(ns.idFromName(key)) : memoryGuard(key);

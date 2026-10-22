@@ -221,12 +221,11 @@ async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Respons
   const origin = originCheck(request);
   if (origin === "direct") return deny(c, "direct_access", 403, "Akses ditolak");
   if (origin === "cross") return deny(c, "cross_site", 403, "Akses ditolak", request.headers.get("origin") ?? request.headers.get("referer") ?? "");
+  if (origin === "unknown") return json({ status: 403, message: "Akses ditolak" }, 403);
 
+  // Cookie tidak ada / kedaluwarsa / tidak cocok (mis. SESSION_SECRET diganti) → klien membuat sesi baru, tanpa poin.
   const read = await readSession(k, request);
-  if (!read.ok) {
-    if (read.why === "forged") return deny(c, "forged_session", 401, "Sesi tidak valid");
-    return json({ status: 401, code: "session_required", message: "Sesi diperlukan" }, 401);
-  }
+  if (!read.ok) return json({ status: 401, code: "session_required", message: "Sesi diperlukan" }, 401);
   const session = read.session;
   if (!(await allow(env.API_LIMITER, `s:${session.sid}`, 300))) {
     return deny(c, "rate_limit", 429, "Terlalu banyak permintaan, coba lagi sebentar", "", { "retry-after": "30" });
@@ -267,8 +266,10 @@ async function checkSignature(c: Call, k: Keys, session: Session): Promise<Respo
   if (!(await verify(ks.mac, canonical(c.request.method, c.url.pathname + c.url.search, ts, nonce), sig))) {
     return deny(c, "bad_signature", 401, "Permintaan tidak valid", "sig");
   }
-  // Tanda tangan sah tapi waktunya jauh / nonce sudah dipakai = request yang disalin lalu diputar ulang.
-  if (Math.abs(Date.now() - Number(ts)) > MAX_SKEW_MS) return deny(c, "replay", 401, "Permintaan kedaluwarsa", "stale");
+  // Timestamp jauh bisa juga karena jam perangkat berubah (HP tidur, sinkron jam): ditolak tanpa poin, klien
+  // menyinkronkan ulang jam lewat tukar kunci. Request lama yang disalin tetap tidak bisa dipakai.
+  if (Math.abs(Date.now() - Number(ts)) > MAX_SKEW_MS) return json({ status: 401, code: "clock_skew", message: "Jam perangkat tidak sinkron" }, 401);
+  // Nonce yang sama dengan tanda tangan sah = request yang disalin lalu diputar ulang.
   if (!freshNonce(session.sid, nonce, MAX_SKEW_MS * 2)) return deny(c, "replay", 401, "Permintaan diputar ulang", "nonce");
   return null;
 }
@@ -279,6 +280,7 @@ async function handleSession(c: Call, k: Keys): Promise<Response> {
   const { request, url, env, ip } = c;
   if (request.method !== "POST") return deny(c, "bad_method", 405, "Method tidak diizinkan", "", { allow: "POST" });
   const origin = originCheck(request);
+  if (origin === "unknown") return json({ status: 403, message: "Akses ditolak" }, 403);
   if (origin !== "ok") return deny(c, origin === "direct" ? "direct_access" : "cross_site", 403, "Akses ditolak");
 
   const text = await request.text();
@@ -291,8 +293,8 @@ async function handleSession(c: Call, k: Keys): Promise<Response> {
   const pub = typeof body.pub === "string" ? body.pub : "";
   if (!pub) return json({ status: 400, code: "client_outdated", message: "Muat ulang halaman" }, 400);
 
+  // Cookie tidak cocok/kedaluwarsa → sesi baru (cookie lama ditimpa).
   const read = await readSession(k, request);
-  if (!read.ok && read.why === "forged") return deny(c, "forged_session", 401, "Sesi tidak valid");
   const existing = read.ok ? read.session : null;
 
   // Berlaku juga untuk tukar ulang kunci (ECDH memakan CPU).
