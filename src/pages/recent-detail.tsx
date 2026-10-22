@@ -77,11 +77,13 @@ export function RecentDetailPage() {
               </p>
             )}
 
-            {r.recordings.length > 0 && (
+            {r.recordingCount > 0 && (
               <div className="pt-8">
                 <Replay
                   recordings={r.recordings}
+                  count={r.recordingCount}
                   unlockAt={r.replayUnlockAt}
+                  onUnlock={() => recent.refetch()}
                   vertical={r.platform === "idn"}
                   poster={r.screenshots[Math.floor(r.screenshots.length / 2)]?.url}
                 />

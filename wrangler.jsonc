@@ -20,7 +20,16 @@
   "vars": {
     "API_UPSTREAM": "https://api.jkt48connect.app"
   },
+  // Rate limit /api/* (worker/security.ts). namespace_id bebas, unik per akun.
+  "ratelimits": [
+    // Per sesi: semua permintaan data, gambar, dan potongan video replay.
+    { "name": "API_LIMITER", "namespace_id": "4801", "simple": { "limit": 300, "period": 60 } },
+    // Per IP: pembuatan sesi baru.
+    { "name": "SESSION_LIMITER", "namespace_id": "4802", "simple": { "limit": 20, "period": 60 } }
+  ],
   "observability": { "enabled": true }
-  // Secret JKT48CONNECT_API_KEY TIDAK ditulis di sini:
+  // Secret TIDAK ditulis di sini:
   //   npx wrangler secret put JKT48CONNECT_API_KEY
+  //   npx wrangler secret put SESSION_SECRET          (opsional, disarankan; acak ≥ 32 karakter)
+  //   npx wrangler secret put TURNSTILE_SECRET_KEY    (opsional; aktifkan juga VITE_TURNSTILE_SITE_KEY saat build)
 }

@@ -40,30 +40,48 @@ tema `jkt48connect`, bukan photobook.
 | `/video` | Upload terbaru JKT48 & JKT48 TV | `GET /api/jkt48_youtube` |
 | `/about`, `/disclaimer`, `/terms`, `/privacy` | Statis | — |
 
-Bentuk respons sudah dicocokkan dengan output asli API (Oktober 2026) di [`src/lib/jkt48.ts`](src/lib/jkt48.ts).
+Bentuk respons sudah dicocokkan dengan output asli API (Oktober 2026) di [`src/lib/shape.ts`](src/lib/shape.ts) (dijalankan di server).
 Beberapa hal yang ditangani di sana:
 
 - Waktu show di daftar theater ada di `start_date`.
 - Lineup di daftar tidak membawa foto, jadi foto dicocokkan dari `/api/member`.
 - `now_live` bisa memuat sesi yang sama dua kali, jadi daftarnya dideduplikasi.
 - Item exclusive/event dari `next_schedule` tidak punya halaman detail (API membalas 502), jadi tampil tanpa link.
-- Replay di `/recent/:id` diputar langsung dari `recordings[].url` (MP4 H.264, CORS terbuka) dengan pemutar custom ([`video-player.tsx`](src/components/video-player.tsx)): bar seek dengan buffer dan pratinjau waktu, lompat ±10 detik, volume (diingat), kecepatan 0.5–2×, picture-in-picture, layar penuh, kontrol yang menghilang sendiri, pintasan keyboard (spasi/K, J/L, ←/→, ↑/↓, M, F, 0–9), dan ketuk dua kali kiri/kanan di HP. Pemutar baru muncul 72 jam setelah `live_info.date.end` (`REPLAY_LOCK_HOURS` di `src/lib/jkt48.ts`); sebelum itu tampil panel terkunci dengan hitung mundur, dan berubah jadi pemutar dengan sendirinya saat waktunya tiba. Rekaman yang terdiri dari beberapa bagian bisa dipilih per bagian.
+- Replay di `/recent/:id` di-stream lewat `/api/replay` (token terenkripsi milik sesi, bukan URL MP4 asli) dengan pemutar custom ([`video-player.tsx`](src/components/video-player.tsx)): bar seek dengan buffer dan pratinjau waktu, lompat ±10 detik, volume (diingat), kecepatan 0.5–2×, picture-in-picture, layar penuh, kontrol yang menghilang sendiri, pintasan keyboard (spasi/K, J/L, ←/→, ↑/↓, M, F, 0–9), dan ketuk dua kali kiri/kanan di HP. Pemutar baru muncul 72 jam setelah `live_info.date.end` (`REPLAY_LOCK_HOURS` di `src/lib/shape.ts`, ditegakkan server); sebelum itu tampil panel terkunci dengan hitung mundur, dan berubah jadi pemutar dengan sendirinya saat waktunya tiba. Rekaman yang terdiri dari beberapa bagian bisa dipilih per bagian.
 - Cuplikan live diambil dari `live_info.screenshot` (nama file = waktu tangkap, epoch ms). Semua cuplikan ditampilkan: grid 18 pertama (bisa dibuka semua) atau daftar rinci berisi nomor, menit ke- (dihitung dari awal live), dan jam WIB. Klik membuka penampil layar penuh dengan filmstrip, panah, keyboard ←/→/Esc, dan geser.
 - Gambar di isi berita jkt48.com menolak hotlink (403 bila Referer dari domain lain, plus `Cross-Origin-Resource-Policy: same-site`), jadi dilewatkan `/api/media?url=…`.
 
-## API key tetap di server
+## Keamanan: semua `/api/*` privat
 
-Sesuai docs JKT48Connect, API key **tidak boleh** ada di JavaScript browser. Browser hanya memanggil `/api/*` di
-domain situs sendiri. Proxy di [`worker/proxy.ts`](worker/proxy.ts) lalu:
+API key **tidak pernah** sampai ke browser, dan data dari API diperlakukan sebagai resource privat. Browser hanya memanggil
+`/api/*` di domain situs sendiri; proxy di [`worker/proxy.ts`](worker/proxy.ts) (dibantu [`worker/security.ts`](worker/security.ts))
+menerapkan lapisan berikut:
 
-- menambahkan header `X-API-Key` dari secret `JKT48CONNECT_API_KEY`,
-- hanya meneruskan endpoint publik yang dipakai UI (allowlist),
-- meng-cache respons di edge (live 20 detik, recent 60 detik, lainnya 5 menit) agar kuota hemat,
-- menyajikan salinan terakhir bila upstream error (5xx/jaringan).
+| Lapisan | Detail |
+| --- | --- |
+| Sesi wajib | `POST /api/session` memberi cookie `__Host-jc_s` (HttpOnly, Secure, SameSite=Strict, ditandatangani HMAC-SHA256, 12 jam, diperpanjang otomatis). Tanpa cookie valid semua `/api/*` membalas 401. |
+| Turnstile (opsional) | Bila `TURNSTILE_SECRET_KEY` (server) dan `VITE_TURNSTILE_SITE_KEY` (build) diisi, sesi baru hanya diberikan setelah lolos Cloudflare Turnstile, sehingga bot/skrip tidak bisa membuat sesi. |
+| Same-origin | Permintaan lintas situs ditolak 403 (`Sec-Fetch-Site`, cadangan Origin/Referer): tidak bisa di-embed/hotlink dari domain lain, tidak ada CSRF. |
+| Rate limit | Binding Workers `API_LIMITER` (300/menit per sesi) dan `SESSION_LIMITER` (20 sesi/menit per IP), lihat `wrangler.jsonc`. |
+| Allowlist ketat | Hanya route yang dipakai UI, ID divalidasi, parameter query di-allowlist & dibatasi (`perpage` ≤ 40). Parameter lain → 400, jadi URL acak tidak bisa memaksa cache miss dan menghabiskan kuota API key. |
+| Normalisasi di server | Respons upstream dibentuk ulang di server ([`src/lib/shape.ts`](src/lib/shape.ts)); browser hanya menerima field yang dipakai UI, URL selain http(s) dibuang. |
+| Replay dikunci server | Selama 72 jam setelah live, server **tidak mengirim URL rekaman apa pun**. Setelahnya URL MP4 asli diganti `/api/replay?t=…`: token AES-256-GCM (URL asli tidak terbaca), terikat ke sesi (tautan yang dibagikan tidak berlaku di browser lain), kedaluwarsa 6 jam, dan video di-stream lewat Worker (mendukung Range/seek). |
+| Media | `/api/media?url=…` hanya `https://*.jkt48.com`, redirect dicek tiap lompatan, hanya JPEG/PNG/WebP/GIF/AVIF (SVG ditolak), maks. 8 MB. |
+| Header | Aset statis: [`public/_headers`](public/_headers) (CSP tanpa script inline, `frame-ancestors 'none'`, HSTS, nosniff, Referrer-Policy, Permissions-Policy, COOP). `/api/*`: CSP `sandbox`, CORP same-origin, `Cache-Control: private`. |
+| Error generik | Pesan/isi error upstream tidak diteruskan ke browser; detail hanya di log Worker. |
 
-`/api/media?url=…` mengambil gambar berita dari `jkt48.com` (hanya host itu) di server tanpa Referer, lalu menyajikannya dari domain situs sendiri dengan cache edge 7 hari.
+Secret Worker:
 
-Gambar (foto member, desain jadwal, gift, cuplikan) memakai URL media dari respons API dan bisa dibuka tanpa key.
+| Secret | Wajib | Isi |
+| --- | --- | --- |
+| `JKT48CONNECT_API_KEY` | ya | Key `jkc_…` |
+| `SESSION_SECRET` | disarankan | String acak ≥ 32 karakter untuk menandatangani sesi & token replay. Bila kosong diturunkan (HKDF) dari API key. Mengganti nilainya membatalkan semua sesi. |
+| `TURNSTILE_SECRET_KEY` | opsional | Secret key Turnstile; pasangkan dengan variabel build `VITE_TURNSTILE_SITE_KEY`. |
+
+Batasan yang perlu diketahui: tanpa Turnstile, skrip yang meniru browser tetap bisa membuat sesi (dibatasi rate limit).
+Gambar (foto member, desain jadwal, cuplikan) memakai URL CDN dari API yang memang publik di sisi upstream. Rekaman
+yang sudah terbuka tetap bisa direkam layar; perlindungan penuh butuh DRM (mis. Cloudflare Stream dengan signed token)
+dan URL bertanda tangan dari upstream.
 
 ## Menjalankan lokal
 
@@ -73,7 +91,8 @@ cp .dev.vars.example .dev.vars   # isi JKT48CONNECT_API_KEY=jkc_…
 npm run dev                      # http://localhost:5173
 ```
 
-Dev server meneruskan `/api/*` ke api.jkt48connect.app dengan key dari `.dev.vars`. Di jaringan yang memakai proxy
+Dev server menjalankan proxy yang sama dengan produksi (`worker/proxy.ts`: sesi, allowlist, normalisasi, kunci replay)
+dengan key dari `.dev.vars`. Di jaringan yang memakai proxy
 keluar, set `HTTPS_PROXY` dan dev server akan memakainya.
 
 ## Deploy ke Cloudflare
@@ -153,9 +172,9 @@ repository secrets berikut:
 src/
   components/   intro, shell (sidebar kiri, topbar, sidebar kanan, footer, dock + menu HP), carousel, motion (GSAP), kartu
   pages/        satu file per halaman (lazy-loaded)
-  lib/          api.ts (klien), jkt48.ts (normalisasi respons), queries, format, gsap
+  lib/          api.ts (klien + sesi), shape.ts (normalisasi respons, dipakai Worker), jkt48.ts, queries, format, gsap
   hooks/        use-reveal (ScrollTrigger), use-member-index, use-theme, use-clock
-worker/         Cloudflare Worker + proxy API
+worker/         Cloudflare Worker: proxy API privat (proxy.ts) + primitif keamanan (security.ts)
 functions/      Cloudflare Pages Functions
 scripts/        cf-setup.mjs
 docs/screenshots/

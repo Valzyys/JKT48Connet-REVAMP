@@ -23,7 +23,14 @@ function viaProxy(src: string) {
 
 /** Bersihkan HTML berita dan perbaiki tautan/gambar relatif dari situs resmi. */
 function sanitize(html: string) {
-  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+  const clean = DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    // Tidak ada formulir, media aktif, atau CSS dari isi berita (mencegah phishing form & UI overlay).
+    FORBID_TAGS: ["style", "form", "input", "button", "textarea", "select", "iframe", "object", "embed", "video", "audio", "source"],
+    FORBID_ATTR: ["style", "srcset", "formaction"],
+    // Sama dengan default DOMPurify tapi hanya http(s)/mailto + URL relatif.
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+  });
   const doc = new DOMParser().parseFromString(clean, "text/html");
   doc.querySelectorAll<HTMLImageElement>("img[src]").forEach((img) => {
     img.setAttribute("src", viaProxy(img.getAttribute("src") ?? ""));
@@ -33,7 +40,8 @@ function sanitize(html: string) {
   });
   doc.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
     const href = a.getAttribute("href") ?? "";
-    if (href.startsWith("/")) a.href = ORIGIN + href;
+    if (href.startsWith("//")) a.href = "https:" + href;
+    else if (href.startsWith("/")) a.href = ORIGIN + href;
     a.target = "_blank";
     a.rel = "noopener noreferrer";
   });
