@@ -13,6 +13,7 @@
     "cf:dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "deploy:auto": "node scripts/deploy.mjs",
+    "guard:unblock": "node scripts/guard-unblock.mjs",
     "deploy:pages": "vite build && wrangler pages deploy dist --project-name jkt48connect"
   },
   "dependencies": {

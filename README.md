@@ -60,7 +60,7 @@ menerapkan lapisan berikut:
 
 | Lapisan | Detail |
 | --- | --- |
-| Penjaga anti-iseng | Setiap upaya mengakali (tanda tangan request dipalsukan, request diputar ulang, probing endpoint/parameter, token replay milik orang lain, banjir request, akses dari situs lain atau langsung di address bar) memberi poin curiga ke IP ([`worker/guard.ts`](worker/guard.ts)). ≥ 10 poin dalam 15 menit → IP diblokir 1 jam (berulang: 6 jam, 24 jam). Seluruh situs lalu menampilkan **halaman blokir** berisi ID insiden, alasan, waktu, dan ajakan screenshot untuk dikirim ke admin. State disimpan di Durable Object `Guard` (dibuat otomatis saat deploy); setiap pelanggaran tercatat di log Worker (`{"guard":"strike",…}`) sehingga ID insiden bisa dicari. Hal yang bisa terjadi pada pengunjung biasa tidak diberi poin: cookie kedaluwarsa atau tidak cocok (mis. setelah `SESSION_SECRET` diganti) cukup membuat sesi baru, jam perangkat yang meleset disinkron ulang, dan browser tanpa header asal ditolak tanpa poin. Darurat: variabel `GUARD_DISABLED=1` mematikan pemblokiran; mengganti prefix kunci di `guardFor` mengosongkan semua blokir. |
+| Penjaga anti-iseng | Setiap upaya mengakali (tanda tangan request dipalsukan, request diputar ulang, probing endpoint/parameter, token replay milik orang lain, banjir request, akses dari situs lain atau langsung di address bar) memberi poin curiga ke IP ([`worker/guard.ts`](worker/guard.ts)). ≥ 10 poin dalam 15 menit → IP diblokir 1 jam (berulang: 6 jam, 24 jam). Seluruh situs lalu menampilkan **halaman blokir** berisi ID insiden, alasan, waktu, dan ajakan screenshot untuk dikirim ke admin. State disimpan di Durable Object `Guard` (dibuat otomatis saat deploy); setiap pelanggaran tercatat di log Worker (`{"guard":"strike",…}`) sehingga ID insiden bisa dicari. Hal yang bisa terjadi pada pengunjung biasa tidak diberi poin: cookie kedaluwarsa atau tidak cocok (mis. setelah `SESSION_SECRET` diganti) cukup membuat sesi baru, jam perangkat yang meleset disinkron ulang, dan browser tanpa header asal ditolak tanpa poin. Blokir selalu sementara: halaman blokir menampilkan hitung mundur dan memuat ulang sendiri saat waktunya habis. Membuka lebih cepat: lihat [Membuka blokir](#membuka-blokir). |
 | Sesi wajib | `POST /api/session` memberi cookie `__Host-jc_s` (HttpOnly, Secure, SameSite=Strict, ditandatangani HMAC-SHA256, 12 jam, diperpanjang otomatis). Tanpa cookie valid semua `/api/*` membalas 401. |
 | Tukar kunci ECDH | Saat membuat sesi browser mengirim kunci publik ECDH P-256 (kunci privat tidak bisa diekspor). Server membungkus rahasia sesi dengan kunci hasil ECDH, sehingga kunci sesi tidak pernah lewat jaringan dalam bentuk terbaca dan disimpan browser sebagai `CryptoKey` yang tidak bisa diekspor ([`src/lib/wire.ts`](src/lib/wire.ts)). |
 | Request bertanda tangan | Setiap request data membawa HMAC-SHA256 atas method, path+query, timestamp, dan nonce acak. Tanda tangan salah, timestamp > 60 detik, atau nonce yang dipakai ulang ditolak (dan diberi poin) → request yang disalin ("Copy as cURL") tidak bisa diputar ulang, dan request tanpa kunci sesi tidak bisa dibuat. |
@@ -82,6 +82,7 @@ Secret Worker:
 | `JKT48CONNECT_API_KEY` | ya | Key `jkc_…` |
 | `SESSION_SECRET` | disarankan | String acak ≥ 32 karakter untuk menandatangani sesi & token replay. Bila kosong diturunkan (HKDF) dari API key. Mengganti nilainya membatalkan semua sesi. |
 | `TURNSTILE_SECRET_KEY` | opsional | Secret key Turnstile; pasangkan dengan variabel build `VITE_TURNSTILE_SITE_KEY`. |
+| `GUARD_ADMIN_TOKEN` | opsional | Token admin acak ≥ 24 karakter (mis. `openssl rand -base64 32`) untuk membuka blokir lewat `npm run guard:unblock`. Tanpa token ini endpoint admin tidak ada. |
 
 Batasan yang perlu diketahui: semua yang ditampilkan di layar pada akhirnya dibuka oleh browser pengunjung sendiri, jadi
 pemilik browser yang sangat niat tetap bisa membaca data miliknya lewat DevTools; enkripsi & tanda tangan mencegah data
@@ -90,6 +91,25 @@ browser penuh tetap bisa membuat sesi (dibatasi rate limit dan penjaga).
 Gambar (foto member, desain jadwal, cuplikan) memakai URL CDN dari API yang memang publik di sisi upstream. Rekaman
 yang sudah terbuka tetap bisa direkam layar; perlindungan penuh butuh DRM (mis. Cloudflare Stream dengan signed token)
 dan URL bertanda tangan dari upstream.
+
+### Membuka blokir
+
+Blokir penjaga tidak permanen: 1 jam, lalu 6 jam, lalu 24 jam untuk pelanggar berulang (level kembali ke awal setelah 7
+hari bersih). Pengunjung yang terblokir melihat hitung mundur dan situs terbuka sendiri saat waktunya habis. Untuk
+membuka lebih cepat:
+
+| Cara | Kapan | Langkah |
+| --- | --- | --- |
+| Per ID insiden | Pengguna mengirim screenshot halaman blokir | `GUARD_ADMIN_TOKEN=… npm run guard:unblock -- --site https://situsmu --incident JC-XXXX-XXXX`. Server mencari IP pemilik insiden (indeks disimpan 8 hari) lalu menghapus poin & blokirnya. |
+| Per IP | IP diketahui dari log Worker (`{"guard":"strike",…}`) | `… npm run guard:unblock -- --site https://situsmu --ip 203.0.113.7` |
+| IP sendiri | Admin ikut terblokir | `… npm run guard:unblock -- --site https://situsmu` (endpoint admin tetap bisa dipakai walau IP-mu sedang diblokir) |
+| Semua sekaligus | Salah blokir massal | Ubah variabel Worker `GUARD_EPOCH` (mis. `1` → `2`) di **Settings → Variables**. Semua poin & blokir lama tidak dipakai lagi, tanpa deploy kode. |
+| Matikan sementara | Darurat | Variabel `GUARD_DISABLED=1`: pelanggaran tetap ditolak, tapi tidak ada yang diblokir. |
+
+Script memanggil `POST /api/admin/unblock` dengan header `Authorization: Bearer <GUARD_ADMIN_TOKEN>`. Token salah
+memberi poin curiga seperti percobaan mengakali lainnya, dan endpoint dibatasi 10 percobaan per menit per IP. Perubahan
+langsung berlaku di isolate yang menerima permintaan; isolate lain menyusul paling lama 30 detik, lalu pengguna cukup
+memuat ulang halaman.
 
 ## Menjalankan lokal
 
@@ -191,6 +211,7 @@ secret `JKT48CONNECT_API_KEY` di **Settings → Variables and Secrets**.
 | `npm run cf:setup` | Setup Cloudflare interaktif |
 | `npm run cf:dev` | Build + `wrangler dev` |
 | `npm run deploy:auto` | Deploy Workers + setup otomatis (Durable Object, rate limit, secret) |
+| `npm run guard:unblock` | Buka blokir penjaga anti-iseng (per ID insiden, IP, atau IP sendiri) |
 | `npm run deploy` / `deploy:pages` | Deploy ke Workers / Pages |
 
 ## Struktur
@@ -222,7 +243,7 @@ Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 | ![Replay terkunci 72 jam](docs/screenshots/22-replay-locked.jpg) | ![Pemutar replay custom](docs/screenshots/22b-replay-player.jpg) |
 | ![Cuplikan: daftar rinci](docs/screenshots/23-cuplikan-daftar.jpg) | ![Cuplikan: grid](docs/screenshots/23b-cuplikan-grid.jpg) |
 | ![Transisi halaman](docs/screenshots/24-transisi-halaman.jpg) | ![API untuk developer (HP)](docs/screenshots/25b-developer-mobile.jpg) |
-| ![API untuk developer](docs/screenshots/25-developer.jpg) | |
+| ![API untuk developer](docs/screenshots/25-developer.jpg) | ![Halaman blokir dengan hitung mundur](docs/screenshots/26-blokir.jpg) |
 | ![Berita](docs/screenshots/13-news.jpg) | ![Detail berita](docs/screenshots/14-news-detail.jpg) |
 | ![Beranda mobile](docs/screenshots/17-home-mobile.jpg) | ![Menu layar penuh mobile](docs/screenshots/19-mobile-menu.jpg) |
 | ![Footer mobile](docs/screenshots/20-footer-mobile.jpg) | ![Sidebar desktop diciutkan](docs/screenshots/21-sidebar-collapsed.jpg) |

@@ -1,5 +1,6 @@
-import { Camera, ShieldAlert } from "lucide-react";
+import { Camera, Clock, ShieldAlert } from "lucide-react";
 import { useEffect } from "react";
+import { useNow } from "@/components/countdown";
 import { createPortal } from "react-dom";
 import { useBlocked } from "@/lib/blocked";
 
@@ -10,8 +11,26 @@ const fmtWib = (ms: number) =>
  * Layar blokir: menutup seluruh situs saat server memblokir IP ini (poin curiga melewati ambang).
  * Berisi ID insiden untuk di-screenshot dan dikirim ke admin; detail lengkap ada di log Worker.
  */
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** "05:42:10" — sisa waktu blokir. */
+function left(ms: number) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s / 60) % 60))}:${pad(s % 60)}`;
+}
+
 export function Blocked() {
   const b = useBlocked();
+  const now = useNow();
+  const remaining = b ? b.until - now : 0;
+
+  // Blokir selalu sementara: begitu waktunya habis, muat ulang supaya situs terbuka lagi tanpa perlu apa-apa.
+  useEffect(() => {
+    if (b && remaining <= 0) {
+      const t = setTimeout(() => window.location.reload(), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [b, remaining]);
 
   useEffect(() => {
     if (!b) return;
@@ -43,6 +62,13 @@ export function Blocked() {
           <p className="text-ink-soft">
             Aktivitas mencurigakan terdeteksi dari jaringanmu, jadi akses ke JKT48Connect dihentikan sementara.
           </p>
+          <div className="mt-5 flex items-center gap-4 rounded-2xl bg-surface p-4">
+            <Clock className="h-6 w-6 shrink-0 text-brand" />
+            <div>
+              <p className="micro text-ink-soft">{remaining > 0 ? "Terbuka otomatis dalam" : "Membuka kembali…"}</p>
+              <p className="num font-mono text-[26px] font-bold leading-tight">{left(remaining)}</p>
+            </div>
+          </div>
           <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5">
             {rows.map(([k, v]) => (
               <div key={k} className="contents">
@@ -53,7 +79,10 @@ export function Blocked() {
           </dl>
           <p className="mt-6 flex items-start gap-3 rounded-2xl border-2 border-dashed border-brand p-4 font-semibold">
             <Camera className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
-            <span>Screenshot halaman ini dan kirim ke admin bila menurutmu ini keliru. Sertakan ID insiden di atas.</span>
+            <span>
+              Screenshot halaman ini dan kirim ke admin bila menurutmu ini keliru. Dengan ID insiden di atas, admin bisa membuka blokir lebih
+              cepat.
+            </span>
           </p>
         </section>
       </main>

@@ -90,6 +90,9 @@ export default defineConfig(({ mode }) => {
     JKT48CONNECT_API_KEY: env.JKT48CONNECT_API_KEY,
     SESSION_SECRET: env.SESSION_SECRET,
     TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY,
+    GUARD_ADMIN_TOKEN: env.GUARD_ADMIN_TOKEN,
+    GUARD_EPOCH: env.GUARD_EPOCH,
+    GUARD_DISABLED: env.GUARD_DISABLED,
     API_UPSTREAM: env.API_UPSTREAM || "https://api.jkt48connect.app",
     UPSTREAM_FETCH: outbound ? proxiedFetch(new HttpsProxyAgent(outbound)) : undefined,
   };
