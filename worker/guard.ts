@@ -19,7 +19,8 @@ export type Reason =
   | "shared_token"
   | "rate_limit"
   | "bot_check"
-  | "media_abuse";
+  | "media_abuse"
+  | "admin_auth";
 
 /** Label yang ditampilkan di halaman blokir (sama dengan src/components/blocked.tsx). */
 export const REASON_LABEL: Record<Reason, string> = {
@@ -34,6 +35,7 @@ export const REASON_LABEL: Record<Reason, string> = {
   rate_limit: "Terlalu banyak permintaan",
   bot_check: "Gagal verifikasi keamanan",
   media_abuse: "Menyalahgunakan proxy gambar",
+  admin_auth: "Mencoba token admin yang salah",
 };
 
 /** Poin per pelanggaran. Hal yang bisa terjadi pada pengunjung biasa (sesi kedaluwarsa, 404 data) bernilai 0. */
@@ -49,6 +51,7 @@ export const POINTS: Record<Reason, number> = {
   rate_limit: 3,
   bot_check: 2,
   media_abuse: 3,
+  admin_auth: 5,
 };
 
 export const THRESHOLD = 10;
@@ -103,6 +106,11 @@ export const emptyState = (): GuardState => ({ strikes: [], level: 0, levelAt: 0
 export interface GuardStub {
   status(): Promise<Verdict>;
   strike(reason: Reason): Promise<Verdict>;
+  /** Hapus semua poin & blokir (dipakai endpoint admin unblock). */
+  clear(): Promise<void>;
+  /** Indeks insiden → IP: simpan / baca nilai (instance bernama `incident:…`). */
+  remember(value: string): Promise<void>;
+  recall(): Promise<string | undefined>;
 }
 
 /** Binding Durable Object (bentuk struktural supaya proxy tidak bergantung pada `cloudflare:workers`). */
@@ -112,6 +120,7 @@ export interface GuardNamespace {
 }
 
 const memory = new Map<string, GuardState>();
+const notes = new Map<string, string>();
 
 function memoryGuard(key: string): GuardStub {
   const read = () => memory.get(key) ?? emptyState();
@@ -123,22 +132,40 @@ function memoryGuard(key: string): GuardStub {
       memory.set(key, next);
       return verdictOf(next, Date.now());
     },
+    clear: async () => void memory.delete(key),
+    remember: async (value) => {
+      if (notes.size > 20_000) notes.clear();
+      notes.set(key, value);
+    },
+    recall: async () => notes.get(key),
   };
 }
+
+function stubFor(ns: GuardNamespace | undefined, key: string): GuardStub {
+  try {
+    return ns ? ns.get(ns.idFromName(key)) : memoryGuard(key);
+  } catch {
+    return memoryGuard(key);
+  }
+}
+
+/**
+ * Kunci penyimpanan per IP. `epoch` (variabel GUARD_EPOCH) ikut di kunci: mengganti nilainya di dashboard
+ * mengosongkan SEMUA blokir sekaligus tanpa deploy kode. Tanpa epoch dipakai kunci lama (`v2:ip:…`).
+ */
+const ipKey = (ip: string, epoch = "") => `v2:${epoch ? `${epoch}:` : ""}ip:${ip || "unknown"}`;
+const incidentKey = (incident: string, epoch = "") => `v2:${epoch ? `${epoch}:` : ""}incident:${incident}`;
+
+export const INCIDENT_RE = /^JC-[0-9A-F]{4}-[0-9A-F]{4}$/;
 
 /** Cache status per isolate supaya tidak memanggil Durable Object di setiap request. */
 const statusCache = new Map<string, { v: Verdict; exp: number }>();
 const STATUS_TTL = 30_000;
 
-export function guardFor(ns: GuardNamespace | undefined, ip: string) {
+export function guardFor(ns: GuardNamespace | undefined, ip: string, epoch = "") {
   // Prefix versi: menaikkannya mengosongkan semua blokir lama (v2: reset blokir salah dari cookie sebelum SESSION_SECRET).
-  const key = `v2:ip:${ip || "unknown"}`;
-  let stub: GuardStub;
-  try {
-    stub = ns ? ns.get(ns.idFromName(key)) : memoryGuard(key);
-  } catch {
-    stub = memoryGuard(key);
-  }
+  const key = ipKey(ip, epoch);
+  const stub = stubFor(ns, key);
   const remember = (v: Verdict) => {
     if (statusCache.size > 20_000) statusCache.clear();
     statusCache.set(key, { v, exp: Date.now() + STATUS_TTL });
@@ -159,6 +186,8 @@ export function guardFor(ns: GuardNamespace | undefined, ip: string) {
       try {
         const v = remember(await stub.strike(reason));
         console.warn(JSON.stringify({ guard: "strike", ip, reason, detail: detail.slice(0, 200), ...v }));
+        // Blokir baru: catat insiden → IP supaya admin bisa membuka blokir cukup dengan ID insiden dari screenshot.
+        if (v.blocked && Date.now() - v.at < 5_000) await stubFor(ns, incidentKey(v.incident, epoch)).remember(ip);
         return v;
       } catch (err) {
         console.error("guard strike failed", err);
@@ -166,6 +195,22 @@ export function guardFor(ns: GuardNamespace | undefined, ip: string) {
       }
     },
   };
+}
+
+/**
+ * Buka blokir (endpoint admin). Target: ID insiden (dicari IP-nya lewat indeks) atau IP langsung.
+ * Cache status di isolate ini ikut dibersihkan; isolate lain menyusul paling lama STATUS_TTL (30 detik).
+ */
+export async function unblock(ns: GuardNamespace | undefined, target: { ip?: string; incident?: string }, epoch = "") {
+  // IP kosong tetap sah (kunci "unknown", mis. dev server tanpa header cf-connecting-ip).
+  let ip = target.ip;
+  if (ip === undefined && target.incident) ip = await stubFor(ns, incidentKey(target.incident, epoch)).recall();
+  if (ip === undefined) return { ok: false as const, ip: "" };
+  const key = ipKey(ip, epoch);
+  await stubFor(ns, key).clear();
+  statusCache.delete(key);
+  console.warn(JSON.stringify({ guard: "unblock", ip, incident: target.incident ?? null }));
+  return { ok: true as const, ip };
 }
 
 /* ───────────────────────────── Halaman blokir (HTML) ───────────────────────────── */
@@ -198,7 +243,9 @@ export function denyPage(opts: { blocked: boolean; incident: string; reason: Rea
     ...(opts.until ? ([["Berlaku sampai", fmtWib(opts.until)]] as [string, string][]) : []),
     ["IP", maskIp(opts.ip)],
   ];
-  return `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${title} · JKT48Connect</title>
+  // Muat ulang sendiri saat blokir berakhir (blokir selalu sementara: 1 jam, 6 jam, atau 24 jam).
+  const refresh = opts.blocked && opts.until ? `<meta http-equiv="refresh" content="${Math.max(5, Math.ceil((opts.until - Date.now()) / 1000) + 2)}">` : "";
+  return `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">${refresh}<title>${title} · JKT48Connect</title>
 <style>
 :root{color-scheme:light dark;--bg:#f3eee6;--card:#fffaf2;--ink:#1c1416;--soft:#6b5e60;--line:#e4d9cb;--brand:#e11d48}
 @media (prefers-color-scheme:dark){:root{--bg:#141012;--card:#1f191b;--ink:#f6efe7;--soft:#b3a6a8;--line:#352c2f}}
@@ -211,6 +258,7 @@ dt{color:var(--soft);font-size:14px}dd{margin:0;font-weight:600;word-break:break
 .ss{margin:22px 0 0;padding:14px 16px;border:2px dashed var(--brand);border-radius:16px;font-weight:600}
 </style></head><body><main><header><p>JKT48Connect · keamanan</p><h1>${title}</h1></header><section>
 <p class="lead">${esc(lead)}</p><dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd${k === "ID insiden" ? ' class="id"' : ""}>${esc(v)}</dd>`).join("")}</dl>
+${opts.blocked ? '<p class="lead" style="margin:18px 0 0">Blokir ini sementara dan terbuka otomatis pada waktu di atas; halaman ini akan memuat ulang sendiri. Admin juga bisa membukanya lebih cepat dengan ID insiden.</p>' : ""}
 <p class="ss">📸 Screenshot halaman ini dan kirim ke admin bila menurutmu ini keliru. Sertakan ID insiden di atas.</p>
 </section></main></body></html>`;
 }

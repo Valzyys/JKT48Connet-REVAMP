@@ -22,6 +22,20 @@ export class Guard extends DurableObject {
     return verdictOf(next, Date.now());
   }
 
+  async clear() {
+    await this.ctx.storage.deleteAll();
+  }
+
+  /** Dipakai instance indeks `incident:…` (nilai = IP), dibersihkan otomatis setelah 8 hari. */
+  async remember(value: string) {
+    await this.ctx.storage.put("v", value);
+    await this.ctx.storage.setAlarm(Date.now() + 8 * 24 * 60 * 60_000);
+  }
+
+  async recall(): Promise<string | undefined> {
+    return this.ctx.storage.get<string>("v");
+  }
+
   async alarm() {
     await this.ctx.storage.deleteAll();
   }

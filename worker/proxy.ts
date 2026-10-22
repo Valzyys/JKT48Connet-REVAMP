@@ -35,7 +35,7 @@ import {
   type RecentDetail,
 } from "../src/lib/shape";
 import { canonical, H, MAX_SKEW_MS, seal, verify, WIRE_VERSION } from "../src/lib/wire";
-import { denyPage, guardFor, maskIp, newIncident, REASON_LABEL, type Block, type GuardNamespace, type Reason } from "./guard";
+import { denyPage, guardFor, INCIDENT_RE, maskIp, newIncident, REASON_LABEL, unblock, type Block, type GuardNamespace, type Reason } from "./guard";
 import {
   allow,
   API_HEADERS,
@@ -66,6 +66,13 @@ export interface ProxyEnv extends SecurityEnv {
   GUARD?: GuardNamespace;
   /** "1" mematikan pemblokiran otomatis (darurat, mis. salah blokir massal). Pelanggaran tetap ditolak. */
   GUARD_DISABLED?: string;
+  /**
+   * Secret (≥ 24 karakter) untuk `POST /api/admin/unblock` (lihat scripts/guard-unblock.mjs).
+   * Tanpa secret ini endpoint admin tidak ada.
+   */
+  GUARD_ADMIN_TOKEN?: string;
+  /** Mengganti nilainya (mis. "2" → "3") mengosongkan semua blokir sekaligus tanpa deploy kode. */
+  GUARD_EPOCH?: string;
   /** Hanya untuk dev server Node (lewat proxy keluar); Workers memakai fetch bawaan. */
   UPSTREAM_FETCH?: typeof fetch;
 }
@@ -202,7 +209,10 @@ export async function handleApi(request: Request, env: ProxyEnv, ctx: Ctx): Prom
 async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Response> {
   const url = new URL(request.url);
   const ip = clientIp(request);
-  const c: Call = { request, url, env, ctx, ip, guard: env.GUARD_DISABLED === "1" ? noGuard : guardFor(env.GUARD, ip) };
+  const c: Call = { request, url, env, ctx, ip, guard: env.GUARD_DISABLED === "1" ? noGuard : guardFor(env.GUARD, ip, env.GUARD_EPOCH) };
+
+  // Endpoint admin diperiksa sebelum status blokir: admin yang ikut terblokir tetap bisa membuka blokirnya sendiri.
+  if (url.pathname === "/api/admin/unblock" && adminToken(env)) return handleUnblock(c);
 
   const verdict = await c.guard.status();
   if (verdict.blocked) return blockedResponse(c, verdict);
@@ -247,6 +257,51 @@ async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Respons
     res.headers.append("set-cookie", fresh.cookie);
   }
   return res;
+}
+
+/* ───────────────────────────── Admin: buka blokir ───────────────────────────── */
+
+const adminToken = (env: ProxyEnv) => ((env.GUARD_ADMIN_TOKEN ?? "").length >= 24 ? env.GUARD_ADMIN_TOKEN! : "");
+
+/** Bandingkan token lewat digest SHA-256 supaya waktu pembandingan tidak membocorkan isi token. */
+async function sameToken(a: string, b: string) {
+  const [x, y] = await Promise.all([a, b].map(async (s) => new Uint8Array(await crypto.subtle.digest("SHA-256", te.encode(s)))));
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
+const IP_RE = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-f:]{2,39})$/i;
+
+/**
+ * `POST /api/admin/unblock` dengan header `Authorization: Bearer <GUARD_ADMIN_TOKEN>` dan body JSON:
+ *   { "incident": "JC-XXXX-XXXX" }  → buka blokir IP pemilik insiden (dari screenshot pengguna)
+ *   { "ip": "203.0.113.7" }         → buka blokir IP tertentu
+ *   {}                              → buka blokir IP pemanggil sendiri
+ * Token salah memberi poin curiga (admin_auth) seperti percobaan mengakali lainnya.
+ */
+async function handleUnblock(c: Call): Promise<Response> {
+  if (c.request.method !== "POST") return json({ status: 405, message: "Method tidak diizinkan" }, 405, { allow: "POST" });
+  if (!(await allow(c.env.SESSION_LIMITER, `admin:${c.ip}`, 10))) return json({ status: 429, message: "Terlalu banyak permintaan" }, 429, { "retry-after": "60" });
+
+  const auth = c.request.headers.get("authorization") ?? "";
+  const given = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!given || !(await sameToken(given, adminToken(c.env)))) {
+    const v = await c.guard.strike("admin_auth", "token admin salah");
+    if (v.blocked) return blockedResponse(c, v);
+    return json({ status: 401, message: "Token admin salah" }, 401);
+  }
+
+  const body = ((await c.request.json().catch(() => ({}))) ?? {}) as { ip?: unknown; incident?: unknown };
+  const incident = typeof body.incident === "string" ? body.incident.trim().toUpperCase() : "";
+  const ip = typeof body.ip === "string" ? body.ip.trim() : "";
+  if (incident && !INCIDENT_RE.test(incident)) return json({ status: 400, message: "Format ID insiden: JC-XXXX-XXXX" }, 400);
+  if (ip && !IP_RE.test(ip)) return json({ status: 400, message: "Format IP tidak valid" }, 400);
+
+  const target = incident ? { incident } : { ip: ip || c.ip };
+  const r = await unblock(c.env.GUARD, target, c.env.GUARD_EPOCH);
+  if (!r.ok) return json({ status: 404, message: "ID insiden tidak ditemukan (sudah lewat 8 hari atau GUARD_EPOCH diganti)" }, 404);
+  return json({ ok: true, message: "Blokir dibuka", ip: maskIp(r.ip), incident: incident || null }, 200);
 }
 
 /* ───────────────────────────── Tanda tangan request ───────────────────────────── */

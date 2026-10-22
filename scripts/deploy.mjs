@@ -7,6 +7,7 @@
  *        JKT48CONNECT_API_KEY  ← dari env (wajib saat pertama kali; berikutnya tidak perlu)
  *        SESSION_SECRET        ← dibuat acak bila belum ada (TIDAK pernah ditimpa: menimpa = semua sesi batal)
  *        TURNSTILE_SECRET_KEY  ← dari env bila diisi
+ *        GUARD_ADMIN_TOKEN     ← dari env bila diisi (≥ 24 karakter), untuk `npm run guard:unblock`
  *
  *   npm run deploy:auto
  *   JKT48CONNECT_API_KEY=jkc_… npm run deploy:auto
@@ -57,5 +58,14 @@ if (list.status === 0 && !existing.has("SESSION_SECRET")) put("SESSION_SECRET", 
 else console.log("✓ SESSION_SECRET sudah ada");
 
 if (process.env.TURNSTILE_SECRET_KEY) put("TURNSTILE_SECRET_KEY", process.env.TURNSTILE_SECRET_KEY);
+
+const adminToken = process.env.GUARD_ADMIN_TOKEN ?? "";
+if (adminToken) {
+  if (adminToken.length < 24) {
+    console.error("✗ GUARD_ADMIN_TOKEN minimal 24 karakter (contoh: openssl rand -base64 32)");
+    process.exit(1);
+  }
+  put("GUARD_ADMIN_TOKEN", adminToken);
+}
 
 console.log("\n✓ Selesai.\n");
