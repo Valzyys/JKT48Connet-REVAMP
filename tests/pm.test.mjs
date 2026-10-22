@@ -216,7 +216,7 @@ test("PM account, billing, authorization and media integration with real local D
         });
         assert.equal(r.status, 201);
         orderId = (await r.json()).id;
-        assert.equal(charged.amount, "3000");
+        assert.equal(charged.amount, 3000);
         assert.equal(charged.ref_id, orderId);
         const order = await call("/orders/" + orderId, { cookie });
         const text = await order.text();

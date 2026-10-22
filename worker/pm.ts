@@ -119,7 +119,7 @@ async function upstream(env: PmEnv, path: string) {
 async function gateway(
   env: PmEnv,
   action: string,
-  values: Record<string, string>,
+  values: Record<string, string | number>,
 ) {
   if (!env.MYPG_API_KEY) fail(503, "Pembayaran belum dikonfigurasi.");
   const res = await fetch(`https://yobasepay.net/api_my?action=${action}`, {
@@ -358,7 +358,7 @@ export async function handlePm(
       let payment;
       try {
         payment = await gateway(env, "createpayment", {
-          amount: String(plan.price),
+          amount: plan.price,
           ref_id: id,
         });
       } catch (e) {
