@@ -1,2 +1,7 @@
 # Salin ke .dev.vars (tidak ikut di-commit). Dipakai `npm run dev` dan `wrangler dev`.
 JKT48CONNECT_API_KEY=jkc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# Opsional: secret penanda tangan sesi & token replay (acak, ≥ 32 karakter). Bila kosong diturunkan dari API key.
+# SESSION_SECRET=
+# Opsional: Cloudflare Turnstile untuk pembuatan sesi. Kunci uji yang selalu lolos:
+# TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+# VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA

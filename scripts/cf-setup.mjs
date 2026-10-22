@@ -5,6 +5,7 @@
  *   2. Minta API key JKT48Connect (jkc_…) dan validasi formatnya.
  *   3. Tulis `.dev.vars` untuk development lokal.
  *   4. Simpan key sebagai secret di Cloudflare (Workers, atau Pages dengan --pages).
+ *   5. Buat SESSION_SECRET acak (penanda tangan sesi & token replay) dan simpan juga sebagai secret.
  *
  * Pemakaian:
  *   npm run cf:setup                 # Workers (default)
@@ -12,6 +13,7 @@
  *   JKT48CONNECT_API_KEY=jkc_… npm run cf:setup -- --yes   # non-interaktif (CI)
  */
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 
@@ -55,14 +57,14 @@ while (!KEY_FORMAT.test(key)) {
   key = await ask("API key JKT48Connect (jkc_…): ");
 }
 
-// 3. .dev.vars
-writeFileSync(".dev.vars", `JKT48CONNECT_API_KEY=${key}\n`);
+// 3. .dev.vars (SESSION_SECRET lama dipakai ulang supaya sesi yang ada tetap berlaku)
+const sessionSecret =
+  (existsSync(".dev.vars") && /SESSION_SECRET=(\S+)/.exec(readFileSync(".dev.vars", "utf8"))?.[1]) || randomBytes(32).toString("base64url");
+writeFileSync(".dev.vars", `JKT48CONNECT_API_KEY=${key}\nSESSION_SECRET=${sessionSecret}\n`);
 console.log("✓ .dev.vars ditulis (dipakai `npm run dev` & `wrangler dev`)");
 
 // 4. Secret di Cloudflare
-const secretArgs = pages
-  ? ["pages", "secret", "put", "JKT48CONNECT_API_KEY", "--project-name", project]
-  : ["secret", "put", "JKT48CONNECT_API_KEY"];
+const secretArgs = (name) => (pages ? ["pages", "secret", "put", name, "--project-name", project] : ["secret", "put", name]);
 
 if (pages) {
   // Project Pages harus ada sebelum secret bisa disimpan.
@@ -72,14 +74,19 @@ if (pages) {
   });
 }
 
-const put = spawnSync("npx", ["wrangler", ...secretArgs], {
-  input: key,
-  stdio: ["pipe", "inherit", "inherit"],
-  shell: process.platform === "win32",
-});
-if (put.status !== 0) {
-  console.log("✗ Gagal menyimpan secret. Untuk Workers, deploy sekali dulu (`npm run deploy`) lalu ulangi.");
-  process.exit(put.status ?? 1);
+for (const [name, value] of [
+  ["JKT48CONNECT_API_KEY", key],
+  ["SESSION_SECRET", sessionSecret],
+]) {
+  const put = spawnSync("npx", ["wrangler", ...secretArgs(name)], {
+    input: value,
+    stdio: ["pipe", "inherit", "inherit"],
+    shell: process.platform === "win32",
+  });
+  if (put.status !== 0) {
+    console.log("✗ Gagal menyimpan secret. Untuk Workers, deploy sekali dulu (`npm run deploy`) lalu ulangi.");
+    process.exit(put.status ?? 1);
+  }
 }
 
 console.log(`\n✓ Selesai. Deploy dengan: ${pages ? "npm run deploy:pages" : "npm run deploy"}\n`);

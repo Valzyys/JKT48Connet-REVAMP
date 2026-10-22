@@ -1,5 +1,5 @@
 import { Lock, Play } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Countdown, useNow } from "@/components/countdown";
 import { cx } from "@/components/ui";
 import { VideoPlayer } from "@/components/video-player";
@@ -10,24 +10,30 @@ import { REPLAY_LOCK_HOURS, type Recording } from "@/lib/jkt48";
 const LOCK_MS = REPLAY_LOCK_HOURS * 3_600_000;
 
 /**
- * Replay live yang diputar langsung di situs (file MP4 dari API).
- * Baru terbuka setelah 72 jam sejak live selesai; sebelum itu tampil panel terkunci dengan hitung mundur
- * dan bar progres masa tunggu, lalu berubah jadi pemutar dengan sendirinya saat waktunya tiba.
+ * Replay live yang diputar langsung di situs (di-stream lewat `/api/replay`, token terikat sesi).
+ * Kunci 72 jam ditegakkan server: selama masa kunci server tidak mengirim URL apa pun (`recordings` kosong),
+ * jadi panel terkunci dengan hitung mundur tampil. Saat waktunya tiba, data diminta ulang (`onUnlock`)
+ * dan panel berubah jadi pemutar bila server sudah membukanya.
  */
 export function Replay({
   recordings,
+  count,
   unlockAt,
+  onUnlock,
   vertical,
   poster,
 }: {
   recordings: Recording[];
+  count: number;
   unlockAt: string;
+  onUnlock: () => void;
   vertical: boolean;
   poster?: string;
 }) {
   const now = useNow();
   const unlock = Date.parse(unlockAt);
-  const open = Number.isFinite(unlock) && now >= unlock;
+  const open = recordings.length > 0;
+  const due = Number.isFinite(unlock) && now >= unlock;
   const [part, setPart] = useState(0);
   const root = useRef<HTMLElement>(null);
   const bar = useRef<HTMLSpanElement>(null);
@@ -46,8 +52,18 @@ export function Replay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  if (!recordings.length) return null;
-  const rec = recordings[Math.min(part, recordings.length - 1)];
+  // Jam lokal bilang sudah waktunya tapi server belum mengirim rekaman → minta ulang (lalu tiap 30 detik,
+  // bila jam perangkat sedikit lebih cepat dari server).
+  const unlockRef = useRef(onUnlock);
+  unlockRef.current = onUnlock;
+  useEffect(() => {
+    if (!due || open) return;
+    unlockRef.current();
+    const t = setInterval(() => unlockRef.current(), 30_000);
+    return () => clearInterval(t);
+  }, [due, open]);
+
+  if (!count) return null;
 
   if (!open) {
     return (
@@ -61,7 +77,7 @@ export function Replay({
               Replay · terbuka {REPLAY_LOCK_HOURS} jam setelah live
             </p>
             <p data-rp className="condensed mt-2 text-[clamp(1.8rem,4vw,2.6rem)] uppercase leading-none">
-              {Number.isFinite(unlock) ? <Countdown target={unlockAt} /> : "Segera"}
+              {due ? "Membuka…" : Number.isFinite(unlock) ? <Countdown target={unlockAt} /> : "Segera"}
             </p>
             {Number.isFinite(unlock) && (
               <p data-rp className="mt-2 text-[14px] text-white/70">
@@ -84,6 +100,7 @@ export function Replay({
     );
   }
 
+  const rec = recordings[Math.min(part, recordings.length - 1)];
   return (
     <section ref={root} className="overflow-hidden rounded-3xl bg-nav p-3 text-white sm:p-4">
       <div data-rp className="flex flex-wrap items-center justify-between gap-2 px-2 pb-3 pt-1">
