@@ -156,13 +156,23 @@ async function gateway(
   action: string,
   values: Record<string, string | number>,
 ) {
-  if (!env.MYPG_API_KEY) fail(503, "Pembayaran belum dikonfigurasi.");
+  const apiKey = env.MYPG_API_KEY?.trim();
+  if (!apiKey) fail(503, "Pembayaran belum dikonfigurasi.");
+  // The live MYPG endpoint reads PHP form fields even though its docs also
+  // advertise JSON. URL-encode every value, including API keys and trx IDs.
+  const form = new URLSearchParams({ api_key: apiKey });
+  for (const [name, value] of Object.entries(values))
+    form.set(name, String(value));
   const res = await externalFetch(
     `https://yobasepay.net/api_my?action=${action}`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: env.MYPG_API_KEY, ...values }),
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+        "User-Agent": "JKT48Connect/1.0",
+      },
+      body: form.toString(),
       signal: AbortSignal.timeout(20000),
     },
     "Gateway pembayaran belum dapat memproses permintaan.",
@@ -176,6 +186,21 @@ async function gateway(
   if (data.status !== true || !data.data)
     fail(502, "Gateway pembayaran belum dapat memproses permintaan.");
   return data.data;
+}
+function validPaymentQr(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    // MYPG returns qrserver.com QR images in its live createpayment response.
+    return (
+      !url.username &&
+      !url.password &&
+      (url.origin === "https://yobasepay.net" ||
+        url.origin === "https://api.qrserver.com")
+    );
+  } catch {
+    return false;
+  }
 }
 async function hasAccess(db: D1Database, user: string, member: string) {
   const row = await db
@@ -415,8 +440,7 @@ export async function handlePm(
         typeof payment.trx_id !== "string" ||
         !Number.isInteger(payment.amount) ||
         payment.amount < plan.price ||
-        typeof payment.qr_image !== "string" ||
-        !payment.qr_image.startsWith("https://yobasepay.net/")
+        !validPaymentQr(payment.qr_image)
       )
         fail(502, "Respons pembayaran tidak valid.");
       await db

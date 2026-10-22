@@ -44,7 +44,12 @@ test("PM account, billing, authorization and media integration with real local D
     const url = new URL(String(input));
     upstreamCalls++;
     if (url.host === "yobasepay.net") {
-      const data = JSON.parse(init.body);
+      assert.equal(init.method, "POST");
+      assert.match(
+        new Headers(init.headers).get("Content-Type"),
+        /^application\/x-www-form-urlencoded/,
+      );
+      const data = Object.fromEntries(new URLSearchParams(String(init.body)));
       assert.equal(data.api_key, "test-gateway-secret");
       const action = url.searchParams.get("action");
       if (action === "createpayment") {
@@ -216,7 +221,7 @@ test("PM account, billing, authorization and media integration with real local D
         });
         assert.equal(r.status, 201);
         orderId = (await r.json()).id;
-        assert.equal(charged.amount, 3000);
+        assert.equal(charged.amount, "3000");
         assert.equal(charged.ref_id, orderId);
         const order = await call("/orders/" + orderId, { cookie });
         const text = await order.text();
@@ -403,6 +408,8 @@ test("PM external requests in the Cloudflare runtime", async (t) => {
     write: false,
   });
   let mode = "json";
+  let qrImage =
+    "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=test-payment";
   const requests = [];
   const mf = new Miniflare(
     convertV4MiniflareOptions({
@@ -429,23 +436,41 @@ test("PM external requests in the Cloudflare runtime", async (t) => {
         if (mode === "shape")
           return Response.json({ success: true, data: null, messages: null });
         if (url.hostname === "yobasepay.net") {
-          const body = await request.json();
+          // The live MYPG endpoint reads PHP form fields, not a JSON request body.
+          if (
+            !request.headers
+              .get("Content-Type")
+              ?.startsWith("application/x-www-form-urlencoded")
+          )
+            return Response.json({
+              status: false,
+              message: "API Key required",
+            });
+          assert.equal(request.method, "POST");
+          const body = Object.fromEntries(await request.formData());
           assert.equal(body.api_key, "test-gateway-secret");
           if (url.searchParams.get("action") === "createpayment") {
-            assert.equal(body.amount, 3000);
+            assert.equal(body.amount, "3000");
             return Response.json({
               status: true,
               data: {
                 trx_id: `MY-${body.ref_id}`,
                 amount: 3000,
-                qr_image: "https://yobasepay.net/qr_render?payload=test",
+                qr_image: qrImage,
                 expired_at: "2026-12-31 23:59:59",
               },
             });
           }
           return Response.json({
             status: true,
-            data: { trx_id: body.trxid, amount: 3000, status: "SUCCESS" },
+            data: {
+              trx_id: body.trxid,
+              amount: 3000,
+              status:
+                url.searchParams.get("action") === "cancelpayment"
+                  ? "CANCELLED"
+                  : "PENDING",
+            },
           });
         }
         assert.equal(url.hostname, "privatemessageraffz.my.id");
@@ -555,7 +580,7 @@ test("PM external requests in the Cloudflare runtime", async (t) => {
       },
     );
     await t.test(
-      "MYPG creation and verification work inside workerd",
+      "MYPG form creation, verification and cancellation work inside workerd",
       async () => {
         const created = await call("/orders", {
           member: "Lily_JKT48",
@@ -563,11 +588,36 @@ test("PM external requests in the Cloudflare runtime", async (t) => {
         });
         const data = await created.json();
         assert.equal(created.status, 201, JSON.stringify(data));
+        const order = await call(`/orders/${data.id}`);
+        assert.equal((await order.json()).data.qr_image, qrImage);
         const verified = await call(`/orders/${data.id}/check`, {});
         assert.equal(verified.status, 200);
-        assert.equal((await verified.json()).data.status, "SUCCESS");
+        assert.equal((await verified.json()).data.status, "PENDING");
+        const cancelled = await call(`/orders/${data.id}/cancel`, {});
+        assert.equal(cancelled.status, 200);
+        assert.equal((await cancelled.json()).data.status, "CANCELLED");
       },
     );
+    await t.test("checkout rejects untrusted QR origins", async () => {
+      const previous = qrImage;
+      for (const value of [
+        "https://api.qrserver.com.evil.test/qr",
+        "javascript:alert(1)",
+        "https://user:password@api.qrserver.com/qr",
+      ]) {
+        qrImage = value;
+        const result = await call("/orders", {
+          member: "Lily_JKT48",
+          plan: "daily",
+        });
+        assert.equal(result.status, 502);
+        assert.match(
+          (await result.json()).error,
+          /Respons pembayaran tidak valid/,
+        );
+      }
+      qrImage = previous;
+    });
     await t.test(
       "upstream redirects never forward API credentials to another host",
       async () => {
