@@ -5,21 +5,28 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import {
   ArrowLeft,
   ArrowUpRight,
+  BarChart3,
   Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   Download,
+  Expand,
   Heart,
   History,
+  Images,
   LoaderCircle,
   LockKeyhole,
   LogOut,
   MessageCircle,
+  Mic,
+  Play,
   Search,
   ShieldCheck,
   Sparkles,
   UserRound,
   X,
-  ZoomIn,
 } from "lucide-react";
 import { PixelCross } from "@/components/logo";
 import { CountUp, SignalBars, SplitText, Tilt } from "@/components/motion";
@@ -941,11 +948,13 @@ function releaseMedia() {
   for (const p of blobs.values()) void p.then((b) => URL.revokeObjectURL(b.url), () => {});
   blobs.clear();
 }
-function useMedia(src: string) {
+function useMedia(src: string, enabled = true) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
+    if (!enabled) return;
     let live = true;
+    setFailed(false);
     loadMedia(src).then(
       (b) => live && setUrl(b.url),
       () => live && setFailed(true),
@@ -953,8 +962,21 @@ function useMedia(src: string) {
     return () => {
       live = false;
     };
-  }, [src]);
+  }, [src, enabled]);
   return { url, failed };
+}
+/** Muat media hanya saat petaknya mendekati layar (galeri bisa berisi ratusan foto). */
+function useInView<T extends Element>(margin = "400px") {
+  const ref = useRef<T>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return;
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && setSeen(true), { rootMargin: margin });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [seen, margin]);
+  return [ref, seen] as const;
 }
 const fileName = (src: string, member: string) => `JKT48Connect-${member.replace(/\s+/g, "_")}-${src.split("/").pop()}`;
 const guard = {
@@ -962,6 +984,29 @@ const guard = {
   onDragStart: (e: { preventDefault: () => void }) => e.preventDefault(),
   style: { WebkitTouchCallout: "none" } as const,
 };
+
+type MediaKind = "image" | "video" | "audio";
+type MediaItem = { src: string; kind: MediaKind; id: string; at: Date | null; text: string };
+const kindOf = (src: string): MediaKind => (/\.mp4$/i.test(src) ? "video" : /\.(m4a|amr|mp3|ogg|wav)$/i.test(src) ? "audio" : "image");
+
+/** `created_at` gateway berformat "22/10/2026, 13.15.22 WIB"; format ISO juga diterima. */
+function parseAt(value: string): Date | null {
+  const m = value.match(/(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2})[.:](\d{2})(?:[.:](\d{2}))?/);
+  if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4] - 7, +m[5], +(m[6] || 0)));
+  const t = Date.parse(value);
+  return Number.isFinite(t) ? new Date(t) : null;
+}
+const WIB = { timeZone: "Asia/Jakarta" } as const;
+const dayKey = (d: Date) => d.toLocaleDateString("en-CA", WIB);
+const clock = (d: Date | null, raw: string) => (d ? d.toLocaleTimeString("id-ID", { ...WIB, hour: "2-digit", minute: "2-digit" }) : raw);
+function dayLabel(d: Date) {
+  const key = dayKey(d);
+  const today = new Date();
+  if (key === dayKey(today)) return "Hari ini";
+  if (key === dayKey(new Date(today.getTime() - 86400000))) return "Kemarin";
+  return d.toLocaleDateString("id-ID", { ...WIB, weekday: "long", day: "numeric", month: "long", year: d.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+}
+const monthLabel = (d: Date | null) => (d ? d.toLocaleDateString("id-ID", { ...WIB, month: "long", year: "numeric" }) : "Tanpa tanggal");
 
 function SaveButton({ src, name, className, label }: { src: string; name: string; className?: string; label?: boolean }) {
   const [busy, setBusy] = useState(false);
@@ -996,7 +1041,7 @@ function SaveButton({ src, name, className, label }: { src: string; name: string
       title="Simpan ke perangkat"
       className={cx(
         "inline-flex items-center gap-1.5 rounded-full font-bold transition",
-        label ? "bg-brand px-4 py-2 text-[13px] text-white hover:bg-brand-strong" : "h-9 w-9 justify-center bg-nav/75 text-white backdrop-blur hover:bg-brand",
+        label ? "bg-brand px-4 py-2 text-[13px] text-white hover:bg-brand-strong" : "h-9 w-9 justify-center bg-nav/70 text-white backdrop-blur hover:bg-brand",
         className,
       )}
     >
@@ -1008,15 +1053,55 @@ function SaveButton({ src, name, className, label }: { src: string; name: string
   );
 }
 
-function Lightbox({ src, name, alt, onClose }: { src: string; name: string; alt: string; onClose: () => void }) {
-  const { url } = useMedia(src);
+/* ───────────────────────────── Penampil (foto & video) ───────────────────────────── */
+
+function Thumb({ item, on, onClick }: { item: MediaItem; on: boolean; onClick: () => void }) {
+  const [ref, seen] = useInView<HTMLButtonElement>("200px");
+  const { url } = useMedia(item.src, seen && item.kind === "image");
+  useEffect(() => {
+    if (on) ref.current?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }, [on, ref]);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onClick}
+      aria-label={item.kind === "video" ? "Video" : "Foto"}
+      className={cx("relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white/10 transition", on ? "ring-2 ring-brand ring-offset-2 ring-offset-black" : "opacity-50 hover:opacity-100")}
+    >
+      {url && <img src={url} alt="" draggable={false} className="h-full w-full object-cover" />}
+      {item.kind === "video" && <Play className="absolute inset-0 m-auto h-5 w-5 fill-white text-white" />}
+    </button>
+  );
+}
+
+function Viewer({ items, start, member, onClose }: { items: MediaItem[]; start: number; member: string; onClose: () => void }) {
+  const [i, setI] = useState(Math.min(start, items.length - 1));
+  const dir = useRef(0);
   const root = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const item = items[i];
+  const { url } = useMedia(item.src, item.kind === "image");
+  const go = (d: number) => {
+    const n = i + d;
+    if (n < 0 || n >= items.length) return;
+    dir.current = d;
+    setI(n);
+  };
+  const goRef = useRef(go);
+  goRef.current = go;
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useLayoutEffect(() => {
     const el = root.current;
     if (!el) return;
     gsap.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.25 });
-    gsap.fromTo(el.querySelector("[data-lb-img]"), { scale: 0.9, y: 20 }, { scale: 1, y: 0, duration: 0.45, ease: "power3.out" });
-    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeRef.current();
+      if (e.key === "ArrowRight") goRef.current(1);
+      if (e.key === "ArrowLeft") goRef.current(-1);
+    };
     window.addEventListener("keydown", key);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -1024,78 +1109,439 @@ function Lightbox({ src, name, alt, onClose }: { src: string; name: string; alt:
       window.removeEventListener("keydown", key);
       document.body.style.overflow = overflow;
     };
-  }, [onClose]);
-  // Di-portal ke <body>: leluhur dengan transform (animasi GSAP) akan memotong position:fixed.
+  }, []);
+  // Geser masuk dari arah navigasi; tetangga foto dimuat lebih dulu supaya geser terasa instan.
+  useLayoutEffect(() => {
+    if (stage.current) gsap.fromTo(stage.current, { x: dir.current * 80, opacity: 0, scale: dir.current ? 1 : 0.94 }, { x: 0, opacity: 1, scale: 1, duration: 0.4, ease: "power3.out" });
+    for (const n of [items[i + 1], items[i - 1]]) if (n?.kind === "image") void loadMedia(n.src).catch(() => {});
+  }, [i, items]);
+
+  const swipe = useRef<number | null>(null);
   return createPortal(
-    <div ref={root} role="dialog" aria-modal="true" aria-label={alt} onClick={onClose} className="fixed inset-0 z-[90] flex flex-col bg-black/90 p-4 backdrop-blur-sm" {...guard}>
-      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-        <SaveButton src={src} name={name} label />
-        <button type="button" onClick={onClose} aria-label="Tutup" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20">
+    <div
+      ref={root}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Galeri ${member}`}
+      className="fixed inset-0 z-[90] flex flex-col bg-[#0b0809]/95 text-white backdrop-blur"
+      onPointerDown={(e) => void (swipe.current = e.clientX)}
+      onPointerUp={(e) => {
+        if (swipe.current === null) return;
+        const dx = e.clientX - swipe.current;
+        swipe.current = null;
+        if (Math.abs(dx) > 60) go(dx < 0 ? 1 : -1);
+      }}
+      {...guard}
+    >
+      <div className="flex items-center gap-3 px-4 py-3 sm:px-6">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-extrabold">{member}</p>
+          <p className="font-mono text-[11px] text-white/55">
+            <span className="num">
+              {i + 1} / {items.length}
+            </span>
+            {item.at && ` · ${dayLabel(item.at)}, ${clock(item.at, "")}`}
+          </p>
+        </div>
+        <SaveButton src={item.src} name={fileName(item.src, member)} label />
+        <button type="button" onClick={onClose} aria-label="Tutup" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 transition hover:bg-white/20">
           <X className="h-5 w-5" />
         </button>
       </div>
-      <div className="grid min-h-0 flex-1 place-items-center py-4">
-        {url ? (
-          <img data-lb-img src={url} alt={alt} draggable={false} onClick={(e) => e.stopPropagation()} className="max-h-full max-w-full select-none rounded-2xl object-contain" {...guard} />
-        ) : (
-          <LoaderCircle data-lb-img className="h-8 w-8 animate-spin text-white/60" />
-        )}
+
+      <div className="relative grid min-h-0 flex-1 place-items-center px-4 sm:px-20">
+        <div ref={stage} className="grid h-full w-full place-items-center">
+          {item.kind === "video" ? (
+            <video key={item.src} src={item.src} controls autoPlay playsInline controlsList="nodownload" disablePictureInPicture className="max-h-full max-w-full rounded-2xl bg-black" {...guard} />
+          ) : url ? (
+            <img src={url} alt={`Foto dari ${member}`} draggable={false} className="max-h-full max-w-full select-none rounded-2xl object-contain" {...guard} />
+          ) : (
+            <LoaderCircle className="h-8 w-8 animate-spin text-white/60" />
+          )}
+        </div>
+        {[-1, 1].map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => go(d)}
+            disabled={i + d < 0 || i + d >= items.length}
+            aria-label={d < 0 ? "Sebelumnya" : "Berikutnya"}
+            className={cx(
+              "absolute top-1/2 hidden h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/10 transition hover:bg-brand disabled:opacity-20 disabled:hover:bg-white/10 sm:grid",
+              d < 0 ? "left-4" : "right-4",
+            )}
+          >
+            {d < 0 ? <ChevronLeft className="h-6 w-6" /> : <ChevronRight className="h-6 w-6" />}
+          </button>
+        ))}
+      </div>
+
+      {item.text && <p className="mx-auto mt-3 line-clamp-2 max-w-2xl px-6 text-center text-[14px] text-white/75">{item.text}</p>}
+      <div className="no-scrollbar mx-auto flex max-w-full gap-2 overflow-x-auto px-4 pb-5 pt-4" onPointerDown={(e) => e.stopPropagation()}>
+        {items.map((it, n) => (
+          <Thumb
+            key={it.src}
+            item={it}
+            on={n === i}
+            onClick={() => {
+              dir.current = n > i ? 1 : -1;
+              setI(n);
+            }}
+          />
+        ))}
       </div>
     </div>,
     document.body,
   );
 }
 
-function ChatImage({ src, name, alt }: { src: string; name: string; alt: string }) {
-  const { url, failed } = useMedia(src);
-  const [open, setOpen] = useState(false);
+/* ───────────────────────────── Isi gelembung ───────────────────────────── */
+
+function BubbleImage({ item, member, onOpen, tall, stamp }: { item: MediaItem; member: string; onOpen: () => void; tall: boolean; stamp?: ReactNode }) {
+  const [ref, seen] = useInView<HTMLDivElement>();
+  const { url, failed } = useMedia(item.src, seen);
   return (
-    <div className="group/media relative mb-2 overflow-hidden rounded-2xl bg-surface" {...guard}>
+    <div ref={ref} className={cx("group/media relative overflow-hidden rounded-[18px] bg-surface", tall ? "min-h-40" : "aspect-square")} {...guard}>
       {url ? (
-        <button type="button" onClick={() => setOpen(true)} aria-label={"Perbesar " + alt} className="block w-full cursor-zoom-in">
-          <img src={url} alt={alt} draggable={false} className="max-h-[420px] w-full select-none object-cover transition duration-500 group-hover/media:scale-[1.03]" {...guard} />
-          <span className="pointer-events-none absolute bottom-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-nav/60 text-white opacity-0 backdrop-blur transition group-hover/media:opacity-100">
-            <ZoomIn className="h-4 w-4" />
-          </span>
+        <button type="button" onClick={onOpen} aria-label={"Perbesar foto dari " + member} className="block h-full w-full cursor-zoom-in">
+          <img
+            src={url}
+            alt={"Foto dari " + member}
+            draggable={false}
+            className={cx("w-full select-none object-cover transition duration-500 group-hover/media:scale-[1.04]", tall ? "max-h-[380px]" : "h-full")}
+            {...guard}
+          />
         </button>
       ) : failed ? (
-        <p className="px-4 py-8 text-center text-[13px] text-ink-soft">Gambar belum dapat dimuat.</p>
+        <p className="grid h-40 place-items-center px-4 text-center text-[13px] text-ink-soft">Foto belum dapat dimuat.</p>
       ) : (
-        <Skeleton className="h-56 w-full rounded-none" />
+        <Skeleton className={cx("w-full rounded-none", tall ? "h-64" : "h-full")} />
       )}
-      {url && <SaveButton src={src} name={name} className="absolute right-2 top-2" />}
-      {open && <Lightbox src={src} name={name} alt={alt} onClose={() => setOpen(false)} />}
+      {url && <SaveButton src={item.src} name={fileName(item.src, member)} className="absolute right-2 top-2 lg:opacity-0 lg:group-hover/media:opacity-100" />}
+      {stamp}
     </div>
   );
 }
 
-function ChatMedia({ src, member }: { src: string; member: string }) {
-  const name = fileName(src, member);
-  if (/\.mp4$/i.test(src))
-    return (
-      <div className="relative mb-2" {...guard}>
-        <video src={src} controls controlsList="nodownload" disablePictureInPicture playsInline preload="none" className="max-h-[420px] w-full rounded-2xl bg-black" {...guard} />
-        <SaveButton src={src} name={name} className="absolute right-2 top-2" />
+function Bubble({
+  m,
+  member,
+  first,
+  last,
+  gallery,
+  onOpen,
+}: {
+  m: Message;
+  member: string;
+  first: boolean;
+  last: boolean;
+  gallery: MediaItem[];
+  onOpen: (index: number) => void;
+}) {
+  const at = parseAt(m.created_at);
+  const items = m.media_urls.map((src): MediaItem => ({ src, kind: kindOf(src), id: m.message_id, at, text: m.text }));
+  const images = items.filter((x) => x.kind === "image");
+  const onlyMedia = !m.text && !m.is_poll && images.length > 0 && images.length === items.length;
+  const time = <time className="font-mono text-[10px] tracking-wide">{clock(at, m.created_at)}</time>;
+  const open = (src: string) => onOpen(gallery.findIndex((g) => g.src === src));
+  return (
+    <div
+      className={cx(
+        "min-w-0 max-w-[min(520px,100%)] overflow-hidden border border-line bg-card shadow-[0_10px_24px_-20px_rgb(0_0_0/0.5)]",
+        "rounded-[22px]",
+        !first && "rounded-tl-md",
+        last ? "rounded-bl-md" : "",
+        onlyMedia ? "p-1" : "p-1.5",
+      )}
+    >
+      {images.length > 0 && (
+        <div className={cx("grid gap-1", images.length > 1 && "grid-cols-2")}>
+          {images.map((it, n) => (
+            <div key={it.src} className={cx(images.length === 3 && n === 0 && "col-span-2")}>
+              <BubbleImage
+                item={it}
+                member={member}
+                tall={images.length === 1 || (images.length === 3 && n === 0)}
+                onOpen={() => open(it.src)}
+                stamp={
+                  onlyMedia && n === images.length - 1 ? (
+                    <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-white backdrop-blur">{time}</span>
+                  ) : undefined
+                }
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      {items
+        .filter((x) => x.kind !== "image")
+        .map((it) =>
+          it.kind === "video" ? (
+            <div key={it.src} className="relative mt-1 first:mt-0" {...guard}>
+              <video src={it.src} controls controlsList="nodownload" disablePictureInPicture playsInline preload="metadata" className="max-h-[380px] w-full rounded-[18px] bg-black" {...guard} />
+              <SaveButton src={it.src} name={fileName(it.src, member)} className="absolute right-2 top-2" />
+              <button
+                type="button"
+                onClick={() => open(it.src)}
+                aria-label="Buka di galeri"
+                className="absolute left-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-nav/70 text-white backdrop-blur transition hover:bg-brand"
+              >
+                <Expand className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <div key={it.src} className="mt-1 flex items-center gap-2 rounded-[18px] bg-surface p-2 first:mt-0" {...guard}>
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white">
+                <Mic className="h-4 w-4" />
+              </span>
+              <audio src={it.src} controls controlsList="nodownload" preload="none" className="h-9 min-w-0 flex-1" />
+              <SaveButton src={it.src} name={fileName(it.src, member)} className="!bg-card !text-ink hover:!bg-brand hover:!text-white" />
+            </div>
+          ),
+        )}
+      {!onlyMedia && (
+        <div className="px-2 pb-1 pt-1.5">
+          {m.text && <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{m.text}</p>}
+          {m.is_poll && (
+            <div className="mt-1 rounded-2xl bg-blush p-3">
+              <p className="micro flex items-center gap-1.5 text-brand">
+                <BarChart3 className="h-3.5 w-3.5" /> Polling member
+              </p>
+              <p className="mt-1 font-semibold">
+                {typeof m.poll === "object" && m.poll
+                  ? String((m.poll as Record<string, unknown>).question || "Lihat pesan member untuk detail polling.")
+                  : "Lihat pesan member untuk detail polling."}
+              </p>
+              <p className="mt-1 text-[12px] text-ink-soft">Voting tidak tersedia melalui layanan ini.</p>
+            </div>
+          )}
+          <p className="mt-0.5 text-right text-ink-soft">{time}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────────── Galeri ───────────────────────────── */
+
+function GalleryTile({ item, member, onOpen }: { item: MediaItem; member: string; onOpen: () => void }) {
+  const [ref, seen] = useInView<HTMLDivElement>();
+  const { url } = useMedia(item.src, seen && item.kind === "image");
+  return (
+    <div ref={ref} data-tile className="group/media relative aspect-square overflow-hidden rounded-2xl bg-surface" {...guard}>
+      <button type="button" onClick={onOpen} aria-label={(item.kind === "video" ? "Putar video" : "Lihat foto") + " dari " + member} className="block h-full w-full">
+        {item.kind === "video" ? (
+          seen && <video src={item.src} muted playsInline preload="metadata" className="h-full w-full object-cover" {...guard} />
+        ) : url ? (
+          <img src={url} alt={"Foto dari " + member} draggable={false} className="h-full w-full select-none object-cover transition duration-500 group-hover/media:scale-105" {...guard} />
+        ) : (
+          <Skeleton className="h-full w-full rounded-none" />
+        )}
+        <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition group-hover/media:opacity-100" />
+        {item.kind === "video" && (
+          <span className="pointer-events-none absolute inset-0 grid place-items-center">
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-black/55 backdrop-blur">
+              <Play className="h-5 w-5 fill-white text-white" />
+            </span>
+          </span>
+        )}
+        {item.at && (
+          <span className="pointer-events-none absolute bottom-2 left-2 font-mono text-[10px] text-white opacity-0 transition group-hover/media:opacity-100">
+            {item.at.toLocaleDateString("id-ID", { ...WIB, day: "numeric", month: "short" })}
+          </span>
+        )}
+      </button>
+      {(item.kind === "video" || url) && (
+        <SaveButton src={item.src} name={fileName(item.src, member)} className="absolute right-2 top-2 !h-8 !w-8 lg:opacity-0 lg:group-hover/media:opacity-100" />
+      )}
+    </div>
+  );
+}
+
+function Gallery({
+  items,
+  member,
+  onOpen,
+  more,
+  loading,
+  onMore,
+}: {
+  items: MediaItem[];
+  member: string;
+  onOpen: (items: MediaItem[], index: number) => void;
+  more: boolean;
+  loading: boolean;
+  onMore: () => void;
+}) {
+  const [filter, setFilter] = useState<"all" | "image" | "video">("all");
+  const box = useRef<HTMLDivElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const counts = { image: items.filter((x) => x.kind === "image").length, video: items.filter((x) => x.kind === "video").length };
+  const shown = items.map((it) => ({ it })).filter(({ it }) => filter === "all" || it.kind === filter);
+  // Penampil mengikuti urutan galeri (terbaru dulu) dan filter yang sedang aktif.
+  const order = shown.map((r) => r.it).reverse();
+  // Terbaru di atas, dikelompokkan per bulan.
+  const groups: { label: string; rows: typeof shown }[] = [];
+  for (const row of [...shown].reverse()) {
+    const label = monthLabel(row.it.at);
+    if (groups.at(-1)?.label !== label) groups.push({ label, rows: [] });
+    groups.at(-1)!.rows.push(row);
+  }
+
+  // Petak baru muncul bertahap.
+  const count = useRef(0);
+  useLayoutEffect(() => {
+    const tiles = [...(box.current?.querySelectorAll<HTMLElement>("[data-tile]") || [])];
+    const fresh = count.current === 0 || tiles.length < count.current ? tiles : tiles.slice(count.current);
+    count.current = tiles.length;
+    gsap.fromTo(fresh.slice(0, 30), { opacity: 0, y: 16, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.025, ease: "power3.out", clearProps: "transform" });
+  }, [shown.length, filter]);
+  // Gulir sampai ujung → muat halaman pesan berikutnya untuk mencari media lama.
+  const moreRef = useRef(onMore);
+  moreRef.current = onMore;
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !more || loading) return;
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && moreRef.current(), { rootMargin: "200px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [more, loading, items.length]);
+
+  return (
+    <div ref={box} className="px-3 pb-6 pt-4 sm:px-6">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {(
+          [
+            ["all", "Semua", items.length],
+            ["image", "Foto", counts.image],
+            ["video", "Video", counts.video],
+          ] as const
+        ).map(([id, label, n]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={filter === id}
+            onClick={() => setFilter(id)}
+            className={cx("flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] font-bold transition", filter === id ? "border-brand bg-brand text-white" : "border-line bg-card text-ink-soft hover:text-ink")}
+          >
+            {label}
+            <span className={cx("num rounded-full px-1.5 font-mono text-[11px]", filter === id ? "bg-white/20" : "bg-surface")}>{n}</span>
+          </button>
+        ))}
       </div>
-    );
-  if (/\.(m4a|amr|mp3|ogg|wav)$/i.test(src))
-    return (
-      <div className="mb-2 flex items-center gap-2" {...guard}>
-        <audio src={src} controls controlsList="nodownload" preload="none" className="min-w-0 flex-1" />
-        <SaveButton src={src} name={name} className="!bg-surface !text-ink hover:!bg-brand hover:!text-white" />
+      {groups.map((g) => (
+        <section key={g.label} className="mb-6">
+          <h3 className="micro sticky top-0 z-[2] -mx-3 mb-3 bg-bg/90 px-3 py-2 text-ink-soft backdrop-blur sm:-mx-6 sm:px-6">{g.label}</h3>
+          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 xl:grid-cols-5">
+            {g.rows.map(({ it }) => (
+              <GalleryTile key={it.src} item={it} member={member} onOpen={() => onOpen(order, order.indexOf(it))} />
+            ))}
+          </div>
+        </section>
+      ))}
+      {!shown.length && !loading && (
+        <div className="grid place-items-center gap-2 py-16 text-center">
+          <Images className="h-10 w-10 text-brand" />
+          <p className="text-[17px] font-extrabold">{more ? "Belum ada media di pesan terbaru." : "Belum ada media."}</p>
+          <p className="text-ink-soft">{more ? "Muat pesan lebih lama untuk mencari foto dan video." : "Foto dan video dari member akan terkumpul di sini."}</p>
+        </div>
+      )}
+      <div ref={sentinel} className="grid place-items-center py-4">
+        {loading ? (
+          <LoaderCircle className="h-6 w-6 animate-spin text-brand" />
+        ) : more ? (
+          <button type="button" className="btn btn-ghost" onClick={onMore}>
+            Muat media lebih lama
+          </button>
+        ) : (
+          shown.length > 0 && <p className="micro text-ink-soft">Semua media sudah ditampilkan</p>
+        )}
       </div>
-    );
-  return <ChatImage src={src} name={name} alt={"Foto dari " + member} />;
+    </div>
+  );
 }
 
 /* ───────────────────────────── Obrolan ───────────────────────────── */
 
-function Chat({ slug, member }: { slug: string; member?: Member }) {
+/** Layar < lg: obrolan tampil layar penuh di atas shell situs, seperti aplikasi chat. */
+function useDesktop() {
+  const q = "(min-width: 1024px)";
+  const [on, setOn] = useState(() => window.matchMedia(q).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(q);
+    const f = () => setOn(mq.matches);
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
+  return on;
+}
+
+function ChatRail({ members, slug }: { members: Member[]; slug: string }) {
+  const [search, setSearch] = useState("");
+  const list = [...members].sort((a, b) => Number(active(b)) - Number(active(a))).filter((m) => m.member.toLowerCase().includes(search.toLowerCase()));
+  return (
+    <aside className="hidden min-h-0 flex-col border-r border-line bg-card lg:flex">
+      <div className="px-4 pb-3 pt-4">
+        <div className="flex items-center justify-between">
+          <p className="text-[18px] font-extrabold">Pesan</p>
+          <span className="pill bg-blush text-brand">{members.filter(active).length} aktif</span>
+        </div>
+        <label className="mt-3 flex h-10 items-center gap-2 rounded-xl border border-line bg-bg px-3 transition focus-within:border-brand">
+          <Search className="h-4 w-4 text-ink-soft" />
+          <input aria-label="Cari member" placeholder="Cari member…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full bg-transparent text-[14px] outline-none placeholder:text-ink-soft" />
+        </label>
+      </div>
+      <nav className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="Member">
+        {list.map((m) => {
+          const on = active(m);
+          const current = m.slug === slug;
+          return (
+            <PmLink
+              key={m.slug}
+              to={on ? `/pm/chat/${m.slug}` : `/pm/shop?member=${m.slug}`}
+              aria-current={current ? "page" : undefined}
+              className={cx("group flex items-center gap-3 rounded-2xl px-2.5 py-2 transition", current ? "bg-blush" : "hover:bg-surface", !on && "opacity-60")}
+            >
+              <span className="relative">
+                <Avatar member={m} className={cx("h-11 w-11 rounded-full", current && "ring-2 ring-brand ring-offset-2 ring-offset-blush")} />
+                {on && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-emerald-500" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={cx("block truncate text-[14px] font-bold", current && "text-brand")}>{m.member}</span>
+                <span className="block truncate text-[12px] text-ink-soft">
+                  {on ? `Aktif s/d ${new Date(m.expires_at! * 1000).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}` : "Terkunci · pilih akses"}
+                </span>
+              </span>
+              {!on && <LockKeyhole className="h-3.5 w-3.5 text-ink-soft" />}
+            </PmLink>
+          );
+        })}
+      </nav>
+      <div className="border-t border-line p-3">
+        <PmLink to="/pm/shop" className="btn btn-primary w-full">
+          <Heart className="h-4 w-4" /> Beli akses member
+        </PmLink>
+      </div>
+    </aside>
+  );
+}
+
+function Chat({ slug, member, members }: { slug: string; member?: Member; members: Member[] }) {
+  const desktop = useDesktop();
+  const name = member?.member || slug.replaceAll("_", " ");
+  const [view, setView] = useState<"chat" | "gallery">(() => (new URLSearchParams(window.location.search).get("view") === "gallery" ? "gallery" : "chat"));
+  const [viewer, setViewer] = useState<{ items: MediaItem[]; start: number } | null>(null);
   const [live, setLive] = useState<Message[]>([]);
   const [error, setError] = useState<unknown>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const [unseen, setUnseen] = useState(0);
   const after = useRef("");
   const feed = useRef<HTMLDivElement>(null);
+  const tabs = useRef<HTMLDivElement>(null);
   const seen = useRef(new Set<string>());
+  const stick = useRef(true);
+  const keep = useRef<number | null>(null);
+  const shownIn = useRef("");
   useEffect(() => releaseMedia, [slug]);
   const q = useInfiniteQuery({
     queryKey: ["pm", "messages", slug],
@@ -1110,6 +1556,37 @@ function Chat({ slug, member }: { slug: string; member?: Member }) {
     return [...map.values()].sort((a, b) => a.sequence_order - b.sequence_order);
   }, [q.data, live]);
   after.current = messages.at(-1)?.message_id || "";
+  const gallery = useMemo(
+    () =>
+      messages.flatMap((m) => {
+        const at = parseAt(m.created_at);
+        return m.media_urls.map((src): MediaItem => ({ src, kind: kindOf(src), id: m.message_id, at, text: m.text })).filter((x) => x.kind !== "audio");
+      }),
+    [messages],
+  );
+  // Pemisah tanggal + pengelompokan pesan beruntun (jarak < 10 menit) supaya gelembung tidak berulang avatar.
+  const days = useMemo(() => {
+    const out: { key: string; label: string; rows: { m: Message; first: boolean; last: boolean }[] }[] = [];
+    let prevAt = 0;
+    messages.forEach((m, n) => {
+      const at = parseAt(m.created_at);
+      const key = at ? dayKey(at) : "";
+      if (!out.length || out.at(-1)!.key !== key) {
+        out.push({ key, label: at ? dayLabel(at) : "", rows: [] });
+        prevAt = 0;
+      }
+      const t = at?.getTime() ?? 0;
+      const next = messages[n + 1];
+      const nextAt = next ? parseAt(next.created_at) : null;
+      out.at(-1)!.rows.push({
+        m,
+        first: !prevAt || !t || t - prevAt > 600000,
+        last: !nextAt || !t || nextAt.getTime() - t > 600000 || dayKey(nextAt) !== key,
+      });
+      prevAt = t;
+    });
+    return out;
+  }, [messages]);
 
   useEffect(() => {
     let stopped = false,
@@ -1135,26 +1612,45 @@ function Chat({ slug, member }: { slug: string; member?: Member }) {
     };
   }, [slug]);
 
-  // Gelembung baru masuk bertahap; pertama kali dan saat ada pesan baru, gulir ke bawah.
+  // Gelembung baru masuk bertahap. Pertama kali → ke bawah; pesan lama dimuat → posisi baca dipertahankan;
+  // pesan baru saat pembaca di bawah → ikut turun, kalau tidak → tombol "pesan baru".
   useLayoutEffect(() => {
     const el = feed.current;
-    if (!el || !messages.length) return;
-    const fresh = [...el.querySelectorAll<HTMLElement>("[data-bubble]")].filter((b) => !seen.current.has(b.dataset.bubble!));
+    // Feed dirender ulang saat ganti tab/tata letak: perlakukan seperti tampilan pertama.
+    if (shownIn.current !== `${view}:${desktop}`) {
+      seen.current.clear();
+      shownIn.current = `${view}:${desktop}`;
+    }
+    if (!el || view !== "chat" || !messages.length) return;
+    const all = [...el.querySelectorAll<HTMLElement>("[data-bubble]")];
+    const fresh = all.filter((b) => !seen.current.has(b.dataset.bubble!));
     const firstPaint = seen.current.size === 0;
     const newest = messages.at(-1)!.message_id;
-    const atEnd = fresh.some((b) => b.dataset.bubble === newest);
+    const atEnd = !firstPaint && fresh.some((b) => b.dataset.bubble === newest);
     fresh.forEach((b) => seen.current.add(b.dataset.bubble!));
-    gsap.fromTo(fresh.slice(-12), { opacity: 0, y: 18, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.04, ease: "power3.out", clearProps: "transform" });
-    if (firstPaint || atEnd) el.scrollTo({ top: el.scrollHeight, behavior: firstPaint ? "auto" : "smooth" });
-  }, [messages]);
+    if (keep.current !== null) {
+      el.scrollTop += el.scrollHeight - keep.current;
+      keep.current = null;
+    } else {
+      gsap.fromTo(fresh.slice(-12), { opacity: 0, y: 18, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.04, ease: "power3.out", clearProps: "transform" });
+      if (firstPaint) el.scrollTop = el.scrollHeight;
+      else if (atEnd) {
+        if (stick.current) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+        else setUnseen((u) => u + fresh.length);
+      }
+    }
+  }, [messages, view, desktop]);
 
   // Media yang selesai dimuat menambah tinggi feed; tetap menempel di bawah bila pembaca memang di bawah.
   useEffect(() => {
     const el = feed.current;
     if (!el) return;
-    let stick = true;
-    const onScroll = () => void (stick = el.scrollHeight - el.scrollTop - el.clientHeight < 120);
-    const onLoad = () => void (stick && (el.scrollTop = el.scrollHeight));
+    const onScroll = () => {
+      stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+      setAtBottom(stick.current);
+      if (stick.current) setUnseen(0);
+    };
+    const onLoad = () => void (stick.current && view === "chat" && (el.scrollTop = el.scrollHeight));
     el.addEventListener("scroll", onScroll, { passive: true });
     el.addEventListener("load", onLoad, true);
     el.addEventListener("loadedmetadata", onLoad, true);
@@ -1163,82 +1659,197 @@ function Chat({ slug, member }: { slug: string; member?: Member }) {
       el.removeEventListener("load", onLoad, true);
       el.removeEventListener("loadedmetadata", onLoad, true);
     };
-  }, []);
+  }, [view, desktop]);
 
-  return (
-    <div className="container-x pt-6">
-      <section className="panel flex h-[calc(100dvh-240px)] min-h-[440px] flex-col overflow-hidden lg:h-[calc(100dvh-120px)]">
-        <header className="flex items-center gap-3 border-b border-line bg-card px-4 py-3 sm:px-5">
-          <PmLink to="/pm" aria-label="Kembali ke daftar member" className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-surface hover:text-brand">
-            <ArrowLeft className="h-5 w-5" />
-          </PmLink>
-          {member && <Avatar member={member} className="h-11 w-11 rounded-full ring-2 ring-brand" />}
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[18px] font-extrabold leading-tight">{member?.member || slug.replaceAll("_", " ")}</h1>
-            <p className="micro flex items-center gap-2 text-ink-soft">
-              <SignalBars className="text-brand" /> Private messages · pembaruan otomatis
-            </p>
-          </div>
-          <LockKeyhole className="h-4 w-4 text-ink-soft" />
-        </header>
+  // Ganti tab: konten bergeser masuk; pil tab meluncur. Pilihan disimpan di ?view= agar bisa dibagikan/di-refresh.
+  useLayoutEffect(() => {
+    const el = feed.current;
+    if (el) {
+      stick.current = true;
+      gsap.fromTo(el.firstElementChild, { opacity: 0, x: view === "gallery" ? 30 : -30 }, { opacity: 1, x: 0, duration: 0.4, ease: "power3.out", clearProps: "transform" });
+    }
+    const pill = tabs.current?.querySelector<HTMLElement>("[data-pill]");
+    const btn = tabs.current?.querySelector<HTMLElement>(`[data-view="${view}"]`);
+    if (pill && btn) gsap.to(pill, { x: btn.offsetLeft, width: btn.offsetWidth, duration: pill.dataset.ready ? 0.5 : 0, ease: "elastic.out(1, 0.8)", onStart: () => void (pill.dataset.ready = "1") });
+    const url = new URL(window.location.href);
+    if (view === "gallery") url.searchParams.set("view", "gallery");
+    else url.searchParams.delete("view");
+    if (url.href !== window.location.href) history.replaceState(history.state, "", url);
+  }, [view, desktop]);
 
-        <div ref={feed} className="thin-scrollbar flex-1 space-y-3 overflow-y-auto bg-bg px-3 py-5 sm:px-6">
-          <ErrorBox error={q.error || error} />
-          {q.isPending ? (
-            <div className="space-y-3">
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 rounded-3xl" />
+  // Ponsel: kunci gulir halaman di belakang obrolan layar penuh.
+  useEffect(() => {
+    if (desktop) return;
+    const o = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => void (document.body.style.overflow = o);
+  }, [desktop]);
+
+  const older = () => {
+    if (!q.hasNextPage || q.isFetchingNextPage) return;
+    if (feed.current && view === "chat") keep.current = feed.current.scrollHeight;
+    void q.fetchNextPage();
+  };
+  const images = gallery.filter((x) => x.kind === "image").length;
+
+  const ui = (
+    <section
+      className={cx(
+        "overflow-hidden",
+        desktop ? "panel grid h-[calc(100dvh-124px)] min-h-[560px] grid-cols-[300px_minmax(0,1fr)] !bg-bg" : "fixed inset-0 z-[55] flex flex-col bg-bg",
+      )}
+    >
+      {desktop && <ChatRail members={members} slug={slug} />}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <header className="border-b border-line bg-card/95 backdrop-blur">
+          <div className="flex items-center gap-3 px-3 pb-2 pt-[max(0.6rem,env(safe-area-inset-top))] sm:px-5 lg:py-3">
+            <PmLink to="/pm" aria-label="Kembali ke daftar member" className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-surface hover:text-brand">
+              <ArrowLeft className="h-5 w-5" />
+            </PmLink>
+            <span className="relative shrink-0">
+              {member ? <Avatar member={member} className="h-11 w-11 rounded-full" /> : <span className="block h-11 w-11 rounded-full bg-blush" />}
+              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-emerald-500" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[17px] font-extrabold leading-tight">{name}</h1>
+              <p className="flex items-center gap-1.5 truncate text-[12px] text-ink-soft">
+                <SignalBars className="text-brand" />
+                {member?.expires_at ? `Aktif s/d ${date(member.expires_at)}` : "Private messages"}
+              </p>
+            </div>
+            <div ref={tabs} className="relative hidden rounded-full border border-line bg-bg p-1 sm:flex">
+              <span data-pill className="pointer-events-none absolute bottom-1 left-0 top-1 rounded-full bg-brand" />
+              {(
+                [
+                  ["chat", "Pesan", MessageCircle, messages.length],
+                  ["gallery", "Galeri", Images, gallery.length],
+                ] as const
+              ).map(([id, label, Icon, n]) => (
+                <button
+                  key={id}
+                  type="button"
+                  data-view={id}
+                  aria-pressed={view === id}
+                  onClick={() => setView(id)}
+                  className={cx("relative z-[1] flex items-center gap-2 rounded-full px-4 py-1.5 text-[13px] font-bold transition-colors", view === id ? "text-white" : "text-ink-soft hover:text-ink")}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                  <span className="num font-mono text-[11px] opacity-70">{n}</span>
+                </button>
               ))}
             </div>
-          ) : (
-            q.hasNextPage && (
-              <div className="text-center">
-                <button className="btn btn-ghost" disabled={q.isFetchingNextPage} onClick={() => void q.fetchNextPage()}>
-                  {q.isFetchingNextPage ? "Memuat…" : "Muat pesan sebelumnya"}
-                </button>
-              </div>
-            )
-          )}
-          {!q.isPending && !q.error && !messages.length && (
-            <div className="grid h-full place-items-center text-center">
+          </div>
+          {/* Ponsel: tab penuh di bawah kepala obrolan */}
+          <div className="grid grid-cols-2 px-3 sm:hidden">
+            {(
+              [
+                ["chat", "Pesan", MessageCircle],
+                ["gallery", `Galeri · ${images} foto`, Images],
+              ] as const
+            ).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={view === id}
+                onClick={() => setView(id)}
+                className={cx("flex items-center justify-center gap-2 border-b-2 py-2.5 text-[13px] font-bold transition-colors", view === id ? "border-brand text-brand" : "border-transparent text-ink-soft")}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        <div className="relative min-h-0 flex-1">
+          <div ref={feed} className="thin-scrollbar h-full overflow-y-auto">
+            {view === "gallery" ? (
               <div>
-                <MessageCircle className="mx-auto h-10 w-10 text-brand" />
-                <p className="mt-3 text-[18px] font-extrabold">Belum ada pesan.</p>
-                <p className="text-ink-soft">Kabar baru akan muncul di sini.</p>
+                <div className="px-3 pt-3 sm:px-6">
+                  <ErrorBox error={q.error} />
+                </div>
+                {q.isPending ? (
+                  <div className="grid grid-cols-3 gap-1.5 p-3 sm:grid-cols-4 sm:p-6 xl:grid-cols-5">
+                    {Array.from({ length: 12 }).map((_, n) => (
+                      <Skeleton key={n} className="aspect-square rounded-2xl" />
+                    ))}
+                  </div>
+                ) : (
+                  <Gallery items={gallery} member={name} onOpen={(items, start) => setViewer({ items, start })} more={!!q.hasNextPage} loading={q.isFetchingNextPage} onMore={older} />
+                )}
               </div>
-            </div>
-          )}
-          {messages.map((m) => (
-            <article key={m.message_id} data-bubble={m.message_id} className="flex max-w-[min(560px,88%)] items-end gap-2">
-              {member ? <Avatar member={member} className="h-8 w-8 rounded-full" /> : <span className="h-8 w-8 shrink-0 rounded-full bg-blush" />}
-              <div className="min-w-0 rounded-3xl rounded-bl-md border border-line bg-card p-3 shadow-[0_8px_20px_-16px_rgb(0_0_0/0.4)]">
-                {m.media_urls.map((src) => (
-                  <ChatMedia key={src} src={src} member={member?.member || slug.replaceAll("_", " ")} />
-                ))}
-                {m.text && <p className="whitespace-pre-wrap break-words px-1 text-[15px] leading-relaxed">{m.text}</p>}
-                {m.is_poll && (
-                  <div className="mt-2 rounded-2xl bg-blush p-3">
-                    <p className="micro text-brand">Polling member</p>
-                    <p className="mt-1 font-semibold">
-                      {typeof m.poll === "object" && m.poll
-                        ? String((m.poll as Record<string, unknown>).question || "Lihat pesan member untuk detail polling.")
-                        : "Lihat pesan member untuk detail polling."}
-                    </p>
-                    <p className="mt-1 text-[12px] text-ink-soft">Voting tidak tersedia melalui layanan ini.</p>
+            ) : (
+              <div className="flex min-h-full flex-col gap-1 px-3 py-4 sm:px-6">
+                <ErrorBox error={q.error || error} />
+                {q.isPending ? (
+                  <div className="mt-auto space-y-3">
+                    {["w-2/3", "w-1/2", "w-3/4", "w-2/5"].map((w) => (
+                      <Skeleton key={w} className={cx("h-16 rounded-[22px]", w)} />
+                    ))}
+                  </div>
+                ) : (
+                  q.hasNextPage && (
+                    <div className="pb-2 text-center">
+                      <button className="btn btn-ghost !py-2 text-[13px]" disabled={q.isFetchingNextPage} onClick={older}>
+                        {q.isFetchingNextPage ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <History className="h-4 w-4" />}
+                        {q.isFetchingNextPage ? "Memuat…" : "Muat pesan sebelumnya"}
+                      </button>
+                    </div>
+                  )
+                )}
+                {!q.isPending && !q.error && !messages.length && (
+                  <div className="m-auto text-center">
+                    <MessageCircle className="mx-auto h-10 w-10 text-brand" />
+                    <p className="mt-3 text-[18px] font-extrabold">Belum ada pesan.</p>
+                    <p className="text-ink-soft">Kabar baru akan muncul di sini.</p>
                   </div>
                 )}
-                <time className="mt-1.5 block px-1 font-mono text-[10px] text-ink-soft">{m.created_at}</time>
+                <div className="mt-auto" />
+                {/* Satu blok per hari supaya label tanggal yang menempel berganti, bukan menumpuk. */}
+                {days.map((d) => (
+                  <section key={"d" + d.key} className="flex flex-col gap-1">
+                    {d.label && (
+                      <div className="sticky top-2 z-[2] mx-auto my-3 rounded-full border border-line bg-card/90 px-3 py-1 text-[11px] font-bold text-ink-soft shadow-sm backdrop-blur">{d.label}</div>
+                    )}
+                    {d.rows.map((r) => (
+                      <article key={r.m.message_id} data-bubble={r.m.message_id} className={cx("flex items-end gap-2", r.first && "mt-2")}>
+                        <span className="w-8 shrink-0">{r.last && (member ? <Avatar member={member} className="h-8 w-8 rounded-full" /> : <span className="block h-8 w-8 rounded-full bg-blush" />)}</span>
+                        <div className="min-w-0 max-w-[min(520px,82%)]">
+                          {r.first && <p className="mb-1 ml-1 text-[12px] font-bold text-brand">{name}</p>}
+                          <Bubble m={r.m} member={name} first={r.first} last={r.last} gallery={gallery} onOpen={(start) => setViewer({ items: gallery, start })} />
+                        </div>
+                      </article>
+                    ))}
+                  </section>
+                ))}
               </div>
-            </article>
-          ))}
+            )}
+          </div>
+          {view === "chat" && !atBottom && (
+            <button
+              type="button"
+              onClick={() => feed.current?.scrollTo({ top: feed.current.scrollHeight, behavior: "smooth" })}
+              className="absolute bottom-4 right-4 z-[3] flex items-center gap-2 rounded-full bg-nav px-3 py-2.5 text-[13px] font-bold text-white shadow-lg transition hover:bg-brand"
+              aria-label="Ke pesan terbaru"
+            >
+              {unseen > 0 && <span className="rounded-full bg-brand px-2 text-[12px]">{unseen} baru</span>}
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
-        <footer className="flex items-center justify-center gap-2 border-t border-line bg-card px-4 py-3 text-[12px] text-ink-soft">
-          <LockKeyhole className="h-3.5 w-3.5" /> Pesan satu arah dari member. Balasan tidak tersedia.
-        </footer>
-      </section>
-    </div>
+        {view === "chat" && (
+          <footer className="flex items-center justify-center gap-2 border-t border-line bg-card px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 text-[12px] text-ink-soft">
+            <LockKeyhole className="h-3.5 w-3.5" /> Pesan satu arah dari member · balasan tidak tersedia
+          </footer>
+        )}
+      </div>
+      {viewer && viewer.items[viewer.start] && <Viewer items={viewer.items} start={viewer.start} member={name} onClose={() => setViewer(null)} />}
+    </section>
   );
+
+  return desktop ? <div className="container-x pt-5">{ui}</div> : createPortal(ui, document.body);
 }
 
 /* ───────────────────────────── Halaman ───────────────────────────── */
@@ -1336,7 +1947,7 @@ export function PmPage() {
         ) : path === "/pm/account" ? (
           <Account user={user} members={members} />
         ) : chat ? (
-          <Chat key={chat} slug={chat} member={members.find((m) => m.slug === chat)} />
+          <Chat key={chat} slug={chat} member={members.find((m) => m.slug === chat)} members={members} />
         ) : (
           <Home members={members} loading={catalog.isPending} error={catalog.error} />
         )}
