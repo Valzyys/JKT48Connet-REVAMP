@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -6,8 +7,10 @@ import {
   ArrowUpRight,
   Check,
   CreditCard,
+  Download,
   Heart,
   History,
+  LoaderCircle,
   LockKeyhole,
   LogOut,
   MessageCircle,
@@ -16,6 +19,7 @@ import {
   Sparkles,
   UserRound,
   X,
+  ZoomIn,
 } from "lucide-react";
 import { PixelCross } from "@/components/logo";
 import { CountUp, SignalBars, SplitText, Tilt } from "@/components/motion";
@@ -912,6 +916,178 @@ function Account({ user, members }: { user: User; members: Member[] }) {
   );
 }
 
+/* ───────────────────────────── Media obrolan ───────────────────────────── */
+
+/**
+ * Media diambil lewat fetch() (worker menolak navigasi/embed langsung) lalu ditampilkan sebagai blob,
+ * jadi alamat media tidak muncul di halaman dan tidak bisa dibuka di tab baru. Satu blob per alamat,
+ * dibebaskan saat obrolan ditutup.
+ */
+const blobs = new Map<string, Promise<{ url: string; blob: Blob }>>();
+function loadMedia(src: string) {
+  let p = blobs.get(src);
+  if (!p) {
+    p = fetch(src, { credentials: "same-origin" }).then(async (r) => {
+      if (!r.ok) throw new Error("Media belum dapat dimuat.");
+      const blob = await r.blob();
+      return { url: URL.createObjectURL(blob), blob };
+    });
+    p.catch(() => blobs.delete(src));
+    blobs.set(src, p);
+  }
+  return p;
+}
+function releaseMedia() {
+  for (const p of blobs.values()) void p.then((b) => URL.revokeObjectURL(b.url), () => {});
+  blobs.clear();
+}
+function useMedia(src: string) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    loadMedia(src).then(
+      (b) => live && setUrl(b.url),
+      () => live && setFailed(true),
+    );
+    return () => {
+      live = false;
+    };
+  }, [src]);
+  return { url, failed };
+}
+const fileName = (src: string, member: string) => `JKT48Connect-${member.replace(/\s+/g, "_")}-${src.split("/").pop()}`;
+const guard = {
+  onContextMenu: (e: { preventDefault: () => void }) => e.preventDefault(),
+  onDragStart: (e: { preventDefault: () => void }) => e.preventDefault(),
+  style: { WebkitTouchCallout: "none" } as const,
+};
+
+function SaveButton({ src, name, className, label }: { src: string; name: string; className?: string; label?: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const icon = useRef<HTMLSpanElement>(null);
+  async function save(e: { stopPropagation: () => void }) {
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { url } = await loadMedia(src);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setDone(true);
+      gsap.fromTo(icon.current, { scale: 0.4, rotate: -30 }, { scale: 1, rotate: 0, duration: 0.5, ease: "back.out(3)" });
+      window.setTimeout(() => setDone(false), 1800);
+    } catch {
+      /* gagal diam-diam; tombol bisa dicoba lagi */
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={save}
+      aria-label={"Simpan " + name}
+      title="Simpan ke perangkat"
+      className={cx(
+        "inline-flex items-center gap-1.5 rounded-full font-bold transition",
+        label ? "bg-brand px-4 py-2 text-[13px] text-white hover:bg-brand-strong" : "h-9 w-9 justify-center bg-nav/75 text-white backdrop-blur hover:bg-brand",
+        className,
+      )}
+    >
+      <span ref={icon} className="grid place-items-center">
+        {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : done ? <Check className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+      </span>
+      {label && (done ? "Tersimpan" : "Simpan")}
+    </button>
+  );
+}
+
+function Lightbox({ src, name, alt, onClose }: { src: string; name: string; alt: string; onClose: () => void }) {
+  const { url } = useMedia(src);
+  const root = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    gsap.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.25 });
+    gsap.fromTo(el.querySelector("[data-lb-img]"), { scale: 0.9, y: 20 }, { scale: 1, y: 0, duration: 0.45, ease: "power3.out" });
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", key);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", key);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose]);
+  // Di-portal ke <body>: leluhur dengan transform (animasi GSAP) akan memotong position:fixed.
+  return createPortal(
+    <div ref={root} role="dialog" aria-modal="true" aria-label={alt} onClick={onClose} className="fixed inset-0 z-[90] flex flex-col bg-black/90 p-4 backdrop-blur-sm" {...guard}>
+      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <SaveButton src={src} name={name} label />
+        <button type="button" onClick={onClose} aria-label="Tutup" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="grid min-h-0 flex-1 place-items-center py-4">
+        {url ? (
+          <img data-lb-img src={url} alt={alt} draggable={false} onClick={(e) => e.stopPropagation()} className="max-h-full max-w-full select-none rounded-2xl object-contain" {...guard} />
+        ) : (
+          <LoaderCircle data-lb-img className="h-8 w-8 animate-spin text-white/60" />
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function ChatImage({ src, name, alt }: { src: string; name: string; alt: string }) {
+  const { url, failed } = useMedia(src);
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="group/media relative mb-2 overflow-hidden rounded-2xl bg-surface" {...guard}>
+      {url ? (
+        <button type="button" onClick={() => setOpen(true)} aria-label={"Perbesar " + alt} className="block w-full cursor-zoom-in">
+          <img src={url} alt={alt} draggable={false} className="max-h-[420px] w-full select-none object-cover transition duration-500 group-hover/media:scale-[1.03]" {...guard} />
+          <span className="pointer-events-none absolute bottom-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-nav/60 text-white opacity-0 backdrop-blur transition group-hover/media:opacity-100">
+            <ZoomIn className="h-4 w-4" />
+          </span>
+        </button>
+      ) : failed ? (
+        <p className="px-4 py-8 text-center text-[13px] text-ink-soft">Gambar belum dapat dimuat.</p>
+      ) : (
+        <Skeleton className="h-56 w-full rounded-none" />
+      )}
+      {url && <SaveButton src={src} name={name} className="absolute right-2 top-2" />}
+      {open && <Lightbox src={src} name={name} alt={alt} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function ChatMedia({ src, member }: { src: string; member: string }) {
+  const name = fileName(src, member);
+  if (/\.mp4$/i.test(src))
+    return (
+      <div className="relative mb-2" {...guard}>
+        <video src={src} controls controlsList="nodownload" disablePictureInPicture playsInline preload="none" className="max-h-[420px] w-full rounded-2xl bg-black" {...guard} />
+        <SaveButton src={src} name={name} className="absolute right-2 top-2" />
+      </div>
+    );
+  if (/\.(m4a|amr|mp3|ogg|wav)$/i.test(src))
+    return (
+      <div className="mb-2 flex items-center gap-2" {...guard}>
+        <audio src={src} controls controlsList="nodownload" preload="none" className="min-w-0 flex-1" />
+        <SaveButton src={src} name={name} className="!bg-surface !text-ink hover:!bg-brand hover:!text-white" />
+      </div>
+    );
+  return <ChatImage src={src} name={name} alt={"Foto dari " + member} />;
+}
+
 /* ───────────────────────────── Obrolan ───────────────────────────── */
 
 function Chat({ slug, member }: { slug: string; member?: Member }) {
@@ -920,6 +1096,7 @@ function Chat({ slug, member }: { slug: string; member?: Member }) {
   const after = useRef("");
   const feed = useRef<HTMLDivElement>(null);
   const seen = useRef(new Set<string>());
+  useEffect(() => releaseMedia, [slug]);
   const q = useInfiniteQuery({
     queryKey: ["pm", "messages", slug],
     queryFn: ({ pageParam }) => api<Messages>(`/messages/${encodeURIComponent(slug)}?page=${pageParam}`),
@@ -1035,22 +1212,9 @@ function Chat({ slug, member }: { slug: string; member?: Member }) {
             <article key={m.message_id} data-bubble={m.message_id} className="flex max-w-[min(560px,88%)] items-end gap-2">
               {member ? <Avatar member={member} className="h-8 w-8 rounded-full" /> : <span className="h-8 w-8 shrink-0 rounded-full bg-blush" />}
               <div className="min-w-0 rounded-3xl rounded-bl-md border border-line bg-card p-3 shadow-[0_8px_20px_-16px_rgb(0_0_0/0.4)]">
-                {m.media_urls.map((src) =>
-                  /\.mp4$/i.test(src) ? (
-                    <video key={src} src={src} controls playsInline preload="none" className="mb-2 max-h-[420px] w-full rounded-2xl bg-black" />
-                  ) : /\.(m4a|amr|mp3|ogg|wav)$/i.test(src) ? (
-                    <div key={src} className="mb-2">
-                      <audio src={src} controls preload="none" className="w-full" />
-                      <a href={src} target="_blank" rel="noreferrer" className="link-more mt-1 inline-block">
-                        Buka audio
-                      </a>
-                    </div>
-                  ) : (
-                    <a href={src} key={src} target="_blank" rel="noreferrer" className="mb-2 block overflow-hidden rounded-2xl">
-                      <img src={src} alt={"Media dari " + (member?.member || slug)} loading="lazy" className="max-h-[420px] w-full object-cover transition duration-500 hover:scale-[1.03]" />
-                    </a>
-                  ),
-                )}
+                {m.media_urls.map((src) => (
+                  <ChatMedia key={src} src={src} member={member?.member || slug.replaceAll("_", " ")} />
+                ))}
                 {m.text && <p className="whitespace-pre-wrap break-words px-1 text-[15px] leading-relaxed">{m.text}</p>}
                 {m.is_poll && (
                   <div className="mt-2 rounded-2xl bg-blush p-3">

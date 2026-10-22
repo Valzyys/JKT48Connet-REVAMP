@@ -545,6 +545,14 @@ export async function handlePm(
         )
       )
         fail(404, "Media tidak ditemukan.");
+      // Media hanya untuk halaman PM: gambar diambil lewat fetch() lalu ditampilkan sebagai blob,
+      // jadi membuka URL di tab baru (navigasi) atau menyematkannya sebagai <img>/<iframe> ditolak.
+      const dest = request.headers.get("Sec-Fetch-Dest");
+      if (
+        request.headers.get("Sec-Fetch-Mode") === "navigate" ||
+        (dest && !["empty", "video", "audio", "track"].includes(dest))
+      )
+        fail(403, "Media hanya dapat dibuka di halaman Private Messages.");
       if (!(await hasAccess(db, user.id, slug)))
         fail(403, "Akses member sudah berakhir.");
       if (!env.PM_API_KEY) fail(503, "Layanan PM belum dikonfigurasi.");
