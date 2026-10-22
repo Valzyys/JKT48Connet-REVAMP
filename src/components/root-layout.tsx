@@ -15,6 +15,8 @@ export function RootLayout() {
   const first = useRef(true);
   const tap = useRef({ x: 0, y: 0, t: 0 });
   const dest = navFor(path);
+  const isPm = path === "/pm" || path.startsWith("/pm/");
+  const prev = useRef(path);
 
   // Ingat titik klik/tap terakhir: transisi halaman mekar dari situ.
   useEffect(() => {
@@ -46,8 +48,15 @@ export function RootLayout() {
   // 3. halaman baru mekar melingkar dengan tepi cincin kuning yang ikut melebar.
   // Tanpa klik (keyboard, tombol back) pusatnya tengah kolom utama. Konten tersembunyi oleh clip sebelum paint.
   useLayoutEffect(() => {
+    const from = prev.current;
+    prev.current = path;
     if (first.current) {
       first.current = false;
+      return;
+    }
+    // Antar tab di dalam Private Messages cukup animasi konten milik halaman PM sendiri.
+    if ((from === "/pm" || from.startsWith("/pm/")) && isPm) {
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
       return;
     }
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
@@ -111,10 +120,9 @@ export function RootLayout() {
     };
   }, [path]);
 
-  if (path === "/pm" || path.startsWith("/pm/")) return <Outlet />;
-
   return (
-    <IntroProvider>
+    // Private Messages ikut shell situs, tapi tanpa intro (dibuka untuk membaca/membayar) dan tanpa sidebar kanan.
+    <IntroProvider skip={isPm}>
       <a href="#konten" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2 focus:text-white">
         Lewati ke konten
       </a>
@@ -126,7 +134,7 @@ export function RootLayout() {
             <div ref={content} className="relative z-10 bg-bg">
               <Outlet />
             </div>
-            <div ref={wipe} aria-hidden className="pointer-events-none fixed inset-0 z-[5] hidden overflow-hidden lg:left-[var(--side-pad)] xl:right-[340px]">
+            <div ref={wipe} aria-hidden className={`pointer-events-none fixed inset-0 z-[5] hidden overflow-hidden lg:left-[var(--side-pad)] ${isPm ? "" : "xl:right-[340px]"}`}>
               <div data-disc className="absolute inset-0 bg-brand" />
               <div data-disc className="absolute inset-0 bg-brand-strong" />
               <span data-ring className="absolute rounded-full border-[3px] border-butter" />
@@ -146,7 +154,7 @@ export function RootLayout() {
           </main>
           <Footer />
         </div>
-        <Aside />
+        {!isPm && <Aside />}
       </div>
       <Dock />
     </IntroProvider>

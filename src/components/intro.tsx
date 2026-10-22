@@ -12,8 +12,8 @@ export function useIntroDone() {
 }
 
 /** Intro diputar setiap kali situs dibuka (muat penuh); navigasi di dalam situs tidak memutarnya lagi. */
-export function IntroProvider({ children }: { children: ReactNode }) {
-  const [done, setDone] = useState(false);
+export function IntroProvider({ children, skip = false }: { children: ReactNode; skip?: boolean }) {
+  const [done, setDone] = useState(skip);
   const finish = useRef(() => setDone(true)).current;
 
   return (
