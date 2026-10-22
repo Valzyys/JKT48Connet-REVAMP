@@ -39,6 +39,10 @@ export function AboutPage() {
             </a>
             . Baca juga <Link to="/disclaimer">disclaimer</Link>.
           </p>
+          <p>
+            Mau memakai data yang sama untuk bot, aplikasi, atau situsmu sendiri? Lihat halaman{" "}
+            <Link to="/developer">JKT48Connect API untuk developer</Link>.
+          </p>
         </div>
         <div>
           {CHANNELS.map((c) => (

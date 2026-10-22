@@ -1,4 +1,5 @@
 import {
+  Braces,
   Cake,
   CalendarDays,
   History,
@@ -25,6 +26,7 @@ export const NAV: NavItem[] = [
   { to: "/news", label: "Berita", icon: Newspaper, group: "Arsip" },
   { to: "/birthday", label: "Birthday", icon: Cake, group: "Arsip" },
   { to: "/video", label: "Video", icon: PlayCircle, group: "Arsip" },
+  { to: "/developer", label: "API", icon: Braces, group: "Info" },
   { to: "/about", label: "Tentang", icon: Info, group: "Info" },
 ];
 

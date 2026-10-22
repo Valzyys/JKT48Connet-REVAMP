@@ -1,4 +1,6 @@
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, Braces } from "lucide-react";
 import { LiveCard, NewsRow, PosterCard, RecentRow, VideoCard } from "@/components/cards";
 import { HeroCarousel } from "@/components/carousel";
 import { useIntroDone } from "@/components/intro";
@@ -52,6 +54,25 @@ export function HomePage() {
         </section>
 
         <Stats />
+
+        <Link
+          to="/developer"
+          data-reveal
+          className="group flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2xl bg-nav px-5 py-4 text-white transition-transform hover:-translate-y-0.5 sm:px-6"
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand">
+            <Braces className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="micro block text-white/50">JKT48Connect API · untuk developer</span>
+            <span className="mt-1 block font-bold leading-snug">
+              Semua data di sini dari <span className="text-butter">api.jkt48connect.app</span>, dan kamu juga bisa memakainya.
+            </span>
+          </span>
+          <span className="link-more inline-flex items-center gap-1.5 text-white/70 group-hover:text-white">
+            Pelajari <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+          </span>
+        </Link>
 
         <section>
           <SectionHead label="On signal" title="Live" count={lives.length} to="/live" />
