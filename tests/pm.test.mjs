@@ -331,6 +331,25 @@ test("PM account, billing, authorization and media integration with real local D
         assert.equal(media.status, 206);
         assert.equal(range, "bytes=0-2");
         assert.equal(media.headers.get("Cache-Control"), "private, no-store");
+        for (const headers of [
+          { "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document" },
+          { "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "image" },
+          { "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "iframe" },
+        ])
+          assert.equal(
+            (await call("/media/" + slug + "/photo.jpg", { cookie, headers }))
+              .status,
+            403,
+          );
+        assert.equal(
+          (
+            await call("/media/" + slug + "/photo.jpg", {
+              cookie,
+              headers: { "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty" },
+            })
+          ).status,
+          200,
+        );
         assert.equal(
           (await call("/media/" + slug + "/unsafe.svg", { cookie })).status,
           404,
