@@ -14,7 +14,7 @@ export function Diag() {
 
   const env = [
     `UA: ${navigator.userAgent}`,
-    `secureContext=${window.isSecureContext} subtle=${!!crypto?.subtle} idb=${"indexedDB" in window} cookies=${navigator.cookieEnabled}`,
+    `secureContext=${window.isSecureContext} subtle=${!!crypto?.subtle} idb=${"indexedDB" in window} cookies=${navigator.cookieEnabled} sw=${!!navigator.serviceWorker?.controller}`,
     `jam perangkat: ${new Date().toISOString()}`,
   ];
   return createPortal(
