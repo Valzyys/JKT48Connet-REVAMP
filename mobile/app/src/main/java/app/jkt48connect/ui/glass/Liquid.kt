@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
@@ -500,3 +501,94 @@ fun LiquidSlider(
         )
     }
 }
+
+/**
+ * Sakelar kaca (seperti LiquidToggle di catalog Backdrop): jempol putih berubah jadi lensa saat ditekan,
+ * bisa diseret, dan warna track mengikuti posisinya. Ketuk untuk membalik.
+ */
+@Composable
+fun LiquidToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    backdrop: Backdrop = LocalBackdrop.current,
+    accent: Color = LocalColors.current.brand,
+) {
+    val c = LocalColors.current
+    val offTrack = if (c.dark) Color(0xFF3A3A40) else Color(0xFFD5D5DB)
+    val trackBackdrop = rememberLayerBackdrop()
+    val travel = with(LocalDensity.current) { 20.dp.toPx() }
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val changed by rememberUpdatedState(onCheckedChange)
+    var didDrag by remember { mutableStateOf(false) }
+    val drag = remember(scope) {
+        DampedDragAnimation(
+            animationScope = scope,
+            initialValue = if (checked) 1f else 0f,
+            valueRange = 0f..1f,
+            visibilityThreshold = 0.001f,
+            initialScale = 1f,
+            pressedScale = 1.5f,
+            onDragStarted = { didDrag = false },
+            onDragStopped = {
+                val next = if (didDrag) targetValue >= 0.5f else targetValue < 0.5f
+                animateToValue(if (next) 1f else 0f)
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                changed(next)
+            },
+            onDrag = { _, amount ->
+                if (amount.x != 0f) didDrag = true
+                updateValue((targetValue + amount.x / travel).coerceIn(0f, 1f))
+            },
+        )
+    }
+    LaunchedEffect(checked) { if (drag.pressProgress == 0f) drag.animateToValue(if (checked) 1f else 0f) }
+    Box(modifier.size(64.dp, 28.dp), contentAlignment = Alignment.CenterStart) {
+        Box(
+            Modifier
+                .layerBackdrop(trackBackdrop)
+                .clip(Capsule())
+                .drawWithTrack { androidx.compose.ui.graphics.lerp(offTrack, accent, drag.progress.fastCoerceIn(0f, 1f)) }
+                .size(64.dp, 28.dp)
+        )
+        Box(
+            Modifier
+                .padding(horizontal = 2.dp)
+                .graphicsLayer { translationX = travel * drag.progress }
+                .then(drag.modifier)
+                .drawBackdrop(
+                    backdrop = rememberCombinedBackdrop(
+                        backdrop,
+                        rememberBackdrop(trackBackdrop) { drawBackdrop ->
+                            val p = drag.pressProgress
+                            scale(lerp(2f / 3f, 0.75f, p), lerp(0f, 0.75f, p)) { drawBackdrop() }
+                        },
+                    ),
+                    shape = { Capsule() },
+                    effects = {
+                        val p = drag.pressProgress
+                        blur(8.dp.toPx() * (1f - p))
+                        lens(5.dp.toPx() * p, 10.dp.toPx() * p, chromaticAberration = true)
+                    },
+                    highlight = { Highlight.Ambient.copy(width = Highlight.Ambient.width / 1.5f, blurRadius = Highlight.Ambient.blurRadius / 1.5f, alpha = drag.pressProgress) },
+                    shadow = { Shadow(radius = 4.dp, color = Color.Black.copy(alpha = 0.1f)) },
+                    innerShadow = { InnerShadow(radius = 4.dp * drag.pressProgress, alpha = drag.pressProgress) },
+                    layerBlock = {
+                        scaleX = drag.scaleX
+                        scaleY = drag.scaleY
+                        val v = drag.velocity / 50f
+                        scaleX /= 1f - (v * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                        scaleY *= 1f - (v * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                    },
+                    onDrawSurface = { drawRect(Color.White.copy(alpha = 1f - drag.pressProgress)) },
+                )
+                .size(40.dp, 24.dp)
+        )
+    }
+}
+
+// Warna track dibaca saat menggambar (bukan saat komposisi) supaya animasi seret tidak merekomposisi.
+private fun Modifier.drawWithTrack(color: () -> Color) = this.then(
+    Modifier.drawBehind { drawRect(color()) }
+)

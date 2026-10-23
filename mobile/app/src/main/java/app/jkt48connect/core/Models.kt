@@ -46,6 +46,7 @@ class MemberDetail(
     val jikosokai: String,
     val socials: List<Social>,
     val upcomingShows: List<TheaterShow>,
+    val recentShows: List<TheaterShow>,
     val totalShowroom: Int?,
     val totalIdn: Int?,
 ) : Member(m.id, m.name, m.nickname, m.img, m.isGraduate) {
@@ -57,11 +58,15 @@ class MemberDetail(
                 j.s("fullname"), j.s("birthdate"), j.s("bloodType"), j.s("height"), j.s("jikosokai"),
                 j.objs("socials").map { Social(it.s("title"), it.s("url")) }.filter { it.url.isNotEmpty() },
                 j.objs("upcomingShows").map(TheaterShow::from),
+                j.objs("recentShows").map(TheaterShow::from),
                 total?.n("showroom"), total?.n("idn"),
             )
         }
     }
 }
+
+/** Theater & live seorang member, dikumpulkan dari arsip theater dan riwayat live terbaru. */
+data class MemberActivity(val upcoming: List<TheaterShow>, val pastShows: List<TheaterShow>, val lives: List<RecentLive>)
 
 data class LiveSession(
     val id: String, val name: String, val img: String, val avatar: String, val platform: String,
@@ -119,7 +124,7 @@ data class BirthdayEntry(val id: String, val name: String, val img: String, val 
 }
 
 open class RecentLive(
-    val id: String, val name: String, val img: String, val platform: String, val start: String, val end: String,
+    val id: String, val name: String, val memberId: String, val img: String, val platform: String, val start: String, val end: String,
     val durationMs: Long, val viewers: Int?, val points: Int?, val pointUnit: String,
 ) {
     val platformLabel: String get() = platformLabel(platform)
@@ -127,7 +132,7 @@ open class RecentLive(
 
     companion object {
         fun from(j: JSONObject) = RecentLive(
-            j.s("id"), j.s("name"), j.s("img"), j.s("platform"), j.s("start"), j.s("end"),
+            j.s("id"), j.s("name"), j.s("memberId"), j.s("img"), j.s("platform"), j.s("start"), j.s("end"),
             (j.n("durationMs") ?: 0).toLong(), j.n("viewers"), j.n("points"), j.s("pointUnit"),
         )
     }
@@ -146,7 +151,7 @@ class RecentDetail(
     val recordingCount: Int,
     val replayUnlockAt: String,
     val screenshots: List<String>,
-) : RecentLive(r.id, r.name, r.img, r.platform, r.start, r.end, r.durationMs, r.viewers, r.points, r.pointUnit) {
+) : RecentLive(r.id, r.name, r.memberId, r.img, r.platform, r.start, r.end, r.durationMs, r.viewers, r.points, r.pointUnit) {
     companion object {
         fun from(j: JSONObject) = RecentDetail(
             RecentLive.from(j),

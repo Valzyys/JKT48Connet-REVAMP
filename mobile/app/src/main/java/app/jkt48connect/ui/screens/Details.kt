@@ -85,17 +85,20 @@ import app.jkt48connect.core.fmtDate
 import app.jkt48connect.core.fmtDuration
 import app.jkt48connect.core.fmtNum
 import app.jkt48connect.core.fmtTime
-import app.jkt48connect.core.htmlToText
+import app.jkt48connect.core.NewsBlock
+import app.jkt48connect.core.htmlBlocks
 import app.jkt48connect.core.parseInstant
 import app.jkt48connect.ui.LocalInsets
 import app.jkt48connect.ui.LocalNav
 import app.jkt48connect.ui.Route
 import app.jkt48connect.ui.components.CategoryPill
 import app.jkt48connect.ui.components.CountUp
+import app.jkt48connect.ui.components.AutoImage
 import app.jkt48connect.ui.components.Countdown
 import app.jkt48connect.ui.components.ErrorRetry
 import app.jkt48connect.ui.components.Micro
 import app.jkt48connect.ui.components.NetImage
+import app.jkt48connect.ui.components.RecentTile
 import app.jkt48connect.ui.components.ShowTile
 import app.jkt48connect.ui.components.Skeleton
 import app.jkt48connect.ui.components.StatBox
@@ -464,8 +467,9 @@ fun MemberDetailScreen(id: String, name: String, img: String) {
     val c = LocalColors.current
     val nav = LocalNav.current
     val open = rememberOpenUrl()
-    val data = rememberLoad(id) { Api.member(id) }
+    val data = rememberLoad(id) { Api.member(id, it) }
     val m = data.data
+    val activity = rememberLoad("activity", id) { Api.memberActivity(id, it) }
     val h = LocalConfiguration.current.screenHeightDp.dp
     val photoBackdrop = rememberLayerBackdrop()
     LazyColumn(contentPadding = PaddingValues(bottom = 40.dp)) {
@@ -542,15 +546,40 @@ fun MemberDetailScreen(id: String, name: String, img: String) {
                         }
                     }
                 }
-                if (m.upcomingShows.isNotEmpty()) {
-                    item { Micro("Jadwal theater", Modifier.padding(20.dp, 26.dp, 20.dp, 10.dp), color = c.brand, dot = true) }
-                    m.upcomingShows.forEachIndexed { i, show ->
-                        item { ShowTile(show, Modifier.padding(16.dp, 0.dp, 16.dp, 10.dp).staggerIn(i)) { nav.push(Route.Theater(show.id, show.title)) } }
+                val act = activity.data
+                val upcoming = (m.upcomingShows + act?.upcoming.orEmpty()).distinctBy { it.id }.sortedBy { it.date }
+                val past = (m.recentShows + act?.pastShows.orEmpty()).distinctBy { it.id }.sortedByDescending { it.date }.take(5)
+                val lives = act?.lives.orEmpty().take(5)
+                listOf(
+                    "Theater mendatang" to upcoming,
+                    "Theater terakhir" to past,
+                ).forEach { (label, shows) ->
+                    item { Micro(label, Modifier.padding(20.dp, 26.dp, 20.dp, 10.dp), color = c.brand, dot = true) }
+                    when {
+                        shows.isNotEmpty() -> shows.forEachIndexed { i, show ->
+                            item { ShowTile(show, Modifier.padding(16.dp, 0.dp, 16.dp, 10.dp).staggerIn(i)) { nav.push(Route.Theater(show.id, show.title)) } }
+                        }
+                        act == null && activity.error == null -> item { Skeleton(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(96.dp), 24.dp) }
+                        else -> item { EmptyNote(if (label == "Theater mendatang") "Belum ada jadwal theater." else "Tidak ada di arsip theater terbaru.") }
                     }
+                }
+                item { Micro("Live terakhir", Modifier.padding(20.dp, 26.dp, 20.dp, 10.dp), color = c.brand, dot = true) }
+                when {
+                    lives.isNotEmpty() -> lives.forEachIndexed { i, r ->
+                        item { RecentTile(r, Modifier.padding(16.dp, 0.dp, 16.dp, 10.dp).staggerIn(i)) { nav.push(Route.Recent(r)) } }
+                    }
+                    act == null && activity.error == null -> item { Skeleton(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(94.dp), 24.dp) }
+                    else -> item { EmptyNote("Tidak ada live di riwayat terbaru.") }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun EmptyNote(text: String) {
+    val c = LocalColors.current
+    Txt(text, AppText.body(13.sp, c.inkSoft), Modifier.padding(horizontal = 20.dp).fillMaxWidth().appCard(18.dp).padding(16.dp))
 }
 
 /** Detail pertunjukan: banner, waktu, hitung mundur, member tampil, dan setlist. */
@@ -558,7 +587,7 @@ fun MemberDetailScreen(id: String, name: String, img: String) {
 fun TheaterDetailScreen(id: String) {
     val c = LocalColors.current
     val nav = LocalNav.current
-    val data = rememberLoad(id) { Api.theaterDetail(id) }
+    val data = rememberLoad(id) { Api.theaterDetail(id, it) }
     val t = data.data
     LazyColumn(contentPadding = detailPadding()) {
         when {
@@ -632,11 +661,11 @@ fun TheaterDetailScreen(id: String) {
 fun NewsDetailScreen(item: NewsItem) {
     val c = LocalColors.current
     val open = rememberOpenUrl()
-    val data = rememberLoad(item.id) { Api.newsDetail(item.id) }
+    val data = rememberLoad(item.id) { Api.newsDetail(item.id, it) }
     LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = LocalInsets.current.calculateTopPadding(), bottom = 40.dp)) {
         item {
             Column {
-                Micro(item.category, Modifier.staggerIn(0), color = c.brand, dot = true)
+                Micro(item.category.ifEmpty { data.data?.category ?: "Berita" }, Modifier.staggerIn(0), color = c.brand, dot = true)
                 VGap(10.dp)
                 Txt(item.title, AppText.display(32.sp, c.ink), Modifier.staggerIn(1))
                 VGap(10.dp)
@@ -648,11 +677,19 @@ fun NewsDetailScreen(item: NewsItem) {
         when {
             data.error != null && n == null -> item { ErrorRetry(data.error!!, { data.run(true) }) }
             n == null -> items(5) { Skeleton(Modifier.padding(bottom = 10.dp).fillMaxWidth().height(16.dp), 6.dp) }
-            else -> item { Txt(htmlToText(n.content), AppText.body(16.sp, c.ink, 500, 1.65f), Modifier.staggerIn(3)) }
+            else -> htmlBlocks(n.content).forEachIndexed { i, block ->
+                item {
+                    when (block) {
+                        is NewsBlock.Text -> Txt(block.text, AppText.body(16.sp, c.ink, 500, 1.65f), Modifier.padding(bottom = 14.dp).staggerIn(3 + i))
+                        is NewsBlock.Image -> AutoImage(block.url, Modifier.padding(bottom = 16.dp))
+                    }
+                }
+            }
         }
-        if (item.url.isNotEmpty()) item {
+        val url = item.url.ifEmpty { n?.url.orEmpty() }
+        if (url.isNotEmpty()) item {
             VGap(24.dp)
-            LiquidButton(onClick = { open(item.url) }, modifier = Modifier.height(50.dp)) {
+            LiquidButton(onClick = { open(url) }, modifier = Modifier.height(50.dp)) {
                 Txt("Buka di jkt48.com", AppText.body(14.sp, c.ink, 800))
                 Image(Icons.Rounded.OpenInNew, null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(c.brand))
             }

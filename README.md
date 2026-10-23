@@ -119,7 +119,8 @@ Area baru `/pm` menyediakan akun, akses berbayar per member, QR MYPG di `/pm/pay
 ## Aplikasi Android (Kotlin + Compose)
 
 Folder [`mobile/`](mobile/README.md) berisi aplikasi Android native bergaya Liquid Glass memakai [Backdrop](https://kyant.gitbook.io/backdrop):
-- **Halaman:** beranda, live, jadwal/theater, recent dengan replay HLS, member, ulang tahun, dan berita.
+- **Halaman:** beranda, live, jadwal/theater, recent dengan replay HLS, member (dengan theater & live terakhir), ulang tahun, berita bergambar, dan Tentang.
+- **Notifikasi:** member live, show segera dimulai, ulang tahun, dan berita baru (diperiksa tiap ±15 menit, bisa diatur per jenis).
 - **Kaca interaktif:** tombol yang bisa ditarik dan membal, tab bar dengan pil yang bisa diseret, dan slider lensa.
 - **Ukuran:** APK rilis sekitar 2 MB.
 
@@ -127,6 +128,7 @@ Aplikasi tidak punya cookie/Origin browser, jadi worker menyediakan jalur `/api/
 - `POST /api/app/session` memberi token Bearer `a1.…` (HMAC, 30 hari, dibatasi per IP).
 - `GET /api/app/<endpoint>` menyajikan data JSON yang sama dengan `/api/<endpoint>`, lewat allowlist, cache, dan penjaga yang sama, dibatasi per token.
 - `GET /api/app/replay[/hls]` menyajikan replay dengan token yang terikat ke token aplikasi.
+- `GET /api/app/media?url=` memproksikan gambar jkt48.com (yang menolak hotlink) untuk isi berita.
 
 Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`).
 

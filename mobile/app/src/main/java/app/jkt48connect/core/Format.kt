@@ -81,3 +81,24 @@ fun htmlToText(html: String): String = html
     .replace("&lt;", "<").replace("&gt;", ">")
     .replace(Regex("\n{3,}"), "\n\n")
     .trim()
+
+/** Potongan isi berita: paragraf teks atau gambar. */
+sealed interface NewsBlock {
+    data class Text(val text: String) : NewsBlock
+    data class Image(val url: String) : NewsBlock
+}
+
+/** HTML berita jkt48.com → urutan paragraf dan gambar (gambar tidak lagi hilang). */
+fun htmlBlocks(html: String): List<NewsBlock> {
+    val out = mutableListOf<NewsBlock>()
+    val img = Regex("<img\\b[^>]*>", RegexOption.IGNORE_CASE)
+    val src = Regex("\\b(?:data-src|src)\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+    var last = 0
+    for (m in img.findAll(html)) {
+        htmlToText(html.substring(last, m.range.first)).takeIf { it.isNotBlank() }?.let { out += NewsBlock.Text(it) }
+        src.find(m.value)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() && !it.startsWith("data:") }?.let { out += NewsBlock.Image(it.replace("&amp;", "&")) }
+        last = m.range.last + 1
+    }
+    htmlToText(html.substring(last)).takeIf { it.isNotBlank() }?.let { out += NewsBlock.Text(it) }
+    return out
+}
