@@ -46,7 +46,7 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 | Beranda | Hero merah dengan logo piksel yang tersusun, pintasan kaca, live sekarang, show berikutnya (hitung mundur), recent, ulang tahun, berita |
 | Live | Semua member yang sedang live (IDN/Showroom), diperbarui tiap 30 detik |
 | Jadwal | Mendatang (dikelompokkan per tanggal) dan arsip theater (muat-lanjut); detail theater dengan member tampil, setlist, hitung mundur |
-| Recent | Rekap live; detail berisi statistik, replay, top supporter, gift, cuplikan layar (geser & cubit untuk zoom) |
+| Recent | Rekap live; detail berisi statistik, replay, top supporter, gift, cuplikan layar (9 petak + "+N"; penampil layar penuh gelap: geser kiri/kanan, filmstrip, ketuk dua kali/cubit untuk zoom, geser ke bawah untuk menutup) |
 | Member | Grid dengan kolom cari kaca dan pilihan aktif/lulus; profil dengan panel kaca di atas foto, theater mendatang, theater terakhir, dan live terakhir |
 | Ulang tahun, Berita | Dari tombol menu di kepala atas; isi berita menampilkan gambar dari jkt48.com |
 | Tentang | Versi, pengaturan notifikasi & tema, tautan, kredit, dan penafian (dari menu) |

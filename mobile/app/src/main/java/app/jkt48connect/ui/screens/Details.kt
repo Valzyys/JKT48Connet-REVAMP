@@ -1,5 +1,27 @@
 package app.jkt48connect.ui.screens
 
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.util.lerp
+import app.jkt48connect.core.Images
+import app.jkt48connect.ui.glass.glass
+import com.kyant.shapes.Capsule
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 import android.view.TextureView
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -205,17 +227,24 @@ fun RecentDetailScreen(r: RecentLive) {
                     VGap(26.dp)
                     Micro("Cuplikan · ${d.screenshots.size}", color = c.brand, dot = true)
                     VGap(10.dp)
-                    val shots = d.screenshots.take(30)
+                    val shots = d.screenshots
+                    val shotTitle = "${d.name} · ${fmtDate(d.start, "d MMM yyyy")}"
+                    // 9 petak; petak terakhir menunjukkan sisa cuplikan (+N), semuanya bisa digeser di penampil.
+                    val visible = shots.take(9)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        shots.chunked(3).forEachIndexed { row, chunk ->
+                        visible.chunked(3).forEachIndexed { row, chunk ->
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 chunk.forEachIndexed { col, url ->
                                     val i = row * 3 + col
-                                    NetImage(
-                                        url,
-                                        Modifier.weight(1f).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)).pressable({ nav.push(Route.Shots(shots, i)) }).staggerIn(i % 12, 25),
-                                        alignment = Alignment.Center,
-                                    )
+                                    val more = if (i == visible.lastIndex) shots.size - visible.size else 0
+                                    Box(Modifier.weight(1f).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)).pressable({ nav.push(Route.Shots(shots, i, shotTitle)) }).staggerIn(i, 25)) {
+                                        NetImage(url, Modifier.fillMaxSize(), alignment = Alignment.Center)
+                                        if (more > 0) {
+                                            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                                                Txt("+$more", AppText.display(30.sp, Color.White))
+                                            }
+                                        }
+                                    }
                                 }
                                 repeat(3 - chunk.size) { Spacer(Modifier.weight(1f)) }
                             }
@@ -429,33 +458,174 @@ private fun time(ms: Long): String {
 
 /** Penampil cuplikan layar: geser kiri/kanan, cubit untuk zoom. */
 @Composable
-fun ShotViewer(urls: List<String>, start: Int) {
+fun ShotViewer(urls: List<String>, start: Int, title: String) {
     val nav = LocalNav.current
+    val scope = rememberCoroutineScope()
     val pager = rememberPagerState(start) { urls.size }
     val backdrop = rememberLayerBackdrop()
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        HorizontalPager(pager, Modifier.fillMaxSize().layerBackdrop(backdrop)) { page ->
-            var scale by remember { mutableFloatStateOf(1f) }
-            var offset by remember { mutableStateOf(Offset.Zero) }
-            val state = rememberTransformableState { zoom, pan, _ ->
-                scale = (scale * zoom).coerceIn(1f, 5f)
-                offset = if (scale == 1f) Offset.Zero else offset + pan
-            }
-            NetImage(
+    val strip = rememberLazyListState((start - 2).coerceAtLeast(0))
+    var chrome by remember { mutableStateOf(true) }
+    var zoomed by remember { mutableStateOf(false) }
+    // Geser vertikal (saat tidak di-zoom) untuk menutup: gambar ikut turun, latar memudar.
+    val drag = remember { Animatable(0f) }
+    val dismissPx = with(LocalDensity.current) { 140.dp.toPx() }
+    val fade = (abs(drag.value) / (dismissPx * 2.5f)).coerceIn(0f, 1f)
+    LaunchedEffect(pager.currentPage) { strip.animateScrollToItem((pager.currentPage - 2).coerceAtLeast(0)) }
+
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 1f - fade))) {
+        HorizontalPager(
+            pager,
+            Modifier
+                .fillMaxSize()
+                .layerBackdrop(backdrop)
+                .pointerInput(zoomed) {
+                    if (zoomed) return@pointerInput
+                    detectVerticalDragGestures(
+                        onDragEnd = { scope.launch { if (abs(drag.value) > dismissPx) nav.pop() else drag.animateTo(0f, spring(0.75f, 400f)) } },
+                        onDragCancel = { scope.launch { drag.animateTo(0f, spring(0.75f, 400f)) } },
+                    ) { change, amount ->
+                        change.consume()
+                        scope.launch { drag.snapTo(drag.value + amount) }
+                    }
+                }
+                .graphicsLayer {
+                    translationY = drag.value
+                    val k = 1f - fade * 0.2f
+                    scaleX = k
+                    scaleY = k
+                },
+            pageSpacing = 16.dp,
+            beyondViewportPageCount = 1,
+            userScrollEnabled = !zoomed,
+        ) { page ->
+            ZoomImage(
                 urls[page],
-                Modifier.fillMaxSize().transformable(state).graphicsLayer {
+                resetKey = pager.settledPage,
+                onZoomChange = { if (page == pager.currentPage) zoomed = it },
+                onTap = { chrome = !chrome },
+            )
+        }
+
+        AnimatedVisibility(chrome && drag.value == 0f, enter = fadeIn(tween(180)), exit = fadeOut(tween(180))) {
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxWidth().height(150.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent))))
+                Row(Modifier.statusBarsPadding().padding(14.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    LiquidButton(
+                        onClick = { nav.pop() },
+                        modifier = Modifier.size(48.dp),
+                        backdrop = backdrop,
+                        fill = Color.White.copy(alpha = 0.14f),
+                        contentPadding = PaddingValues(0.dp),
+                    ) { Image(Icons.Rounded.Close, "Tutup", Modifier.size(22.dp), colorFilter = ColorFilter.tint(Color.White)) }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Txt(title.ifEmpty { "Cuplikan" }, AppText.body(15.sp, Color.White, 800), maxLines = 1)
+                        Txt("CUPLIKAN LAYAR LIVE", AppText.micro(Color.White.copy(alpha = 0.6f), 9.sp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Box(Modifier.glass(backdrop, Capsule(), Color.White.copy(alpha = 0.14f), blur = 6.dp).padding(horizontal = 14.dp, vertical = 9.dp)) {
+                        Txt("${pager.currentPage + 1} / ${urls.size}", AppText.mono(13.sp, Color.White, FontWeight.SemiBold))
+                    }
+                }
+                Column(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
+                        .navigationBarsPadding()
+                        .padding(top = 36.dp, bottom = 14.dp),
+                ) {
+                    LazyRow(state = strip, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(urls) { i, url ->
+                            val selected = i == pager.currentPage
+                            val k by animateFloatAsState(if (selected) 1f else 0.86f, spring(0.7f, 500f), label = "thumb")
+                            NetImage(
+                                url,
+                                Modifier
+                                    .size(54.dp, 72.dp)
+                                    .graphicsLayer {
+                                        scaleX = k
+                                        scaleY = k
+                                        alpha = if (selected) 1f else 0.55f
+                                    }
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .then(if (selected) Modifier.border(2.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier)
+                                    .pressable({ scope.launch { pager.animateScrollToPage(i) } }),
+                                alignment = Alignment.Center,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Satu halaman cuplikan: cubit untuk zoom, ketuk dua kali untuk zoom di titik itu, geser hanya saat di-zoom. */
+@Composable
+private fun ZoomImage(url: String, resetKey: Int, onZoomChange: (Boolean) -> Unit, onTap: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(resetKey) {
+        scale = 1f
+        offset = Offset.Zero
+    }
+    fun clamp(o: Offset, s: Float): Offset {
+        val mx = size.width * (s - 1f) / 2f
+        val my = size.height * (s - 1f) / 2f
+        return Offset(o.x.coerceIn(-mx, mx), o.y.coerceIn(-my, my))
+    }
+    val state = rememberTransformableState { zoom, pan, _ ->
+        val s = (scale * zoom).coerceIn(1f, 5f)
+        offset = if (s == 1f) Offset.Zero else clamp(offset + pan, s)
+        scale = s
+        onZoomChange(s > 1f)
+    }
+    val bitmap by produceState<ImageBitmap?>(null, url, size.width) {
+        if (size.width > 0) value = Images.load(url, (size.width * 1.5f).toInt().coerceAtMost(2048))?.asImageBitmap()
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onSizeChanged { size = it }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onTap() },
+                    onDoubleTap = { p ->
+                        scope.launch {
+                            val target = if (scale > 1f) 1f else 2.5f
+                            val to = if (target == 1f) Offset.Zero else clamp((Offset(size.width / 2f, size.height / 2f) - p) * (target - 1f), target)
+                            val fromScale = scale
+                            val fromOffset = offset
+                            onZoomChange(target > 1f)
+                            animate(0f, 1f, animationSpec = spring(0.85f, 400f)) { t, _ ->
+                                scale = lerp(fromScale, target, t)
+                                offset = androidx.compose.ui.geometry.lerp(fromOffset, to, t)
+                            }
+                        }
+                    },
+                )
+            }
+            .transformable(state, canPan = { scale > 1f }),
+        contentAlignment = Alignment.Center,
+    ) {
+        val b = bitmap
+        if (b == null) {
+            Spinner()
+        } else {
+            Image(
+                b,
+                null,
+                Modifier.fillMaxSize().graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                     translationX = offset.x
                     translationY = offset.y
                 },
                 contentScale = ContentScale.Fit,
-                alignment = Alignment.Center,
             )
-        }
-        Row(Modifier.statusBarsPadding().padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Txt("${pager.currentPage + 1} / ${urls.size}", AppText.mono(13.sp, Color.White.copy(alpha = 0.8f)), Modifier.weight(1f))
-            LiquidIconButton(Icons.Rounded.Close, { nav.pop() }, size = 48.dp, iconColor = Color.White, backdrop = backdrop, contentDescription = "Tutup")
         }
     }
 }

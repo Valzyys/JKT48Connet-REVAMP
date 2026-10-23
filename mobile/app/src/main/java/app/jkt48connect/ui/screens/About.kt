@@ -248,7 +248,6 @@ fun AboutScreen() {
             Column(Modifier.fillMaxWidth().appCard(24.dp).padding(16.dp).staggerIn(9), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf(
                     "Data" to "jkt48.com, Showroom, dan IDN Live melalui API JKT48Connect",
-                    "Liquid glass" to "Backdrop oleh Kyant · Apache License 2.0",
                     "Pemutar video" to "AndroidX Media3 ExoPlayer · Apache License 2.0",
                     "Huruf" to "Archivo & IBM Plex Mono · SIL Open Font License",
                 ).forEach { (k, v) ->

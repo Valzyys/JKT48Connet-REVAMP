@@ -27,7 +27,7 @@ sealed interface Route {
     data object Birthday : Route
     data object News : Route
     data class NewsDetail(val item: NewsItem) : Route
-    data class Shots(val urls: List<String>, val start: Int) : Route
+    data class Shots(val urls: List<String>, val start: Int, val title: String = "") : Route
     data object About : Route
 }
 
