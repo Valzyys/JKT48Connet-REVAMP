@@ -2,7 +2,8 @@ import { Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { IntroProvider } from "@/components/intro";
 import { PixelCross } from "@/components/logo";
-import { Aside, Dock, Footer, Sidebar, Topbar } from "@/components/shell";
+import { Aside, Dock, Sidebar, Topbar } from "@/components/shell";
+import { Footer } from "@/components/footer";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { NAV, navFor } from "@/lib/nav";
 
