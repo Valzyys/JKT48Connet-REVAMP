@@ -135,3 +135,10 @@ test("app update reports the latest GitHub release, with the app token", async (
   assert.equal(info.notes, "Perbaikan");
   assert.equal((await call("/api/app/update?x=1", { token })).status, 400);
 });
+
+test("app push config is disabled until Firebase is configured on the worker", async () => {
+  assert.equal((await call("/api/app/push")).status, 401);
+  const res = await call("/api/app/push", { token: await newToken() });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { enabled: false });
+});

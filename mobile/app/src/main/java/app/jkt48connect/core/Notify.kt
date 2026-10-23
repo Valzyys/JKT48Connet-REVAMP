@@ -54,6 +54,7 @@ object Notify {
     fun setEnabled(context: Context, kind: NotifyKind, on: Boolean) {
         prefs(context).edit().putBoolean("on_${kind.key}", on).apply()
         schedule(context)
+        Push.syncTopicsLater(context)
     }
 
     /** Izin notifikasi (Android 13+) sudah diberikan dan notifikasi aplikasi tidak dimatikan. */
@@ -70,7 +71,8 @@ object Notify {
     fun schedule(context: Context) {
         createChannels(context)
         val scheduler = context.getSystemService(JobScheduler::class.java)
-        if (NotifyKind.entries.none { enabled(context, it) }) {
+        // Push server aktif → tidak perlu memeriksa berkala (dan tidak ada notifikasi ganda).
+        if (Push.active(context) || NotifyKind.entries.none { enabled(context, it) }) {
             scheduler.cancel(JOB_ID)
             return
         }
@@ -152,6 +154,23 @@ object Notify {
 
         // Versi baru diberitahukan sekali per versi; pop-up di aplikasi muncul saat dibuka.
         if (enabled(context, NotifyKind.Update)) runCatching { checkUpdate(context) }
+    }
+
+    /** Pesan data dari server push (worker/push.ts): dicatat dengan kunci yang sama dengan pemeriksaan berkala. */
+    suspend fun fromPush(context: Context, d: Map<String, String>) {
+        prefs(context)
+        val kind = NotifyKind.entries.firstOrNull { it.key == d["kind"] } ?: return
+        val id = d["id"]?.takeIf { it.isNotEmpty() } ?: return
+        if (!enabled(context, kind)) return
+        val key = if (kind == NotifyKind.Update) id.removePrefix("update-") else id
+        if (kind == NotifyKind.Update && !Updater.isNewer(key, Updater.current)) return
+        val before = seen(kind.key).orEmpty()
+        if (key in before) return
+        Api.init(context)
+        Images.init(context)
+        createChannels(context)
+        post(context, kind, id, d["title"].orEmpty(), d["body"].orEmpty(), d["open"].orEmpty(), d["image"], big = kind == NotifyKind.Show)
+        remember(kind.key, listOf(key), before)
     }
 
     private suspend fun checkUpdate(context: Context) {

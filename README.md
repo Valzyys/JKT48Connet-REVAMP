@@ -131,7 +131,39 @@ Aplikasi tidak punya cookie/Origin browser, jadi worker menyediakan jalur `/api/
 - `GET /api/app/media?url=` memproksikan gambar jkt48.com (yang menolak hotlink) untuk isi berita.
 - `GET /api/app/update` memberi versi APK terbaru dari GitHub Releases, untuk pop-up dan notifikasi update di aplikasi.
 
-Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`).
+Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test:push`.
+
+### Server push (cron Cloudflare → aplikasi)
+
+Worker mengirim notifikasi ke aplikasi Android lewat Firebase Cloud Messaging (FCM). Cron `*/2 * * * *` di `wrangler.jsonc` memanggil Durable Object `PushState` (`worker/push-do.ts`). Logikanya ada di `worker/push.ts`:
+
+| Jenis | Kapan dicek | Dikirim saat |
+|---|---|---|
+| Live | tiap 2 menit | member mulai live (IDN/Showroom) |
+| Show | tiap 10 menit | show/event dimulai ≤ 65 menit lagi |
+| Ulang tahun | tiap 10 menit, mulai 07.00 WIB | hari ulang tahun member (sekali per tahun) |
+| Berita | tiap 10 menit | berita baru di jkt48.com |
+| Update | tiap 10 menit | release "latest" GitHub dengan versi lebih baru |
+
+- Pesan dikirim ke topik `jkc-live`, `jkc-show`, `jkc-birthday`, `jkc-news`, dan `jkc-update`. Aplikasi berlangganan sesuai sakelar di halaman Tentang, jadi worker tidak menyimpan token perangkat.
+- Yang sudah dikirim dicatat di Durable Object. Putaran pertama hanya mencatat, supaya tidak membanjiri.
+- Konfigurasi Firebase untuk aplikasi diambil dari `GET /api/app/push` (hanya pengenal publik), jadi tidak ada yang ditanam di APK.
+- Bila push belum diatur, atau HP tanpa Google Play services, aplikasi kembali memeriksa sendiri tiap ±15 menit.
+
+Setup sekali:
+1. [Firebase console](https://console.firebase.google.com) → buat proyek → **Add app → Android**, package name `app.jkt48connect`, lalu unduh `google-services.json`. Dari file itu ambil `mobilesdk_app_id` (App ID, `1:…:android:…`) dan `api_key[0].current_key`. File ini tidak perlu dimasukkan ke aplikasi.
+2. Project settings → **Service accounts → Generate new private key**: berkas JSON ini rahasia, jangan di-commit.
+3. Simpan sebagai secret Worker, lalu deploy. Durable Object dan cron dibuat otomatis:
+   ```sh
+   npx wrangler secret put FCM_SERVICE_ACCOUNT < service-account.json
+   npx wrangler secret put FCM_ANDROID_APP_ID      # 1:1234567890:android:abc…
+   npx wrangler secret put FCM_ANDROID_API_KEY     # AIza…
+   npm run deploy
+   ```
+   Atau sekaligus: `FCM_SERVICE_ACCOUNT=./service-account.json FCM_ANDROID_APP_ID=… FCM_ANDROID_API_KEY=… npm run deploy:auto`. Kalau deploy lewat GitHub Actions (`deploy.yml`), isi tiga secret repo dengan nama yang sama (`FCM_SERVICE_ACCOUNT` berisi isi JSON-nya).
+4. Buka aplikasi sekali supaya berlangganan. Halaman Tentang menulis "Dikirim langsung dari server" bila push aktif. Log pengiriman bisa dilihat dengan `npx wrangler tail`.
+
+Coba cron di lokal: `npx wrangler dev --test-scheduled`, lalu buka `http://localhost:8787/__scheduled?cron=*/2+*+*+*+*`.
 
 ## Menjalankan lokal
 

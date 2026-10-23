@@ -56,7 +56,8 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 
 **Notifikasi**
 - Memberi tahu saat member mulai live, satu jam sebelum show/event, ulang tahun member (mulai pukul 07.00 WIB), dan berita baru.
-- Tanpa server push: `JobScheduler` memeriksa API tiap ±15 menit saat ada internet, dan tetap terjadwal setelah reboot.
+- **Server push** (bila diatur di worker, lihat README utama → Server push): cron Cloudflare mengirim pesan FCM ke topik yang dilanggan aplikasi, sehingga notifikasi datang dalam ±2 menit walau aplikasi tertutup. Konfigurasi Firebase diambil dari `/api/app/push` saat runtime, tanpa `google-services.json` di APK.
+- **Cadangan tanpa push**: `JobScheduler` memeriksa API tiap ±15 menit saat ada internet, dan tetap terjadwal setelah reboot. Cadangan ini mati otomatis selama push aktif, supaya tidak ada notifikasi ganda.
 - ID yang sudah diberitahukan disimpan di perangkat. Pemeriksaan pertama hanya mencatat, supaya tidak membanjiri.
 - Tiap jenis punya channel sendiri dan bisa dimatikan di halaman Tentang. Izin (Android 13+) ditanyakan sekali setelah intro.
 - Mengetuk notifikasi membuka halaman terkait (tab Live, detail show, ulang tahun, atau isi berita).
@@ -151,7 +152,8 @@ Alamat API diambil dari input `api_base` saat dijalankan manual. Kalau kosong, d
 app/src/main/java/app/jkt48connect/
   MainActivity.kt          edge-to-edge, warna ikon sistem ikut tema, tujuan dari notifikasi
   core/  Api.kt            klien /api/app (token, cache memori + disk), tanpa library HTTP
-         Notify.kt         notifikasi live/show/ultah/berita (JobScheduler, channel per jenis)
+         Notify.kt         notifikasi live/show/ultah/berita/update (channel per jenis, cadangan JobScheduler)
+         Push.kt           server push FCM: konfigurasi dari worker, topik sesuai sakelar, penerima pesan
          Updater.kt        cek versi baru, unduh APK (DownloadManager), cek kunci, buka pemasang
          Models.kt         model data (sama dengan src/lib/shape.ts), org.json
          Format.kt         tanggal WIB, durasi, angka, hitung mundur

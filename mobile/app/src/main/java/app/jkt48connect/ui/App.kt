@@ -10,6 +10,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import app.jkt48connect.core.Notify
 import app.jkt48connect.core.Updater
+import app.jkt48connect.core.Push
 import app.jkt48connect.ui.screens.AboutScreen
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -149,6 +150,8 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
         // Izin notifikasi (Android 13+) ditanyakan sekali, setelah intro selesai.
         val context = LocalContext.current
         val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+        // Server push (FCM) disiapkan di latar; tanpa push, pemeriksaan berkala tetap berjalan.
+        LaunchedEffect(Unit) { runCatching { Push.setup(context) } }
         // Setiap aplikasi dibuka: cek versi baru di GitHub Releases → pop-up update.
         LaunchedEffect(showIntro) {
             if (!showIntro) runCatching { Updater.check(context) }

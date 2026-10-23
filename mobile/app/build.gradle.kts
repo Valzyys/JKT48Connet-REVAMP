@@ -78,4 +78,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.media3:media3-exoplayer:1.9.2")
     implementation("androidx.media3:media3-exoplayer-hls:1.9.2")
+    // Server push (FCM). Dikonfigurasi saat runtime dari worker, jadi tanpa plugin google-services.
+    implementation("com.google.firebase:firebase-messaging:25.1.3")
 }

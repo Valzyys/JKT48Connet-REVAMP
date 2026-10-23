@@ -165,6 +165,7 @@ object Api {
         MemberActivity(up.sortedBy { it.date }, past.sortedByDescending { it.date }, lives.filterNotNull().flatten().filter { it.memberId == id }.distinctBy { it.id })
     }
 
+    suspend fun pushConfig(f: Fetch = Fetch.Force) = get("/push", 6 * 3600_000, f).obj()
     suspend fun update(f: Fetch = Fetch.Normal) = AppUpdate.from(get("/update", 15 * 60_000, f).obj())
     suspend fun birthdays(f: Fetch = Fetch.Normal) = get("/next_birthday", 60 * 60_000, f).list().map(BirthdayEntry::from)
 }

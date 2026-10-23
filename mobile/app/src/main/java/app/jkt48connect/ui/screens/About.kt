@@ -47,6 +47,7 @@ import app.jkt48connect.core.Api
 import app.jkt48connect.core.Notify
 import app.jkt48connect.core.NotifyKind
 import app.jkt48connect.core.Updater
+import app.jkt48connect.core.Push
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -203,7 +204,8 @@ fun AboutScreen() {
             }
             VGap(8.dp)
             Txt(
-                "Diperiksa otomatis tiap ±15 menit saat ada internet. Penghemat baterai bisa membuat pemberitahuan sedikit terlambat.",
+                if (Push.active(context)) "Dikirim langsung dari server JKT48Connect begitu ada kabar (push)."
+                else "Diperiksa otomatis tiap ±15 menit saat ada internet. Penghemat baterai bisa membuat pemberitahuan sedikit terlambat.",
                 AppText.body(12.sp, c.inkSoft),
                 Modifier.padding(horizontal = 6.dp),
             )
