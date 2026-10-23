@@ -26,27 +26,19 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      # Flutter diunduh langsung dari rilis resmi; JDK 17 dan Android SDK sudah ada di runner.
-      - name: Install Flutter 3.47.7
-        run: |
-          curl -sSL https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.7-stable.tar.xz | tar -xJ -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
-      - run: flutter --disable-analytics
-      - run: flutter pub get
+      # JDK 17 dan Android SDK sudah ada di runner; platform yang kurang diunduh otomatis oleh Gradle.
       - name: Build APK
         env:
           API_BASE: ${{ inputs.api_base || vars.API_BASE }}
         run: |
-          args=()
-          if [ -n "$API_BASE" ]; then args+=("--dart-define=API_BASE=$API_BASE"); fi
-          flutter build apk --release "${args[@]}"
-          cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/jkt48connect.apk"
+          ./gradlew --no-daemon :app:assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/jkt48connect.apk"
       - name: Buat release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$GITHUB_REF_TYPE" = tag ]; then tag="$GITHUB_REF_NAME"; else tag="mobile-build-$GITHUB_RUN_NUMBER"; fi
-          version=$(grep '^version:' pubspec.yaml | cut -d' ' -f2)
+          version=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
           gh release create "$tag" "$RUNNER_TEMP/jkt48connect.apk" \
             --target "$GITHUB_SHA" --prerelease \
             --title "JKT48Connect Android $version ($tag)" \
