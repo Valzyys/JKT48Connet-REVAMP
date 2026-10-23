@@ -12,18 +12,15 @@ permissions:
   contents: read
 
 jobs:
-  analyze:
+  build:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: mobile
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      # Flutter diunduh langsung dari rilis resmi (tanpa action pihak ketiga).
-      - name: Install Flutter 3.47.7
-        run: |
-          curl -sSL https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.7-stable.tar.xz | tar -xJ -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
-      - run: flutter --disable-analytics
-      - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos
+      # JDK 17 dan Android SDK sudah ada di runner; platform yang kurang diunduh otomatis oleh Gradle.
+      - name: Build APK rilis (compile + R8)
+        run: ./gradlew --no-daemon --stacktrace :app:assembleRelease
+      - name: Ukuran APK
+        run: ls -la app/build/outputs/apk/release/
