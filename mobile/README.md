@@ -2,9 +2,16 @@
 
 Aplikasi Android/iOS fan-made untuk mengikuti member JKT48. UI bergaya **Liquid Glass** memakai paket [`liquid_glass_easy`](https://pub.dev/packages/liquid_glass_easy): kepala atas, tab bar, segmented, kolom cari, panel profil, dan tombol pemutar adalah lensa kaca yang membiaskan isi di belakangnya.
 
-**Tema.** Ada tema putih (latar putih bersih, kaca susu) dan tema gelap (hitam pekat netral, kaca asap). Pilih lewat tombol matahari/bulan di kepala atas: Ikuti sistem, Putih, atau Gelap. Pilihan disimpan di perangkat. Di belakang isi ada cahaya ambient merah muda yang melayang pelan, supaya kaca punya warna untuk dibiaskan.
+**Kepala atas.** Kepala atas bergaya iOS 26 dan terdiri dari tiga lensa kaca terpisah:
+- kapsul merek berisi logo, wordmark, dan subjudul yang berganti sesuai tab;
+- pil status live, yang menyala merah dengan sinyal bergerak saat ada member live (ketuk untuk membuka tab Live);
+- tombol menu bulat yang membuka Ulang tahun, Berita, dan pilihan tema.
 
-**Efek sentuh kaca.** Setiap tombol kaca menyala putih dari titik jari saat disentuh. Cahayanya mengikuti jari, tepi kaca ikut terang, lalu memudar pelan saat dilepas. Efek ini ada di tombol kepala atas, tab bar, pintasan beranda, segmented, kolom cari, chip sosial, dan tombol pemutar. Kartu biasa (bukan kaca) mengecil sedikit saat ditekan.
+Saat isi digulir, kepala atas mengecil dan subjudulnya disembunyikan. Halaman detail memakai tombol kembali bulat dan kapsul judul.
+
+**Tema.** Ada tema putih (latar putih bersih, kaca susu) dan tema gelap (hitam pekat netral, kaca asap). Pilih lewat tombol menu di kepala atas: Sistem, Putih, atau Gelap. Pilihan disimpan di perangkat. Di belakang isi ada cahaya ambient merah muda yang melayang pelan, supaya kaca punya warna untuk dibiaskan.
+
+**Efek sentuh kaca.** Setiap tombol kaca menyala putih dari titik jari saat disentuh. Cahayanya mengikuti jari, tepi kaca ikut terang, lalu memudar pelan saat dilepas. Efek ini ada di semua lensa kepala atas, tab bar, pintasan beranda, segmented, kolom cari, chip sosial, dan tombol pemutar. Kartu biasa (bukan kaca) mengecil sedikit saat ditekan.
 
 Data diambil dari worker situs yang sama (`worker/proxy.ts`) lewat jalur khusus aplikasi `/api/app/*`.
 
@@ -75,6 +82,7 @@ lib/
   widgets/ glass.dart       gaya kaca, efek sentuh PressGlow, GlassChip, GlassIconButton, GlassSegmented, Pressable, latar Ambient
            common.dart      logo piksel, signal bars, skeleton, countdown, count-up
            cards.dart       kartu live/show/recent/berita
+           app_header.dart  kepala atas (kapsul merek, pil live, menu) + lembar menu
            detail_scaffold.dart  halaman detail dengan kepala kaca
   screens/ shell.dart (tab bar kaca), home, live, schedule, recent (+ pemutar replay), members, birthday, news
 ```

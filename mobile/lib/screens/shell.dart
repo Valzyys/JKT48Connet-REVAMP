@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
+import '../core/api.dart';
 import '../core/theme.dart';
-import '../widgets/common.dart';
+import '../widgets/app_header.dart';
 import '../widgets/glass.dart';
 import 'birthday.dart';
 import 'home.dart';
@@ -28,6 +31,10 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   int _tab = 0;
+  int? _live;
+  Timer? _poll;
+  // Posisi gulir tiap tab, supaya kepala atas tahu kapan harus ringkas.
+  final _offsets = List<double>.filled(5, 0);
 
   static const _tabs = [
     (Icons.home_rounded, 'Beranda'),
@@ -37,9 +44,38 @@ class _ShellState extends State<Shell> {
     (Icons.groups_rounded, 'Member'),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _refreshLive();
+    _poll = Timer.periodic(const Duration(seconds: 60), (_) => _refreshLive());
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshLive() async {
+    try {
+      final list = await Api.instance.live();
+      if (mounted) setState(() => _live = list.length);
+    } catch (_) {}
+  }
+
   void go(int i) {
     if (i != _tab) HapticFeedback.selectionClick();
     setState(() => _tab = i);
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    if (n.depth == 0 && n.metrics.axis == Axis.vertical) {
+      final was = _offsets[_tab] > 24;
+      _offsets[_tab] = n.metrics.pixels;
+      if (was != (_offsets[_tab] > 24)) setState(() {});
+    }
+    return false;
   }
 
   @override
@@ -49,41 +85,32 @@ class _ShellState extends State<Shell> {
     final barWidth = (w - 28).clamp(260.0, 520.0);
     final scaffold = LiquidGlassScaffold(
       backgroundColor: c.bg,
-      appBar: LiquidGlassAppBar(
+      appBarTopMargin: 4,
+      appBar: AppHeader(
         width: barWidth,
-        height: 56,
-        centerTitle: false,
-        style: glass(context, 28),
-        foregroundColor: c.ink,
-        leading: const Padding(padding: EdgeInsets.only(left: 6), child: PixelLogo(size: 22)),
-        title: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text('JKT48', style: AppText.display(22, color: c.ink)),
-          Text('CONNECT', style: AppText.display(22, color: c.brand)),
-        ]),
-        actions: [
-          GlassIconButton(
-            tooltip: 'Tampilan',
-            onTap: () => showThemeSheet(context),
-            icon: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 420),
-              transitionBuilder: (child, a) => RotationTransition(turns: Tween(begin: 0.6, end: 1.0).animate(a), child: FadeTransition(opacity: a, child: child)),
-              child: Icon(c.dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded, key: ValueKey(c.dark)),
-            ),
-          ),
-          GlassIconButton(tooltip: 'Ulang tahun', icon: const Icon(Icons.cake_rounded), onTap: () => _push(context, const BirthdayScreen())),
-          GlassIconButton(tooltip: 'Berita', icon: const Icon(Icons.newspaper_rounded), onTap: () => _push(context, const NewsScreen())),
-          const SizedBox(width: 4),
-        ],
+        subtitle: headerSubtitle(_tab, _live),
+        compact: _offsets[_tab] > 24,
+        liveCount: _live,
+        onLogo: () => go(0),
+        onLive: () => go(1),
+        onMenu: () => showMenuSheet(
+          context,
+          onBirthday: () => _push(context, const BirthdayScreen()),
+          onNews: () => _push(context, const NewsScreen()),
+        ),
       ),
       body: Stack(children: [
         const Positioned.fill(child: Ambient()),
-        IndexedStack(index: _tab, children: [
-          HomeScreen(onTab: go),
-          const LiveScreen(),
-          const ScheduleScreen(),
-          const RecentScreen(),
-          const MembersScreen(),
-        ]),
+        NotificationListener<ScrollNotification>(
+          onNotification: _onScroll,
+          child: IndexedStack(index: _tab, children: [
+            HomeScreen(onTab: go),
+            const LiveScreen(),
+            const ScheduleScreen(),
+            const RecentScreen(),
+            const MembersScreen(),
+          ]),
+        ),
       ]),
       bottomNavigationBar: LiquidGlassTabBar(
         items: [for (final (icon, label) in _tabs) LiquidGlassTabBarItem(icon: icon, label: label)],
@@ -127,69 +154,3 @@ class _ShellState extends State<Shell> {
 }
 
 void _push(BuildContext context, Widget page) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
-
-/// Lembar pilihan tema: ikuti sistem, putih, atau gelap.
-void showThemeSheet(BuildContext context) {
-  showModalBottomSheet<void>(
-    context: context,
-    builder: (context) => ValueListenableBuilder(
-      valueListenable: ThemeController.instance,
-      builder: (context, mode, _) {
-        final c = AppColors.of(context);
-        Widget option(ThemeMode m, IconData icon, String label, String hint) {
-          final on = mode == m;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Pressable(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                ThemeController.instance.set(m);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                padding: const EdgeInsets.all(14),
-                decoration: c.cardDecoration(radius: 20).copyWith(border: Border.all(color: on ? c.brand : c.line, width: on ? 1.6 : 0.8)),
-                child: Row(children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(gradient: on ? c.brandGradient : null, color: on ? null : c.surface, borderRadius: BorderRadius.circular(14)),
-                    child: Icon(icon, color: on ? Colors.white : c.ink, size: 21),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(label, style: AppText.body(15, color: c.ink, weight: 800)),
-                      Text(hint, style: AppText.body(12.5, color: c.inkSoft)),
-                    ]),
-                  ),
-                  AnimatedScale(
-                    scale: on ? 1 : 0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutBack,
-                    child: Icon(Icons.check_circle_rounded, color: c.brand),
-                  ),
-                ]),
-              ),
-            ),
-          );
-        }
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Micro('Tampilan', color: c.brand, dot: true),
-              const SizedBox(height: 6),
-              Text('TEMA APLIKASI', style: AppText.display(30, color: c.ink)),
-              const SizedBox(height: 16),
-              option(ThemeMode.system, Icons.brightness_auto_rounded, 'Ikuti sistem', 'Berganti otomatis sesuai pengaturan ponsel'),
-              option(ThemeMode.light, Icons.light_mode_rounded, 'Putih', 'Latar putih bersih dengan kaca susu'),
-              option(ThemeMode.dark, Icons.dark_mode_rounded, 'Gelap', 'Hitam pekat dengan kaca asap'),
-            ]),
-          ),
-        );
-      },
-    ),
-  );
-}

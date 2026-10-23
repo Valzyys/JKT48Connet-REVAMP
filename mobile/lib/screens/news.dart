@@ -93,7 +93,7 @@ class NewsDetailScreen extends StatelessWidget {
       title: 'Berita',
       actions: [
         if (item.url.isNotEmpty)
-          GlassIconButton(tooltip: 'Buka di jkt48.com', onTap: () => openUrl(item.url), icon: const Icon(Icons.open_in_new_rounded, size: 20)),
+          GlassIconButton(tooltip: 'Buka di jkt48.com', size: 52, onTap: () => openUrl(item.url), icon: const Icon(Icons.open_in_new_rounded, size: 20)),
       ],
       body: FutureBuilder(
         future: Api.instance.newsDetail(item.id),
