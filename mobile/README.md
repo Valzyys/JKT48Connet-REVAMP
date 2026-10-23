@@ -43,6 +43,14 @@ flutter build ipa --release --dart-define=API_BASE=https://domain-situs-kamu    
 
 APK rilis saat ini ditandatangani dengan kunci debug bawaan template, jadi hanya cocok untuk dicoba. Untuk Play Store, buat keystore sendiri dan atur `android/app/build.gradle.kts`.
 
+### Unduh APK dari GitHub Releases
+
+Workflow `.github/workflows/mobile-release.yml` membangun APK dan mengunggahnya ke halaman **Releases**. Workflow ini jalan saat:
+- tag `mobile-v*` di-push (misalnya `git tag mobile-v1.0.1 && git push origin mobile-v1.0.1`);
+- dijalankan manual dari tab Actions → Mobile Release → Run workflow.
+
+Alamat API diambil dari input `api_base` saat dijalankan manual. Kalau kosong, dipakai variabel repo `API_BASE` (Settings → Secrets and variables → Actions → Variables). Kalau keduanya kosong, dipakai nilai bawaan di `lib/core/api.dart`.
+
 ## Keamanan jalur aplikasi
 
 - `POST /api/app/session` memberi token `a1.<id>.<exp>.<sig>` (HMAC, 30 hari), dibatasi 20/menit per IP. Aplikasi menyimpannya dan meminta ulang otomatis bila ditolak (401).

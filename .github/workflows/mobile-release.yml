@@ -1,0 +1,51 @@
+name: Mobile Release
+
+# Build APK Android lalu unggah sebagai GitHub Release.
+# Jalan saat tag mobile-v* di-push, atau manual dari tab Actions.
+on:
+  push:
+    tags: ["mobile-v*"]
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: "Alamat situs yang melayani /api/app (kosong = variabel repo API_BASE)"
+        required: false
+        default: ""
+
+# Perlu tulis untuk membuat release.
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # Flutter diunduh langsung dari rilis resmi; JDK 17 dan Android SDK sudah ada di runner.
+      - name: Install Flutter 3.47.7
+        run: |
+          curl -sSL https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.7-stable.tar.xz | tar -xJ -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter --disable-analytics
+      - run: flutter pub get
+      - name: Build APK
+        env:
+          API_BASE: ${{ inputs.api_base || vars.API_BASE }}
+        run: |
+          args=()
+          if [ -n "$API_BASE" ]; then args+=("--dart-define=API_BASE=$API_BASE"); fi
+          flutter build apk --release "${args[@]}"
+          cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/jkt48connect.apk"
+      - name: Buat release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then tag="$GITHUB_REF_NAME"; else tag="mobile-build-$GITHUB_RUN_NUMBER"; fi
+          version=$(grep '^version:' pubspec.yaml | cut -d' ' -f2)
+          gh release create "$tag" "$RUNNER_TEMP/jkt48connect.apk" \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "JKT48Connect Android $version ($tag)" \
+            --notes "APK Android dari commit $GITHUB_SHA. Ditandatangani dengan kunci debug, hanya untuk dicoba (bukan untuk Play Store). Pasang dengan mengizinkan instalasi dari sumber tidak dikenal."
