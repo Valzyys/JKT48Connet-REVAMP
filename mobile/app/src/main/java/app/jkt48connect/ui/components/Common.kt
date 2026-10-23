@@ -16,6 +16,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -64,6 +65,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.input.pointer.PointerEventPass
+import app.jkt48connect.core.Api
 import app.jkt48connect.core.Images
 import app.jkt48connect.core.fmtCountdown
 import app.jkt48connect.core.fmtNum
@@ -238,7 +240,7 @@ fun NetImage(
             failed = url.isEmpty()
             return@LaunchedEffect
         }
-        val cached = Images.cached(url, width)
+        val cached = Images.cached(Api.imageUrl(url), width)
         if (cached != null) {
             bitmap = cached.asImageBitmap()
             alpha.snapTo(1f)
@@ -257,6 +259,26 @@ fun NetImage(
         } else if (failed && fallback.isNotEmpty()) {
             Txt(fallback.take(1).uppercase(), AppText.display(28.sp, c.brand))
         }
+    }
+}
+
+/** Gambar selebar wadah dengan tinggi mengikuti rasio aslinya (untuk gambar di isi berita). */
+@Composable
+fun AutoImage(url: String, modifier: Modifier = Modifier) {
+    val c = LocalColors.current
+    var width by remember { mutableStateOf(0) }
+    var bitmap by remember(url) { mutableStateOf<ImageBitmap?>(null) }
+    var failed by remember(url) { mutableStateOf(false) }
+    LaunchedEffect(url, width) {
+        if (width == 0) return@LaunchedEffect
+        val b = Images.cached(Api.imageUrl(url), width) ?: Images.load(url, width)
+        if (b == null) failed = true else bitmap = b.asImageBitmap()
+    }
+    val b = bitmap
+    when {
+        b != null -> Image(b, null, modifier.fillMaxWidth().aspectRatio(b.width.toFloat() / b.height).clip(RoundedCornerShape(18.dp)), contentScale = ContentScale.Fit)
+        failed -> Unit
+        else -> Box(modifier.fillMaxWidth().aspectRatio(16f / 9f).onSizeChanged { if (it.width > 0) width = it.width }.clip(RoundedCornerShape(18.dp)).background(c.surface))
     }
 }
 

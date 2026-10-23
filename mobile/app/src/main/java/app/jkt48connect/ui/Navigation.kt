@@ -12,6 +12,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.PaddingValues
+import app.jkt48connect.core.Fetch
 import app.jkt48connect.core.NewsItem
 import app.jkt48connect.core.Paged
 import app.jkt48connect.core.RecentLive
@@ -27,6 +28,7 @@ sealed interface Route {
     data object News : Route
     data class NewsDetail(val item: NewsItem) : Route
     data class Shots(val urls: List<String>, val start: Int) : Route
+    data object About : Route
 }
 
 /** Navigasi sederhana tanpa library: tab utama + tumpukan halaman detail. */
@@ -49,6 +51,24 @@ class Nav {
         stack.removeAt(stack.lastIndex)
         return true
     }
+
+    /** Tujuan dari notifikasi: "tab:1", "route:birthday", "theater:<id>|<judul>", "news:<id>|<tanggal>|<judul>". */
+    fun open(target: String) {
+        val kind = target.substringBefore(':')
+        val rest = target.substringAfter(':')
+        menuOpen = false
+        stack.clear()
+        when (kind) {
+            "tab" -> tab = rest.toIntOrNull() ?: 0
+            "route" -> when (rest) {
+                "birthday" -> push(Route.Birthday)
+                "news" -> push(Route.News)
+                "about" -> push(Route.About)
+            }
+            "theater" -> push(Route.Theater(rest.substringBefore('|'), rest.substringAfter('|', "")))
+            "news" -> rest.split('|', limit = 3).let { push(Route.NewsDetail(NewsItem(it[0], it.getOrElse(2) { "" }, it.getOrElse(1) { "" }, "", ""))) }
+        }
+    }
 }
 
 val LocalNav = staticCompositionLocalOf { Nav() }
@@ -56,9 +76,11 @@ val LocalNav = staticCompositionLocalOf { Nav() }
 /** Jarak isi dari kaca atas & bawah (sudah termasuk inset sistem). */
 val LocalInsets = staticCompositionLocalOf { PaddingValues() }
 
-/** Status muat data sederhana untuk satu permintaan. */
+/**
+ * Status muat data: tampil seketika dari cache terakhir (memori/disk), lalu diperbarui dari jaringan.
+ */
 @Stable
-class Load<T>(private val scope: CoroutineScope, private val block: suspend (force: Boolean) -> T) {
+class Load<T>(private val scope: CoroutineScope, private val block: suspend (Fetch) -> T) {
     var data by mutableStateOf<T?>(null)
         private set
     var error by mutableStateOf<Throwable?>(null)
@@ -71,7 +93,8 @@ class Load<T>(private val scope: CoroutineScope, private val block: suspend (for
         loading = true
         scope.launch {
             try {
-                data = block(force)
+                if (data == null) runCatching { block(Fetch.Cache) }.getOrNull()?.let { data = it }
+                data = block(if (force) Fetch.Force else Fetch.Normal)
                 error = null
             } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -84,7 +107,7 @@ class Load<T>(private val scope: CoroutineScope, private val block: suspend (for
 
     suspend fun refresh() {
         try {
-            data = block(true)
+            data = block(Fetch.Force)
             error = null
         } catch (e: Throwable) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -94,16 +117,16 @@ class Load<T>(private val scope: CoroutineScope, private val block: suspend (for
 }
 
 @Composable
-fun <T> rememberLoad(vararg keys: Any?, block: suspend (force: Boolean) -> T): Load<T> {
+fun <T> rememberLoad(vararg keys: Any?, block: suspend (Fetch) -> T): Load<T> {
     val scope = rememberCoroutineScope()
     val load = remember(*keys) { Load(scope, block) }
     LaunchedEffect(load) { load.run() }
     return load
 }
 
-/** Daftar bertingkat halaman (recent, arsip theater, berita) dengan muat-lanjut. */
+/** Daftar bertingkat halaman (recent, arsip theater, berita) dengan muat-lanjut; halaman 1 tampil dulu dari cache. */
 @Stable
-class PagedLoad<T>(private val scope: CoroutineScope, private val block: suspend (page: Int, force: Boolean) -> Paged<T>) {
+class PagedLoad<T>(private val scope: CoroutineScope, private val block: suspend (page: Int, fetch: Fetch) -> Paged<T>) {
     val items = mutableStateListOf<T>()
     var error by mutableStateOf<Throwable?>(null)
         private set
@@ -118,7 +141,9 @@ class PagedLoad<T>(private val scope: CoroutineScope, private val block: suspend
         loading = true
         scope.launch {
             try {
-                val p = block(page + 1, false)
+                if (page == 0 && items.isEmpty()) runCatching { block(1, Fetch.Cache) }.getOrNull()?.let { items.addAll(it.items) }
+                val p = block(page + 1, Fetch.Normal)
+                if (page == 0) items.clear()
                 items.addAll(p.items)
                 page = p.page
                 hasMore = p.hasMore
@@ -134,7 +159,7 @@ class PagedLoad<T>(private val scope: CoroutineScope, private val block: suspend
 
     suspend fun refresh() {
         try {
-            val p = block(1, true)
+            val p = block(1, Fetch.Force)
             items.clear()
             items.addAll(p.items)
             page = p.page
@@ -148,7 +173,7 @@ class PagedLoad<T>(private val scope: CoroutineScope, private val block: suspend
 }
 
 @Composable
-fun <T> rememberPaged(block: suspend (page: Int, force: Boolean) -> Paged<T>): PagedLoad<T> {
+fun <T> rememberPaged(block: suspend (page: Int, fetch: Fetch) -> Paged<T>): PagedLoad<T> {
     val scope = rememberCoroutineScope()
     val load = remember { PagedLoad(scope, block) }
     LaunchedEffect(load) { load.more() }

@@ -271,6 +271,7 @@ async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Respons
  * tidak punya Origin/cookie browser, jadi:
  *   POST /api/app/session      → token `a1.…` (30 hari), dibatasi per IP
  *   GET  /api/app/<endpoint>   → data JSON yang sama dengan `/api/<endpoint>` (allowlist, cache, penjaga)
+ *   GET  /api/app/media?url=   → proxy gambar jkt48.com (host di-allowlist), sama dengan `/api/media`
  *   GET  /api/app/replay[/hls] → replay, token replay terikat ke token aplikasi
  * Semua tetap lewat status blokir penjaga (diperiksa sebelum fungsi ini) dan batas laju per token.
  */
@@ -293,6 +294,8 @@ async function handleApp(c: Call, k: Keys): Promise<Response> {
   if (!(await allow(env.API_LIMITER, `a:${session.sid}`, 300))) {
     return deny(c, "rate_limit", 429, "Terlalu banyak permintaan, coba lagi sebentar", "", { "retry-after": "30" });
   }
+  // Gambar berita jkt48.com (menolak hotlink) — sama dengan `/api/media` web, tetapi dengan token aplikasi.
+  if (url.pathname === "/api/app/media") return handleMedia(c);
   if (url.pathname === "/api/app/replay") return handleReplay(c, k, session);
   if (url.pathname === "/api/app/replay/hls") return handleReplayHls(c, k, session);
 
@@ -489,8 +492,11 @@ async function loadBody(c: Call, k: Keys, session: Session, pathname: string, re
   return body;
 }
 
-/** Batas umur salinan lama yang boleh dikirim sambil memperbarui: data live cepat basi, sisanya lebih longgar. */
-const swrWindow = (ttl: number) => (ttl <= 60 ? 10 * 60_000 : 6 * 60 * 60_000);
+/**
+ * Batas umur salinan lama yang boleh dikirim sambil memperbarui: daftar live cepat basi (10 menit),
+ * rekap live 1 jam (dulu ikut 10 menit sehingga sering menunggu upstream ± 3 detik), sisanya 6 jam.
+ */
+const swrWindow = (ttl: number) => (ttl <= 20 ? 10 * 60_000 : ttl <= 60 ? 60 * 60_000 : 6 * 60 * 60_000);
 
 /** Request upstream yang sedang berjalan per path (per isolate), supaya banyak pengunjung serentak cukup satu fetch. */
 const inflight = new Map<string, Promise<Fetched>>();

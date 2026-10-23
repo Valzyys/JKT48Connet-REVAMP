@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -12,6 +13,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Pemuat gambar ringan tanpa library: cache memori (LRU), cache disk, dan decode yang diperkecil
@@ -20,6 +22,10 @@ import java.security.MessageDigest
 object Images {
     private lateinit var dir: File
     private val net = Semaphore(6)
+
+    // Satu unduhan per URL: gambar yang sama (mis. avatar member di banyak kartu show) tidak diunduh
+    // bersamaan ke file yang sama — dulu ini bisa merusak file cache sehingga gambar tak pernah muncul.
+    private val inflight = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
     private val memory = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
@@ -35,35 +41,59 @@ object Images {
     // Lebar dibulatkan ke kelipatan 128 px supaya satu gambar tidak di-decode berkali-kali.
     private fun bucket(widthPx: Int) = ((widthPx.coerceAtLeast(64) + 127) / 128) * 128
 
-    suspend fun load(url: String, widthPx: Int): Bitmap? {
-        if (url.isEmpty()) return null
+    suspend fun load(rawUrl: String, widthPx: Int): Bitmap? {
+        if (rawUrl.isEmpty()) return null
+        val url = Api.imageUrl(rawUrl)
         val k = key(url, widthPx)
         memory.get(k)?.let { return it }
         return withContext(Dispatchers.IO) {
             val file = File(dir, sha1(url))
-            if (!file.exists()) {
-                net.withPermit {
-                    if (!file.exists()) download(url, file)
-                }
+            if (!file.exists() && !fetch(url, file)) return@withContext null
+            val bitmap = decode(file, bucket(widthPx))
+            if (bitmap == null) {
+                // File rusak/terpotong: hapus supaya dicoba lagi lain kali.
+                file.delete()
+                return@withContext null
             }
-            decode(file, bucket(widthPx))?.also { memory.put(k, it) }
+            memory.put(k, bitmap)
+            bitmap
         }
     }
 
-    private fun download(url: String, file: File) {
-        val conn = runCatching { URL(url).openConnection() as HttpURLConnection }.getOrNull() ?: return
-        try {
+    private suspend fun fetch(url: String, file: File): Boolean {
+        val mine = CompletableDeferred<Boolean>()
+        val running = inflight.putIfAbsent(url, mine)
+        if (running != null) return running.await()
+        return try {
+            val ok = net.withPermit { file.exists() || download(url, file) }
+            mine.complete(ok)
+            ok
+        } catch (e: Throwable) {
+            mine.complete(false)
+            throw e
+        } finally {
+            inflight.remove(url)
+        }
+    }
+
+    private suspend fun download(url: String, file: File): Boolean {
+        val headers = if (url.startsWith(Api.base)) runCatching { Api.authHeaders() }.getOrDefault(emptyMap()) else emptyMap()
+        val conn = runCatching { URL(url).openConnection() as HttpURLConnection }.getOrNull() ?: return false
+        val tmp = File(file.path + ".${System.nanoTime()}.part")
+        return try {
             conn.connectTimeout = 15_000
-            conn.readTimeout = 20_000
-            if (conn.responseCode !in 200..299) return
-            val tmp = File(file.path + ".part")
+            conn.readTimeout = 25_000
+            headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+            if (conn.responseCode !in 200..299) return false
             conn.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
             tmp.renameTo(file)
         } catch (_: Exception) {
+            false
         } finally {
+            tmp.delete()
             conn.disconnect()
+            trim()
         }
-        trim()
     }
 
     private fun decode(file: File, reqWidth: Int): Bitmap? = runCatching {

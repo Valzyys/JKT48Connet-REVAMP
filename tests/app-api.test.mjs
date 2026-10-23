@@ -39,6 +39,7 @@ const env = {
       return new Response(
         ["#EXTM3U", "#EXT-X-PLAYLIST-TYPE:VOD", `#EXT-X-MAP:URI="${MP4}",BYTERANGE="100@0"`, "#EXTINF:2,", "#EXT-X-BYTERANGE:500@100", MP4, "#EXTINF:2,", "#EXT-X-BYTERANGE:500@600", MP4, "#EXT-X-ENDLIST", ""].join("\n"),
       );
+    if (url.href === "https://jkt48.com/images/news/a.jpg") return new Response(new Uint8Array([255, 216, 255]), { headers: { "content-type": "image/jpeg" } });
     if (url.href === MP4) return new Response(new Uint8Array(10), { status: 206, headers: { "content-range": "bytes 0-9/1100", "content-length": "10" } });
     return new Response("not found", { status: 404 });
   },
@@ -97,4 +98,15 @@ test("replay links point to the app endpoints and are bound to the app token", a
   assert.equal(upstreamCalls.at(-1).range, "bytes=0-9");
   assert.equal((await call(segment, { token: other })).status, 403, "another install cannot reuse the link");
   assert.equal((await call(rec.url)).status, 401, "no token, no replay");
+});
+
+test("app media proxies jkt48.com images only, with the app token", async () => {
+  const token = await newToken();
+  const img = "/api/app/media?url=" + encodeURIComponent("https://jkt48.com/images/news/a.jpg");
+  assert.equal((await call(img)).status, 401, "no token, no image");
+  const ok = await call(img, { token });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get("content-type"), "image/jpeg");
+  const evil = "/api/app/media?url=" + encodeURIComponent("https://evil.test/a.jpg");
+  assert.equal((await call(evil, { token })).status, 403, "other hosts are refused");
 });

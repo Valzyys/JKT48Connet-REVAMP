@@ -1,5 +1,15 @@
 package app.jkt48connect.ui
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
+import app.jkt48connect.core.Notify
+import app.jkt48connect.ui.screens.AboutScreen
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -122,11 +132,29 @@ private val TABS = listOf(
 )
 
 @Composable
-fun App(onDarkChanged: (Boolean) -> Unit) {
+fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, onOpened: () -> Unit) {
     val dark = isDarkTheme()
-    LaunchedEffect(dark) { onDarkChanged(dark) }
+    var showIntro by rememberSaveable { mutableStateOf(intro) }
+    // Selama intro, ikon status bar putih di atas layar merah.
+    LaunchedEffect(dark, showIntro) { onDarkChanged(dark || showIntro) }
     AppTheme(dark) {
         val nav = remember { Nav() }
+        LaunchedEffect(openTarget) {
+            openTarget?.let {
+                nav.open(it)
+                onOpened()
+            }
+        }
+        // Izin notifikasi (Android 13+) ditanyakan sekali, setelah intro selesai.
+        val context = LocalContext.current
+        val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+        LaunchedEffect(showIntro) {
+            if (!showIntro && Build.VERSION.SDK_INT >= 33 && !Notify.permitted(context) && !Notify.askedOnce(context)) {
+                delay(1200)
+                Notify.markAsked(context)
+                askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
         val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val insets = PaddingValues(top = status + 80.dp, bottom = navBar + 104.dp)
@@ -154,6 +182,10 @@ fun App(onDarkChanged: (Boolean) -> Unit) {
 
         var liveCount by remember { mutableStateOf<Int?>(null) }
         LaunchedEffect(Unit) {
+            // Hangatkan cache tab lain (recent & arsip theater lambat di upstream) selagi beranda tampil.
+            listOf<suspend () -> Unit>(
+                { Api.recent(1) }, { Api.theater(1) }, { Api.nextSchedule() }, { Api.members() }, { Api.news(1) }, { Api.birthdays() },
+            ).forEach { launch { runCatching { it() } } }
             while (true) {
                 runCatching { liveCount = Api.live().size }
                 delay(60_000)
@@ -202,6 +234,7 @@ fun App(onDarkChanged: (Boolean) -> Unit) {
                     }
                     MenuSheet(nav)
                 }
+                if (showIntro) Intro { showIntro = false }
             }
         }
     }
@@ -214,6 +247,7 @@ private fun title(r: Route): String = when (r) {
     Route.Birthday -> "Ulang tahun"
     Route.News, is Route.NewsDetail -> "Berita"
     is Route.Shots -> ""
+    Route.About -> "Tentang"
 }
 
 /** Tab utama (dipertahankan state-nya) + halaman detail yang meluncur dari kanan. */
@@ -254,6 +288,7 @@ private fun Pages(nav: Nav, modifier: Modifier) {
                 Route.News -> NewsScreen()
                 is Route.NewsDetail -> NewsDetailScreen(route.item)
                 is Route.Shots -> ShotViewer(route.urls, route.start)
+                Route.About -> AboutScreen()
             }
         }
     }
@@ -391,6 +426,28 @@ private fun MenuSheet(nav: Nav) {
                         nav.menuOpen = false
                         nav.push(Route.News)
                     }
+                }
+                VGap(10.dp)
+                LiquidButton(
+                    onClick = {
+                        nav.menuOpen = false
+                        nav.push(Route.About)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    backdrop = sheetBackdrop,
+                    shape = RoundedRectangle(24.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.Start,
+                ) {
+                    Box(Modifier.size(38.dp).background(c.brandGradient, RoundedRectangle(13.dp)), contentAlignment = Alignment.Center) {
+                        androidx.compose.foundation.Image(Icons.Rounded.Info, null, Modifier.size(20.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Txt("Tentang & notifikasi", AppText.body(15.sp, c.ink, 800))
+                        Txt("Pemberitahuan live, show, ultah, berita · kredit", AppText.body(12.sp, c.inkSoft), maxLines = 1)
+                    }
+                    androidx.compose.foundation.Image(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.inkSoft))
                 }
                 VGap(22.dp)
                 Micro("Tema · tarik pilnya", color = c.brand, dot = true)
