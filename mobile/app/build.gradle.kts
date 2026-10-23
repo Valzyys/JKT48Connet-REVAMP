@@ -21,18 +21,20 @@ android {
         applicationId = "app.jkt48connect"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "2.2.0"
+        versionCode = 5
+        versionName = "2.2.1"
         buildConfigField("String", "API_BASE", "\"${apiBase.trimEnd('/')}\"")
         androidResources.localeFilters += listOf("in", "en")
     }
 
     signingConfigs {
         if (releaseKeystore != null) create("release") {
+            val env = { name: String -> System.getenv(name)?.takeIf { it.isNotBlank() } }
             storeFile = releaseKeystore
-            storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-            keyAlias = System.getenv("SIGNING_KEY_ALIAS")
-            keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            storePassword = env("SIGNING_STORE_PASSWORD")
+            // Alias & password kunci opsional: bawaan scripts/buat-keystore.sh (alias jkt48connect, password sama).
+            keyAlias = env("SIGNING_KEY_ALIAS") ?: "jkt48connect"
+            keyPassword = env("SIGNING_KEY_PASSWORD") ?: storePassword
         }
     }
 

@@ -109,7 +109,7 @@ Android hanya mau memperbarui aplikasi bila APK baru ditandatangani kunci yang s
 cd mobile && ./scripts/buat-keystore.sh      # menghasilkan jkt48connect-release.jks + .base64
 ```
 
-Lalu tambahkan empat secret di GitHub → Settings → Secrets and variables → Actions: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`jkt48connect`), dan `ANDROID_KEY_PASSWORD`. Simpan file `.jks` dan password-nya di tempat aman, jangan di-commit (sudah di `.gitignore`). Kalau kunci hilang, pengguna harus hapus-pasang sekali lagi.
+Lalu tambahkan dua secret di GitHub → Settings → Secrets and variables → Actions: `ANDROID_KEYSTORE_BASE64` (isi file `.base64`) dan `ANDROID_KEYSTORE_PASSWORD`. `ANDROID_KEY_ALIAS` dan `ANDROID_KEY_PASSWORD` opsional; bawaannya `jkt48connect` dan password keystore. Simpan file `.jks` dan password-nya di tempat aman, jangan di-commit (sudah di `.gitignore`). Kalau kunci hilang, pengguna harus hapus-pasang sekali lagi.
 
 Pengguna yang memasang APK lama (bertanda tangan kunci debug acak) perlu hapus-pasang satu kali ke versi berkunci tetap. Setelah itu update berikutnya bisa langsung dari pop-up. Aplikasi mendeteksi kunci yang berbeda dan menjelaskannya di pop-up.
 

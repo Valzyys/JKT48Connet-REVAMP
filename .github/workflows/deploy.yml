@@ -39,7 +39,9 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           JKT48CONNECT_API_KEY: ${{ secrets.JKT48CONNECT_API_KEY }}
           # Opsional: server push ke aplikasi Android (README → Server push). Kosong = dilewati.
+          # Cukup dua secret berisi isi file dari Firebase: service account JSON dan google-services.json.
           FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
+          FCM_GOOGLE_SERVICES: ${{ secrets.FCM_GOOGLE_SERVICES }}
           FCM_ANDROID_APP_ID: ${{ secrets.FCM_ANDROID_APP_ID }}
           FCM_ANDROID_API_KEY: ${{ secrets.FCM_ANDROID_API_KEY }}
           PM_API_KEY: ${{ secrets.PM_API_KEY }}
