@@ -22,4 +22,5 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:pm
       - run: npm run test:replay
+      - run: npm run test:push
       - run: npm run build

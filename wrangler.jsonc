@@ -29,11 +29,24 @@
     { "name": "SESSION_LIMITER", "namespace_id": "4802", "simple": { "limit": 30, "period": 60 } }
   ],
   // Penjaga anti-iseng (worker/guard-do.ts): poin curiga & blokir per IP. Dibuat otomatis saat deploy.
-  "durable_objects": { "bindings": [{ "name": "GUARD", "class_name": "Guard" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Guard"] }],
+  // PushState (worker/push-do.ts): ID notifikasi yang sudah dikirim + token FCM untuk server push.
+  "durable_objects": {
+    "bindings": [
+      { "name": "GUARD", "class_name": "Guard" },
+      { "name": "PUSH", "class_name": "PushState" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Guard"] },
+    { "tag": "v2", "new_sqlite_classes": ["PushState"] }
+  ],
+  // Server push ke aplikasi Android tiap 2 menit (live); jadwal/ultah/berita/update tiap 10 menit.
+  // Tidak berbuat apa-apa sampai secret FCM_SERVICE_ACCOUNT diatur (lihat README → Server push).
+  "triggers": { "crons": ["*/2 * * * *"] },
   "observability": { "enabled": true }
   // Secret TIDAK ditulis di sini. `npm run deploy:auto` mengisinya otomatis:
   //   JKT48CONNECT_API_KEY   dari env build (wajib, sekali)
   //   SESSION_SECRET         dibuat acak bila belum ada
   //   TURNSTILE_SECRET_KEY   dari env build (opsional; pasangkan VITE_TURNSTILE_SITE_KEY)
+  //   FCM_SERVICE_ACCOUNT, FCM_ANDROID_APP_ID, FCM_ANDROID_API_KEY  dari env build (opsional; server push)
 }

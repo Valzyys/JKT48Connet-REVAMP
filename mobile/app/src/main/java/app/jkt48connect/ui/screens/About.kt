@@ -46,6 +46,11 @@ import app.jkt48connect.BuildConfig
 import app.jkt48connect.core.Api
 import app.jkt48connect.core.Notify
 import app.jkt48connect.core.NotifyKind
+import app.jkt48connect.core.Updater
+import app.jkt48connect.core.Push
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import app.jkt48connect.ui.LocalInsets
 import app.jkt48connect.ui.components.Micro
 import app.jkt48connect.ui.components.PixelLogo
@@ -82,6 +87,10 @@ fun AboutScreen() {
     }
     val permitted = remember(tick) { Notify.permitted(context) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
+    val scope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var checked by remember { mutableStateOf(false) }
+    var checkError by remember { mutableStateOf(false) }
     val toggles = remember { mutableStateMapOf<NotifyKind, Boolean>().apply { NotifyKind.entries.forEach { put(it, Notify.enabled(context, it)) } } }
 
     LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = LocalInsets.current.calculateTopPadding(), bottom = 48.dp)) {
@@ -108,7 +117,45 @@ fun AboutScreen() {
             }
         }
 
-        item { Section("Notifikasi", 1) }
+        item {
+            VGap(12.dp)
+            Row(Modifier.fillMaxWidth().appCard(22.dp).padding(16.dp).staggerIn(1), verticalAlignment = Alignment.CenterVertically) {
+                val newer = Updater.available
+                Column(Modifier.weight(1f)) {
+                    Txt(if (newer != null) "Versi ${newer.version} tersedia" else "Versi ${Updater.current}", AppText.body(15.sp, c.ink, 800))
+                    Txt(
+                        when {
+                            checking -> "Memeriksa update…"
+                            newer != null -> "Versi kamu ${Updater.current}. Ketuk Update."
+                            checkError -> "Tidak bisa memeriksa update. Coba lagi nanti."
+                            checked -> "Sudah versi terbaru."
+                            else -> "Update dicek otomatis dari GitHub Releases."
+                        },
+                        AppText.body(12.5.sp, c.inkSoft),
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                LiquidButton(
+                    onClick = {
+                        if (newer != null) {
+                            Updater.dialog = true
+                        } else if (!checking) {
+                            scope.launch {
+                                checking = true
+                                checkError = runCatching { Updater.check(context, force = true) }.isFailure
+                                checked = true
+                                checking = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.height(40.dp),
+                    tint = if (newer != null) c.brand else Color.Unspecified,
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                ) { Txt(if (newer != null) "Update" else "Periksa", AppText.body(13.sp, if (newer != null) Color.White else c.ink, 800)) }
+            }
+        }
+
+        item { Section("Notifikasi", 2) }
         if (!permitted) item {
             Row(Modifier.fillMaxWidth().appCard(22.dp).padding(16.dp).staggerIn(2), verticalAlignment = Alignment.CenterVertically) {
                 Image(Icons.Rounded.NotificationsActive, null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(c.brand))
@@ -157,7 +204,8 @@ fun AboutScreen() {
             }
             VGap(8.dp)
             Txt(
-                "Diperiksa otomatis tiap ±15 menit saat ada internet. Penghemat baterai bisa membuat pemberitahuan sedikit terlambat.",
+                if (Push.active(context)) "Dikirim langsung dari server JKT48Connect begitu ada kabar (push)."
+                else "Diperiksa otomatis tiap ±15 menit saat ada internet. Penghemat baterai bisa membuat pemberitahuan sedikit terlambat.",
                 AppText.body(12.sp, c.inkSoft),
                 Modifier.padding(horizontal = 6.dp),
             )

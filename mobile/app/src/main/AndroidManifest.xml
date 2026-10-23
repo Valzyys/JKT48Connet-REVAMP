@@ -5,8 +5,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Jadwal pemeriksaan notifikasi (JobScheduler, setPersisted) tetap ada setelah ponsel dinyalakan ulang. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Memasang update APK yang diunduh dari GitHub Releases (pengguna tetap mengonfirmasi di pemasang Android). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
+        android:name=".JktApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
@@ -25,6 +28,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".core.PushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
         <service
             android:name=".core.NotifyJob"
             android:exported="false"

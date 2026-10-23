@@ -38,6 +38,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           JKT48CONNECT_API_KEY: ${{ secrets.JKT48CONNECT_API_KEY }}
+          # Opsional: server push ke aplikasi Android (README → Server push). Kosong = dilewati.
+          FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
+          FCM_ANDROID_APP_ID: ${{ secrets.FCM_ANDROID_APP_ID }}
+          FCM_ANDROID_API_KEY: ${{ secrets.FCM_ANDROID_API_KEY }}
           PM_API_KEY: ${{ secrets.PM_API_KEY }}
           MYPG_API_KEY: ${{ secrets.MYPG_API_KEY }}
           TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}

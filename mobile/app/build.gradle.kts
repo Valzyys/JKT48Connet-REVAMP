@@ -9,6 +9,10 @@ val apiBase: String = (findProperty("apiBase") as String?)
     ?: System.getenv("API_BASE")?.takeIf { it.isNotBlank() }
     ?: "https://jkt48connect.app"
 
+// Kunci rilis tetap (dari GitHub Secrets di workflow rilis) supaya APK baru bisa memperbarui yang lama
+// tanpa hapus-pasang. Tanpa SIGNING_STORE_FILE dipakai kunci debug (hanya untuk dicoba).
+val releaseKeystore: File? = System.getenv("SIGNING_STORE_FILE")?.takeIf { it.isNotBlank() }?.let(::file)?.takeIf { it.exists() }
+
 android {
     namespace = "app.jkt48connect"
     compileSdk = 37
@@ -17,10 +21,19 @@ android {
         applicationId = "app.jkt48connect"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "2.1.0"
+        versionCode = 4
+        versionName = "2.2.0"
         buildConfigField("String", "API_BASE", "\"${apiBase.trimEnd('/')}\"")
         androidResources.localeFilters += listOf("in", "en")
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) create("release") {
+            storeFile = releaseKeystore
+            storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+            keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+            keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -28,8 +41,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Belum ada keystore rilis: APK ditandatangani kunci debug (hanya untuk dicoba).
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (releaseKeystore != null) "release" else "debug")
             vcsInfo.include = false
         }
     }
@@ -66,4 +78,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.media3:media3-exoplayer:1.9.2")
     implementation("androidx.media3:media3-exoplayer-hls:1.9.2")
+    // Server push (FCM). Dikonfigurasi saat runtime dari worker, jadi tanpa plugin google-services.
+    implementation("com.google.firebase:firebase-messaging:25.1.3")
 }

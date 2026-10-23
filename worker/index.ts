@@ -1,11 +1,14 @@
 import { handleApi, type ProxyEnv } from "./proxy";
 
 export { Guard } from "./guard-do";
+export { PushState } from "./push-do";
+import type { PushState } from "./push-do";
 
 import { handlePm, type PmEnv } from "./pm";
 
 interface Env extends ProxyEnv, PmEnv {
   ASSETS: Fetcher;
+  PUSH?: DurableObjectNamespace<PushState>;
 }
 
 export default {
@@ -16,5 +19,10 @@ export default {
     if (pathname.startsWith("/api/")) return handleApi(request, env, ctx);
     // Selain /api, sajikan file statis hasil `vite build` (SPA fallback diatur di wrangler.jsonc).
     return env.ASSETS.fetch(request);
+  },
+  // Cron (wrangler.jsonc → triggers.crons): server push live/show/ultah/berita/update ke aplikasi (worker/push.ts).
+  async scheduled(controller, env, ctx) {
+    if (!env.PUSH || !env.FCM_SERVICE_ACCOUNT) return;
+    ctx.waitUntil(env.PUSH.get(env.PUSH.idFromName("main")).tick(controller.scheduledTime));
   },
 } satisfies ExportedHandler<Env>;

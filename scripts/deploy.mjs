@@ -8,13 +8,16 @@
  *        SESSION_SECRET        ← dibuat acak bila belum ada (TIDAK pernah ditimpa: menimpa = semua sesi batal)
  *        TURNSTILE_SECRET_KEY  ← dari env bila diisi
  *        GUARD_ADMIN_TOKEN     ← dari env bila diisi (≥ 24 karakter), untuk `npm run guard:unblock`
+ *        FCM_SERVICE_ACCOUNT, FCM_ANDROID_APP_ID, FCM_ANDROID_API_KEY
+ *                              ← dari env bila diisi: server push ke aplikasi Android (cron tiap 2 menit).
+ *                                FCM_SERVICE_ACCOUNT boleh berisi JSON-nya atau path ke file .json.
  *
  *   npm run deploy:auto
  *   JKT48CONNECT_API_KEY=jkc_… npm run deploy:auto
  */
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { setupPm } from "./pm-setup.mjs";
 
@@ -98,5 +101,28 @@ if (adminToken) {
   }
   put("GUARD_ADMIN_TOKEN", adminToken);
 }
+
+// Server push (worker/push.ts): ketiganya harus ada supaya aktif; tanpa itu cron tidak berbuat apa-apa.
+const fcm = process.env.FCM_SERVICE_ACCOUNT ?? "";
+if (fcm) {
+  const json = fcm.trim().startsWith("{") ? fcm : readFileSync(fcm, "utf8");
+  let sa;
+  try {
+    sa = JSON.parse(json);
+  } catch {
+    console.error("✗ FCM_SERVICE_ACCOUNT bukan JSON service account yang valid");
+    process.exit(1);
+  }
+  if (!sa.project_id || !sa.client_email || !String(sa.private_key ?? "").includes("PRIVATE KEY")) {
+    console.error("✗ FCM_SERVICE_ACCOUNT harus JSON service account Firebase (project_id, client_email, private_key)");
+    process.exit(1);
+  }
+  put("FCM_SERVICE_ACCOUNT", JSON.stringify(sa));
+}
+for (const name of ["FCM_ANDROID_APP_ID", "FCM_ANDROID_API_KEY"]) {
+  if (process.env[name]) put(name, process.env[name]);
+}
+if (!fcm && !existing.has("FCM_SERVICE_ACCOUNT"))
+  console.log("· Server push belum diatur (opsional). Lihat README → Server push.");
 
 console.log("\n✓ Selesai.\n");
