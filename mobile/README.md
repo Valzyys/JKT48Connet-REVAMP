@@ -2,13 +2,17 @@
 
 Aplikasi Android/iOS fan-made untuk mengikuti member JKT48. UI bergaya **Liquid Glass** memakai paket [`liquid_glass_easy`](https://pub.dev/packages/liquid_glass_easy): kepala atas, tab bar, segmented, kolom cari, panel profil, dan tombol pemutar adalah lensa kaca yang membiaskan isi di belakangnya.
 
+**Tema.** Ada tema putih (latar putih bersih, kaca susu) dan tema gelap (hitam pekat netral, kaca asap). Pilih lewat tombol matahari/bulan di kepala atas: Ikuti sistem, Putih, atau Gelap. Pilihan disimpan di perangkat. Di belakang isi ada cahaya ambient merah muda yang melayang pelan, supaya kaca punya warna untuk dibiaskan.
+
+**Efek sentuh kaca.** Setiap tombol kaca menyala putih dari titik jari saat disentuh. Cahayanya mengikuti jari, tepi kaca ikut terang, lalu memudar pelan saat dilepas. Efek ini ada di tombol kepala atas, tab bar, pintasan beranda, segmented, kolom cari, chip sosial, dan tombol pemutar. Kartu biasa (bukan kaca) mengecil sedikit saat ditekan.
+
 Data diambil dari worker situs yang sama (`worker/proxy.ts`) lewat jalur khusus aplikasi `/api/app/*`.
 
 ## Isi
 
 | Tab / halaman | Isi |
 |---|---|
-| Beranda | Hero dengan logo piksel yang tersusun, live sekarang (kartu foto + pil kaca LIVE), show berikutnya dengan hitung mundur, recent, ulang tahun, berita |
+| Beranda | Hero merah dengan logo piksel yang tersusun, pintasan kaca, live sekarang (kartu foto + pil kaca LIVE), show berikutnya dengan hitung mundur, recent, ulang tahun, berita |
 | Live | Semua member yang sedang live (IDN/Showroom), diperbarui tiap 30 detik, ketuk untuk membuka live |
 | Jadwal | Segmented kaca: jadwal mendatang (dikelompokkan per tanggal) dan arsip theater (muat-lanjut); detail theater dengan member tampil, setlist, hitung mundur |
 | Recent | Rekap live (muat-lanjut); detail berisi statistik, replay, top supporter, gift, cuplikan layar (bisa digeser/zoom) |
@@ -66,9 +70,9 @@ lib/
   main.dart                 tema, shader kaca dimuat di awal
   core/  api.dart           klien /api/app (token, cache memori)
          models.dart        model data (sama dengan src/lib/shape.ts)
-         theme.dart         warna & tipografi (Archivo, IBM Plex Mono)
+         theme.dart         tema putih & gelap, pilihan tema, tipografi (Archivo, IBM Plex Mono)
          format.dart        tanggal WIB, durasi, angka
-  widgets/ glass.dart       gaya kaca, GlassChip, GlassSegmented
+  widgets/ glass.dart       gaya kaca, efek sentuh PressGlow, GlassChip, GlassIconButton, GlassSegmented, Pressable, latar Ambient
            common.dart      logo piksel, signal bars, skeleton, countdown, count-up
            cards.dart       kartu live/show/recent/berita
            detail_scaffold.dart  halaman detail dengan kepala kaca

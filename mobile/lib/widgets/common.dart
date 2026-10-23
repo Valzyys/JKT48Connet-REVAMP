@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
+import 'glass.dart';
 
 /// Logo salib piksel JKT48Connect (grid 5×5, 12 piksel, tengah kosong). `assemble` = piksel terbang lalu tersusun.
 class PixelLogo extends StatelessWidget {
@@ -112,7 +113,7 @@ class Micro extends StatelessWidget {
   }
 }
 
-/// Judul bagian: label mikro + judul condensed + tautan "Semua".
+/// Judul bagian: label mikro + judul condensed + tombol "Semua".
 class SectionHead extends StatelessWidget {
   const SectionHead({super.key, required this.label, required this.title, this.onMore});
   final String label, title;
@@ -121,7 +122,7 @@ class SectionHead extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
+      padding: const EdgeInsets.fromLTRB(20, 30, 20, 12),
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -131,16 +132,43 @@ class SectionHead extends StatelessWidget {
           ]),
         ),
         if (onMore != null)
-          TextButton(
-            onPressed: onMore,
-            style: TextButton.styleFrom(foregroundColor: c.ink),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text('SEMUA', style: AppText.micro(color: c.ink)),
-              const SizedBox(width: 4),
-              const Icon(Icons.north_east_rounded, size: 14),
-            ]),
+          Pressable(
+            onTap: onMore,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 7, 9, 7),
+              decoration: c.cardDecoration(radius: 99),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('SEMUA', style: AppText.micro(color: c.ink, size: 10)),
+                const SizedBox(width: 4),
+                Icon(Icons.north_east_rounded, size: 13, color: c.brand),
+              ]),
+            ),
           ),
       ]),
+    );
+  }
+}
+
+/// Kepala halaman tab: label mikro + judul besar + elemen kanan opsional (mis. angka).
+class PageHeader extends StatelessWidget {
+  const PageHeader({super.key, required this.label, required this.title, this.trailing});
+  final String label, title;
+  final Widget? trailing;
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Micro(label, color: c.brand, dot: true),
+            const SizedBox(height: 8),
+            Text(title.toUpperCase(), style: AppText.display(44, color: c.ink)),
+          ]),
+        ),
+        ?trailing,
+      ]).animate().fadeIn(duration: 380.ms).slideX(begin: -0.04, end: 0, curve: Curves.easeOutCubic),
     );
   }
 }
@@ -255,7 +283,14 @@ class ErrorRetry extends StatelessWidget {
         const SizedBox(height: 10),
         Text('$error', textAlign: TextAlign.center, style: AppText.body(14, color: c.inkSoft)),
         const SizedBox(height: 12),
-        FilledButton(onPressed: onRetry, style: FilledButton.styleFrom(backgroundColor: c.brand), child: const Text('Coba lagi')),
+        Pressable(
+          onTap: onRetry,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+            decoration: BoxDecoration(gradient: c.brandGradient, borderRadius: BorderRadius.circular(99)),
+            child: Text('Coba lagi', style: AppText.body(14, color: Colors.white, weight: 800)),
+          ),
+        ),
       ]),
     );
   }

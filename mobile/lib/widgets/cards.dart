@@ -21,7 +21,7 @@ class LiveCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final img = live.banner.isNotEmpty ? live.banner : (live.img.isNotEmpty ? live.img : live.avatar);
-    return GestureDetector(
+    return Pressable(
       onTap: () => openUrl(live.link),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
@@ -73,7 +73,7 @@ Pill categoryPill(BuildContext context, String category) {
   return switch (category) {
     'exclusive' => Pill('Exclusive', bg: c.blush, fg: c.brand),
     'general' => Pill('Event', bg: c.surface, fg: c.inkSoft),
-    _ => Pill('Show', bg: c.butter, fg: const Color(0xFF7A4B00)),
+    _ => Pill('Show', bg: c.butter, fg: c.butterInk),
   };
 }
 
@@ -87,22 +87,26 @@ class ShowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
     final t = parseTime(show.date);
-    return Material(
-      color: c.card,
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: onTap,
+    final soon = t != null && t.isAfter(DateTime.now()) && t.difference(DateTime.now()).inHours < 24;
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        decoration: c.cardDecoration(radius: 24),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           child: Row(children: [
             Container(
-              width: 58,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(16)),
+              width: 60,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                gradient: soon ? c.brandGradient : null,
+                color: soon ? null : c.bg.withValues(alpha: c.dark ? 0.6 : 1),
+                borderRadius: BorderRadius.circular(18),
+              ),
               child: Column(children: [
-                Text(t == null ? '–' : '${t.day}', style: AppText.display(28, color: c.ink)),
-                Text(fmtDate(show.date, pattern: 'MMM'), style: AppText.micro(color: c.inkSoft)),
+                Text(t == null ? '–' : '${t.day}', style: AppText.display(28, color: soon ? Colors.white : c.ink)),
+                const SizedBox(height: 2),
+                Text(fmtDate(show.date, pattern: 'MMM').toUpperCase(), style: AppText.micro(color: soon ? Colors.white70 : c.inkSoft, size: 9.5)),
               ]),
             ),
             const SizedBox(width: 14),
@@ -123,10 +127,11 @@ class ShowTile extends StatelessWidget {
 
 /// Deret foto bulat yang saling menumpuk.
 class AvatarStack extends StatelessWidget {
-  const AvatarStack(this.images, {super.key, this.size = 26, this.max = 6});
+  const AvatarStack(this.images, {super.key, this.size = 26, this.max = 6, this.ring, this.extraColor});
   final List<String> images;
   final double size;
   final int max;
+  final Color? ring, extraColor;
   @override
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
@@ -141,7 +146,7 @@ class AvatarStack extends StatelessWidget {
             child: Container(
               width: size,
               height: size,
-              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: c.card, width: 2)),
+              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: ring ?? c.card, width: 2)),
               child: ClipOval(child: NetImage(url)),
             ),
           ),
@@ -149,7 +154,7 @@ class AvatarStack extends StatelessWidget {
           Positioned(
             left: shown.length * size * 0.68 + 4,
             top: size * 0.22,
-            child: Text('+$extra', style: AppText.mono(11, color: c.inkSoft, weight: FontWeight.w600)),
+            child: Text('+$extra', style: AppText.mono(11, color: extraColor ?? c.inkSoft, weight: FontWeight.w600)),
           ),
       ]),
     );
@@ -164,16 +169,14 @@ class RecentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
-    return Material(
-      color: c.card,
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: onTap,
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        decoration: c.cardDecoration(radius: 24),
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(children: [
-            ClipRRect(borderRadius: BorderRadius.circular(16), child: SizedBox(width: 62, height: 74, child: NetImage(r.img, fallback: r.name))),
+            ClipRRect(borderRadius: BorderRadius.circular(18), child: SizedBox(width: 62, height: 74, child: NetImage(r.img, fallback: r.name))),
             const SizedBox(width: 14),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -210,11 +213,12 @@ class NewsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
-    return InkWell(
+    return Pressable(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        decoration: c.cardDecoration(radius: 22),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           if (index != null) ...[
             SizedBox(width: 30, child: Text((index! + 1).toString().padLeft(2, '0'), style: AppText.mono(12, color: c.brand, weight: FontWeight.w600))),
@@ -228,7 +232,12 @@ class NewsTile extends StatelessWidget {
               Text(fmtDate(n.date, pattern: 'd MMMM yyyy'), style: AppText.mono(11, color: c.inkSoft)),
             ]),
           ),
-          Icon(Icons.north_east_rounded, size: 16, color: c.inkSoft),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(color: c.bg.withValues(alpha: c.dark ? 0.6 : 1), shape: BoxShape.circle),
+            child: Icon(Icons.north_east_rounded, size: 15, color: c.brand),
+          ),
         ]),
       ),
     );

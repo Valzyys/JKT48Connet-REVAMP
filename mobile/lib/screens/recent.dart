@@ -67,14 +67,7 @@ class _RecentScreenState extends State<RecentScreen> {
         child: ListView(
           padding: const EdgeInsets.only(top: kTopInset, bottom: kBottomInset),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Micro('Gift · supporter · replay', color: c.brand, dot: true),
-                const SizedBox(height: 6),
-                Text('RECENT', style: AppText.display(40, color: c.ink)),
-              ]),
-            ),
+            const PageHeader(label: 'Gift · supporter · replay', title: 'Recent'),
             if (_items.isEmpty && _loading)
               for (var i = 0; i < 5; i++) const Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 10), child: Skeleton(height: 94)),
             for (final (i, r) in _items.indexed)
@@ -152,17 +145,31 @@ class _RecentDetailScreenState extends State<RecentDetailScreen> {
                   const SizedBox(height: 26),
                   Micro('Top supporter', color: c.brand, dot: true),
                   const SizedBox(height: 10),
-                  for (final (i, f) in d.fans.take(10).indexed)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(children: [
-                        SizedBox(width: 30, child: Text((i + 1).toString().padLeft(2, '0'), style: AppText.mono(12, color: i < 3 ? c.brand : c.inkSoft, weight: FontWeight.w600))),
-                        ClipOval(child: SizedBox(width: 34, height: 34, child: NetImage(f.avatar, fallback: f.name))),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.body(14, color: c.ink, weight: 700))),
-                        Text(fmtNum(f.amount), style: AppText.mono(12.5, color: c.ink, weight: FontWeight.w600)),
-                      ]),
-                    ).staggerIn(i, step: 30),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: c.cardDecoration(radius: 24),
+                    child: Column(children: [
+                      for (final (i, f) in d.fans.take(10).indexed)
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(border: i == 0 ? null : Border(top: BorderSide(color: c.line, width: 0.8))),
+                          child: Row(children: [
+                            Container(
+                              width: 26,
+                              height: 26,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(gradient: i < 3 ? c.brandGradient : null, shape: BoxShape.circle),
+                              child: Text('${i + 1}', style: AppText.mono(11.5, color: i < 3 ? Colors.white : c.inkSoft, weight: FontWeight.w600)),
+                            ),
+                            const SizedBox(width: 10),
+                            ClipOval(child: SizedBox(width: 34, height: 34, child: NetImage(f.avatar, fallback: f.name))),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.body(14, color: c.ink, weight: 700))),
+                            Text(fmtNum(f.amount), style: AppText.mono(12.5, color: i < 3 ? c.brand : c.ink, weight: FontWeight.w600)),
+                          ]),
+                        ).staggerIn(i, step: 30),
+                    ]),
+                  ),
                 ],
                 if (d.gifts.isNotEmpty) ...[
                   const SizedBox(height: 26),
@@ -172,7 +179,7 @@ class _RecentDetailScreenState extends State<RecentDetailScreen> {
                     for (final g in d.gifts.take(18))
                       Container(
                         padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
-                        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(99)),
+                        decoration: c.cardDecoration(radius: 99),
                         child: Row(mainAxisSize: MainAxisSize.min, children: [
                           SizedBox(width: 26, height: 26, child: g.img.isEmpty ? Icon(Icons.redeem_rounded, color: c.brand, size: 18) : NetImage(g.img, fit: BoxFit.contain, alignment: Alignment.center)),
                           const SizedBox(width: 6),
@@ -208,7 +215,7 @@ class _RecentDetailScreenState extends State<RecentDetailScreen> {
         opaque: false,
         barrierColor: Colors.black87,
         pageBuilder: (_, _, _) => _ShotViewer(d.screenshots.map((s) => s.url).toList(), start),
-        transitionsBuilder: (_, a, __, child) => FadeTransition(opacity: a, child: child),
+        transitionsBuilder: (_, a, _, child) => FadeTransition(opacity: a, child: child),
       ));
 }
 
@@ -222,7 +229,7 @@ class _StatBox extends StatelessWidget {
     final c = AppColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(color: accent ? c.brand : c.card, borderRadius: BorderRadius.circular(20)),
+      decoration: accent ? BoxDecoration(gradient: c.brandGradient, borderRadius: BorderRadius.circular(22)) : c.cardDecoration(radius: 22),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
         Text(label.toUpperCase(), style: AppText.micro(color: accent ? Colors.white70 : c.inkSoft, size: 9.5)),
         const SizedBox(height: 4),
@@ -257,14 +264,14 @@ class _ReplayPanelState extends State<_ReplayPanel> {
           : (DateTime.now().difference(start).inSeconds / unlock.difference(start).inSeconds).clamp(0.0, 1.0);
       return Container(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: c.nav, borderRadius: BorderRadius.circular(26)),
+        decoration: c.panelDecoration(radius: 28),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
               width: 46,
               height: 46,
-              decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(14)),
-              child: Icon(Icons.lock_rounded, color: c.brand),
+              decoration: BoxDecoration(gradient: c.brandGradient, borderRadius: BorderRadius.circular(15)),
+              child: const Icon(Icons.lock_rounded, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 14),
             Expanded(child: Text('REPLAY · TERBUKA 72 JAM SETELAH LIVE', style: AppText.micro(color: Colors.white54))),
@@ -297,7 +304,7 @@ class _ReplayPanelState extends State<_ReplayPanel> {
     final rec = d.recordings[_part.clamp(0, d.recordings.length - 1)];
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: c.nav, borderRadius: BorderRadius.circular(26)),
+      decoration: c.panelDecoration(radius: 28),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
@@ -443,14 +450,12 @@ class _ReplayPlayerState extends State<ReplayPlayer> {
                                   ),
                                 ),
                                 Center(
-                                  child: GestureDetector(
+                                  child: GlassChip(
+                                    dark: true,
+                                    radius: 37,
                                     onTap: _toggle,
-                                    child: GlassChip(
-                                      dark: true,
-                                      radius: 36,
-                                      padding: const EdgeInsets.all(18),
-                                      child: Icon(v.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 38),
-                                    ),
+                                    padding: const EdgeInsets.all(18),
+                                    child: Icon(v.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 38),
                                   ),
                                 ),
                                 Positioned(
@@ -519,10 +524,7 @@ class _ShotViewer extends StatelessWidget {
         Positioned(
           top: MediaQuery.paddingOf(context).top + 10,
           right: 16,
-          child: GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: const GlassChip(dark: true, radius: 22, padding: EdgeInsets.all(10), child: Icon(Icons.close_rounded, color: Colors.white)),
-          ),
+          child: GlassChip(dark: true, radius: 22, onTap: () => Navigator.of(context).pop(), padding: const EdgeInsets.all(10), child: const Icon(Icons.close_rounded, color: Colors.white)),
         ),
       ]),
     );

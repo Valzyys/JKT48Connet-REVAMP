@@ -46,43 +46,35 @@ class _MembersScreenState extends State<MembersScreen> {
           child: CustomScrollView(slivers: [
             const SliverToBoxAdapter(child: SizedBox(height: kTopInset)),
             SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Micro('JKT48', color: c.brand, dot: true),
-                      const SizedBox(height: 6),
-                      Text('MEMBER', style: AppText.display(40, color: c.ink)),
-                    ]),
-                  ),
-                  CountUp(list.length, style: AppText.display(40, color: c.brand)),
-                ]),
-              ),
+              child: PageHeader(label: 'JKT48', title: 'Member', trailing: CountUp(list.length, style: AppText.display(48, color: c.brand))),
             ),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: LiquidGlassLens(
-                  style: glass(context, 22),
-                  child: SizedBox(
-                    height: 48,
-                    child: Row(children: [
-                      const SizedBox(width: 14),
-                      Icon(Icons.search_rounded, color: c.inkSoft),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          onChanged: (v) => setState(() => _q = v),
-                          style: AppText.body(15, color: c.ink),
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Cari oshi kamu…',
-                            hintStyle: AppText.body(15, color: c.inkSoft),
+                  style: glass(context, 24),
+                  child: PressGlow(
+                    radius: 24,
+                    haptic: false,
+                    child: SizedBox(
+                      height: 50,
+                      child: Row(children: [
+                        const SizedBox(width: 14),
+                        Icon(Icons.search_rounded, color: c.inkSoft),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            onChanged: (v) => setState(() => _q = v),
+                            style: AppText.body(15, color: c.ink),
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              hintText: 'Cari oshi kamu…',
+                              hintStyle: AppText.body(15, color: c.inkSoft),
+                            ),
                           ),
                         ),
-                      ),
-                    ]),
+                      ]),
+                    ),
                   ),
                 ),
               ),
@@ -121,10 +113,10 @@ class _MemberCard extends StatelessWidget {
   final int index;
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MemberDetailScreen(m.id, name: m.name, img: m.img))),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         child: Stack(fit: StackFit.expand, children: [
           Hero(tag: 'member-${m.id}', child: NetImage(m.img, fallback: m.name)),
           const DecoratedBox(
@@ -137,7 +129,7 @@ class _MemberCard extends StatelessWidget {
             top: 10,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: AppColors.of(context).brand, borderRadius: BorderRadius.circular(99)),
+              decoration: BoxDecoration(gradient: AppColors.of(context).brandGradient, borderRadius: BorderRadius.circular(99)),
               child: Text((index + 1).toString().padLeft(2, '0'), style: AppText.mono(10, color: Colors.white, weight: FontWeight.w600)),
             ),
           ),
@@ -238,15 +230,13 @@ class MemberDetailScreen extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
                     child: Wrap(spacing: 8, runSpacing: 8, children: [
                       for (final so in m.socials)
-                        GestureDetector(
+                        GlassChip(
                           onTap: () => openUrl(so.url),
-                          child: GlassChip(
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text(so.title, style: AppText.body(13, color: c.ink, weight: 700)),
-                              const SizedBox(width: 4),
-                              Icon(Icons.north_east_rounded, size: 14, color: c.ink),
-                            ]),
-                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text(so.title, style: AppText.body(13, color: c.ink, weight: 700)),
+                            const SizedBox(width: 4),
+                            Icon(Icons.north_east_rounded, size: 14, color: c.brand),
+                          ]),
                         ),
                     ]).staggerIn(4),
                   ),
@@ -278,7 +268,7 @@ class _Stat extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(18)),
+        decoration: c.cardDecoration(radius: 18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label.toUpperCase(), style: AppText.micro(color: c.inkSoft, size: 9)),
           const SizedBox(height: 4),
@@ -299,7 +289,7 @@ class _BigStat extends StatelessWidget {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: c.nav, borderRadius: BorderRadius.circular(20)),
+        decoration: c.panelDecoration(radius: 22),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label.toUpperCase(), style: AppText.micro(color: Colors.white54, size: 9.5)),
           const SizedBox(height: 6),

@@ -9,6 +9,7 @@ import 'screens/shell.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('id_ID');
+  await ThemeController.instance.load();
   // Kompilasi shader kaca di awal supaya kaca pertama langsung tampil sempurna.
   await LiquidGlassShaders.ensureLoaded();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -19,11 +20,17 @@ class JktApp extends StatelessWidget {
   const JktApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'JKT48Connect',
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
-        home: const Shell(),
+  Widget build(BuildContext context) => ValueListenableBuilder(
+        valueListenable: ThemeController.instance,
+        builder: (_, mode, _) => MaterialApp(
+          title: 'JKT48Connect',
+          debugShowCheckedModeBanner: false,
+          themeMode: mode,
+          theme: buildTheme(Brightness.light),
+          darkTheme: buildTheme(Brightness.dark),
+          themeAnimationDuration: const Duration(milliseconds: 380),
+          builder: (context, child) => AnnotatedRegion(value: overlayStyle(Theme.of(context).brightness), child: child!),
+          home: const Shell(),
+        ),
       );
 }

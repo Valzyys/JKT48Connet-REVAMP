@@ -7,6 +7,7 @@ import '../core/models.dart';
 import '../core/theme.dart';
 import '../widgets/common.dart';
 import '../widgets/detail_scaffold.dart';
+import '../widgets/glass.dart';
 import 'members.dart';
 import 'shell.dart';
 
@@ -32,11 +33,15 @@ class BirthdayBubble extends StatelessWidget {
       width: 74,
       height: 74,
       padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: d == 0 ? c.brand : c.line, width: 2.5)),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: d == 0 ? c.brandGradient : null,
+        border: d == 0 ? null : Border.all(color: c.line, width: 2),
+      ),
       child: ClipOval(child: NetImage(b.img, fallback: b.name)),
     );
     if (d == 0) photo = photo.animate(onPlay: (x) => x.repeat(reverse: true)).scaleXY(begin: 1, end: 1.06, duration: 900.ms);
-    return GestureDetector(
+    return Pressable(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MemberDetailScreen(b.id, name: b.name, img: b.img))),
       child: SizedBox(
         width: 82,
@@ -76,7 +81,13 @@ class BirthdayScreen extends StatelessWidget {
               final age = born == null ? null : DateTime.now().add(Duration(days: d)).year - born.year;
               return Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: d == 0 ? c.brand : c.card, borderRadius: BorderRadius.circular(22)),
+                decoration: d == 0
+                    ? BoxDecoration(
+                        gradient: c.brandGradient,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [BoxShadow(color: c.brand.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
+                      )
+                    : c.cardDecoration(radius: 24),
                 child: Row(children: [
                   ClipRRect(borderRadius: BorderRadius.circular(16), child: SizedBox(width: 56, height: 66, child: NetImage(b.img, fallback: b.name))),
                   const SizedBox(width: 14),

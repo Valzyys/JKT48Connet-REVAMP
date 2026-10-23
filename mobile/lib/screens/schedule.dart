@@ -72,14 +72,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         child: ListView(
           padding: const EdgeInsets.only(top: kTopInset, bottom: kBottomInset),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Micro('Theater & event', color: c.brand, dot: true),
-                const SizedBox(height: 6),
-                Text('JADWAL', style: AppText.display(40, color: c.ink)),
-              ]),
-            ),
+            const PageHeader(label: 'Theater & event', title: 'Jadwal'),
             Center(
               child: GlassSegmented(segments: const ['Mendatang', 'Theater'], selected: _seg, onChanged: (i) => setState(() => _seg = i), width: (w - 40).clamp(240.0, 420.0), height: 46),
             ),
@@ -152,7 +145,7 @@ class TheaterDetailScreen extends StatelessWidget {
                 const SizedBox(height: 14),
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: c.brand, borderRadius: BorderRadius.circular(20)),
+                  decoration: BoxDecoration(gradient: c.brandGradient, borderRadius: BorderRadius.circular(20)),
                   child: Row(children: [
                     const Icon(Icons.timer_outlined, color: Colors.white),
                     const SizedBox(width: 10),
@@ -174,7 +167,7 @@ class TheaterDetailScreen extends StatelessWidget {
                   childAspectRatio: 0.72,
                   children: [
                     for (final (i, m) in t.members.indexed)
-                      GestureDetector(
+                      Pressable(
                         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MemberDetailScreen(m.id, name: m.name, img: m.img))),
                         child: Column(children: [
                           Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(16), child: NetImage(m.img, fallback: m.name))),

@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/detail_scaffold.dart';
+import '../widgets/glass.dart';
 import 'shell.dart';
 
 class NewsScreen extends StatefulWidget {
@@ -92,7 +93,7 @@ class NewsDetailScreen extends StatelessWidget {
       title: 'Berita',
       actions: [
         if (item.url.isNotEmpty)
-          IconButton(tooltip: 'Buka di jkt48.com', onPressed: () => openUrl(item.url), icon: Icon(Icons.open_in_new_rounded, color: c.ink, size: 20)),
+          GlassIconButton(tooltip: 'Buka di jkt48.com', onTap: () => openUrl(item.url), icon: const Icon(Icons.open_in_new_rounded, size: 20)),
       ],
       body: FutureBuilder(
         future: Api.instance.newsDetail(item.id),
