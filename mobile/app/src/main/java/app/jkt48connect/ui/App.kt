@@ -137,10 +137,11 @@ private val TABS = listOf(
 fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, onOpened: () -> Unit) {
     val dark = isDarkTheme()
     var showIntro by rememberSaveable { mutableStateOf(intro) }
-    // Selama intro, ikon status bar putih di atas layar merah.
-    LaunchedEffect(dark, showIntro) { onDarkChanged(dark || showIntro) }
     AppTheme(dark) {
         val nav = remember { Nav() }
+        // Ikon status bar putih saat intro (layar merah) dan penampil cuplikan (layar hitam).
+        val immersive = nav.stack.lastOrNull() is Route.Shots
+        LaunchedEffect(dark, showIntro, immersive) { onDarkChanged(dark || showIntro || immersive) }
         LaunchedEffect(openTarget) {
             openTarget?.let {
                 if (it == "update") Updater.dialog = true else nav.open(it)
@@ -296,7 +297,7 @@ private fun Pages(nav: Nav, modifier: Modifier) {
                 Route.Birthday -> BirthdayScreen()
                 Route.News -> NewsScreen()
                 is Route.NewsDetail -> NewsDetailScreen(route.item)
-                is Route.Shots -> ShotViewer(route.urls, route.start)
+                is Route.Shots -> ShotViewer(route.urls, route.start, route.title)
                 Route.About -> AboutScreen()
             }
         }
