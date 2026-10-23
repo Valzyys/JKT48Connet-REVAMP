@@ -1,0 +1,29 @@
+name: Mobile
+
+on:
+  pull_request:
+    paths: ["mobile/**", ".github/workflows/mobile.yml"]
+  push:
+    branches-ignore: [main]
+    paths: ["mobile/**", ".github/workflows/mobile.yml"]
+
+# Token GITHUB_TOKEN hanya baca.
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # Flutter diunduh langsung dari rilis resmi (tanpa action pihak ketiga).
+      - name: Install Flutter 3.47.7
+        run: |
+          curl -sSL https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.7-stable.tar.xz | tar -xJ -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter --disable-analytics
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos

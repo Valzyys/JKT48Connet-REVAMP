@@ -116,6 +116,17 @@ memuat ulang halaman.
 
 Area baru `/pm` menyediakan akun, akses berbayar per member, QR MYPG di `/pm/pay/:id`, riwayat transaksi, chat dengan pagination dan polling, serta proxy media dengan pemeriksaan akses. D1 dibuat dan dimigrasikan otomatis melalui `npm run deploy:auto`. Tambahkan secret server `PM_API_KEY` dan `MYPG_API_KEY`; token Cloudflare perlu izin D1 Edit. Panduan lengkap: [docs/pm.md](docs/pm.md).
 
+## Aplikasi mobile (Flutter)
+
+Folder [`mobile/`](mobile/README.md) berisi aplikasi Android/iOS bergaya Liquid Glass ([`liquid_glass_easy`](https://pub.dev/packages/liquid_glass_easy)): beranda, live, jadwal/theater, recent dengan replay HLS, member, ulang tahun, dan berita.
+
+Aplikasi tidak punya cookie/Origin browser, jadi worker menyediakan jalur `/api/app/*`:
+- `POST /api/app/session` memberi token Bearer `a1.…` (HMAC, 30 hari, dibatasi per IP).
+- `GET /api/app/<endpoint>` menyajikan data JSON yang sama dengan `/api/<endpoint>`, lewat allowlist, cache, dan penjaga yang sama, dibatasi per token.
+- `GET /api/app/replay[/hls]` menyajikan replay dengan token yang terikat ke token aplikasi.
+
+Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`).
+
 ## Menjalankan lokal
 
 ```sh

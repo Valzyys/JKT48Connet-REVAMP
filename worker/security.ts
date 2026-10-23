@@ -102,6 +102,33 @@ export async function readSession(k: Keys, request: Request): Promise<SessionRea
   return { ok: true, session: { sid: m[1], exp } };
 }
 
+/* ───────────────────────────── Token aplikasi mobile ───────────────────────────── */
+
+/** Umur token aplikasi; aplikasi meminta token baru otomatis saat kedaluwarsa. */
+export const APP_TOKEN_TTL = 30 * 24 * 60 * 60;
+
+/**
+ * Aplikasi native tidak punya cookie/Origin browser, jadi memakai token `a1.<sid>.<exp>.<sig>` di header
+ * `Authorization: Bearer`. Awalan berbeda dari cookie (`v1`) sehingga keduanya tidak bisa saling dipakai.
+ */
+export async function issueAppToken(k: Keys): Promise<{ session: Session; token: string }> {
+  const session = { sid: b64url(crypto.getRandomValues(new Uint8Array(16))), exp: Math.floor(Date.now() / 1000) + APP_TOKEN_TTL };
+  const payload = `a1.${session.sid}.${session.exp}`;
+  const sig = b64url(await crypto.subtle.sign("HMAC", k.hmac, enc.encode(payload)));
+  return { session, token: `${payload}.${sig}` };
+}
+
+export async function readAppToken(k: Keys, request: Request): Promise<SessionRead> {
+  const auth = request.headers.get("authorization") ?? "";
+  if (!auth.startsWith("Bearer ")) return { ok: false, why: "none" };
+  const m = /^a1\.([A-Za-z0-9_-]{22})\.(\d{10})\.([A-Za-z0-9_-]{43})$/.exec(auth.slice(7).trim());
+  const sig = m && unb64url(m[3]);
+  if (!m || !sig || !(await crypto.subtle.verify("HMAC", k.hmac, sig, enc.encode(`a1.${m[1]}.${m[2]}`)))) return { ok: false, why: "invalid" };
+  const exp = Number(m[2]);
+  if (exp <= Date.now() / 1000) return { ok: false, why: "expired" };
+  return { ok: true, session: { sid: m[1], exp } };
+}
+
 /* ───────────────────────────── Kunci per sesi ───────────────────────────── */
 
 /** Rahasia sesi 32 byte, deterministik dari secret server + id sesi (tidak perlu disimpan). */

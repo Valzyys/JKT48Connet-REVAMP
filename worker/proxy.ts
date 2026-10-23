@@ -42,11 +42,13 @@ import {
   clientIp,
   exchangeKey,
   freshNonce,
+  issueAppToken,
   issueSession,
   json,
   keys,
   openReplay,
   originCheck,
+  readAppToken,
   readSession,
   sealReplay,
   sessionKeys,
@@ -224,6 +226,8 @@ async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Respons
   }
 
   if (url.pathname === "/api/session") return handleSession(c, k);
+  // Aplikasi mobile: tanpa cookie/Origin browser, memakai token Bearer sendiri (lihat handleApp).
+  if (url.pathname.startsWith("/api/app/")) return handleApp(c, k);
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     return deny(c, "bad_method", 405, "Method tidak diizinkan", "", { allow: "GET, HEAD" });
@@ -258,6 +262,43 @@ async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Respons
     res.headers.append("set-cookie", fresh.cookie);
   }
   return res;
+}
+
+/* ───────────────────────────── Aplikasi mobile ───────────────────────────── */
+
+/**
+ * `/api/app/*` untuk aplikasi native (Flutter). Browser memakai cookie + tanda tangan + enkripsi; aplikasi
+ * tidak punya Origin/cookie browser, jadi:
+ *   POST /api/app/session      → token `a1.…` (30 hari), dibatasi per IP
+ *   GET  /api/app/<endpoint>   → data JSON yang sama dengan `/api/<endpoint>` (allowlist, cache, penjaga)
+ *   GET  /api/app/replay[/hls] → replay, token replay terikat ke token aplikasi
+ * Semua tetap lewat status blokir penjaga (diperiksa sebelum fungsi ini) dan batas laju per token.
+ */
+async function handleApp(c: Call, k: Keys): Promise<Response> {
+  const { request, url, env, ip } = c;
+  if (url.pathname === "/api/app/session") {
+    if (request.method !== "POST") return deny(c, "bad_method", 405, "Method tidak diizinkan", "", { allow: "POST" });
+    if (!(await allow(env.SESSION_LIMITER, `app:${ip}`, 20))) {
+      return deny(c, "rate_limit", 429, "Terlalu banyak permintaan, coba lagi sebentar", "app-session", { "retry-after": "60" });
+    }
+    const { session, token } = await issueAppToken(k);
+    return json({ status: 200, token, exp: session.exp, now: Date.now() }, 200);
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return deny(c, "bad_method", 405, "Method tidak diizinkan", "", { allow: "GET, HEAD" });
+  }
+  const read = await readAppToken(k, request);
+  if (!read.ok) return json({ status: 401, code: "token_required", message: "Token aplikasi diperlukan" }, 401);
+  const session = read.session;
+  if (!(await allow(env.API_LIMITER, `a:${session.sid}`, 300))) {
+    return deny(c, "rate_limit", 429, "Terlalu banyak permintaan, coba lagi sebentar", "", { "retry-after": "30" });
+  }
+  if (url.pathname === "/api/app/replay") return handleReplay(c, k, session);
+  if (url.pathname === "/api/app/replay/hls") return handleReplayHls(c, k, session);
+
+  const body = await loadBody(c, k, session, url.pathname.replace(/^\/api\/app\//, "/api/"), "/api/app/replay");
+  if (body instanceof Response) return body;
+  return new Response(body, { headers: { ...API_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" } });
 }
 
 /* ───────────────────────────── Admin: buka blokir ───────────────────────────── */
@@ -378,9 +419,33 @@ async function handleSession(c: Call, k: Keys): Promise<Response> {
 /* ───────────────────────────── Data JSON ───────────────────────────── */
 
 async function handleData(c: Call, k: Keys, session: Session): Promise<Response> {
+  const { url } = c;
+  const body = await loadBody(c, k, session, url.pathname, "/api/replay");
+  if (body instanceof Response) return body;
+
+  // Isi dienkripsi dengan kunci sesi; AAD = path+query sehingga respons tidak bisa ditukar antar endpoint.
+  const ks = await sessionKeys(k, session.sid);
+  const sealed = { v: WIRE_VERSION, d: await seal(ks.enc, new Uint8Array(te.encode(body)), url.pathname + url.search) };
+
+  return new Response(JSON.stringify(sealed), {
+    headers: {
+      ...API_HEADERS,
+      "content-type": "application/json; charset=utf-8",
+      // Respons privat per sesi: tidak boleh disimpan cache bersama (CDN/proxy).
+      "cache-control": "private, no-store",
+      vary: "Cookie",
+    },
+  });
+}
+
+/**
+ * Data JSON (sudah dinormalisasi) untuk `pathname` `/api/...` lewat allowlist + cache edge. Dipakai web
+ * (lalu dienkripsi) dan aplikasi mobile (dikirim apa adanya). `replayBase` = endpoint token replay klien itu.
+ */
+async function loadBody(c: Call, k: Keys, session: Session, pathname: string, replayBase: string): Promise<string | Response> {
   const { url, env, ctx } = c;
   let match: RegExpExecArray | null = null;
-  const r = ROUTES.find((x) => (match = x.re.exec(url.pathname)));
+  const r = ROUTES.find((x) => (match = x.re.exec(pathname)));
   if (!r || !match) return deny(c, "probing", 404, "Endpoint tidak tersedia");
   const m = (match as RegExpExecArray).slice(1);
 
@@ -420,23 +485,8 @@ async function handleData(c: Call, k: Keys, session: Session): Promise<Response>
     }
   }
 
-  if (r.replay) {
-    body = JSON.stringify(await gateReplay(JSON.parse(body) as RecentDetail, k, session));
-  }
-
-  // Isi dienkripsi dengan kunci sesi; AAD = path+query sehingga respons tidak bisa ditukar antar endpoint.
-  const ks = await sessionKeys(k, session.sid);
-  const sealed = { v: WIRE_VERSION, d: await seal(ks.enc, new Uint8Array(te.encode(body)), url.pathname + url.search) };
-
-  return new Response(JSON.stringify(sealed), {
-    headers: {
-      ...API_HEADERS,
-      "content-type": "application/json; charset=utf-8",
-      // Respons privat per sesi: tidak boleh disimpan cache bersama (CDN/proxy).
-      "cache-control": "private, no-store",
-      vary: "Cookie",
-    },
-  });
+  if (r.replay) body = JSON.stringify(await gateReplay(JSON.parse(body) as RecentDetail, k, session, replayBase));
+  return body;
 }
 
 /** Batas umur salinan lama yang boleh dikirim sambil memperbarui: data live cepat basi, sisanya lebih longgar. */
@@ -516,7 +566,7 @@ async function fetchUpstream(path: string, env: ProxyEnv): Promise<Upstream> {
 /* ───────────────────────────── Replay ───────────────────────────── */
 
 /** Selama masa kunci tidak ada URL apa pun; setelahnya URL asli diganti token terenkripsi milik sesi ini. */
-async function gateReplay(d: RecentDetail, k: Keys, session: Session): Promise<RecentDetail> {
+async function gateReplay(d: RecentDetail, k: Keys, session: Session, base = "/api/replay"): Promise<RecentDetail> {
   const unlock = Date.parse(d.replayUnlockAt);
   if (!Number.isFinite(unlock) || Date.now() < unlock) return { ...d, recordings: [] };
   const e = Math.floor(Date.now() / 1000) + REPLAY_TOKEN_TTL;
@@ -525,8 +575,8 @@ async function gateReplay(d: RecentDetail, k: Keys, session: Session): Promise<R
     recordings: await Promise.all(
       d.recordings.map(async (r) => ({
         ...r,
-        url: `/api/replay?t=${await sealReplay(k, { u: r.url, s: session.sid, e })}`,
-        ...(r.hls ? { hls: `/api/replay/hls?t=${await sealReplay(k, { u: r.hls, s: session.sid, e })}` } : {}),
+        url: `${base}?t=${await sealReplay(k, { u: r.url, s: session.sid, e })}`,
+        ...(r.hls ? { hls: `${base}/hls?t=${await sealReplay(k, { u: r.hls, s: session.sid, e })}` } : {}),
       })),
     ),
   };
@@ -693,11 +743,12 @@ async function handleReplayHls(c: Call, k: Keys, session: Session): Promise<Resp
   }
 
   // Satu token per file (biasanya seluruh potongan menunjuk ke satu MP4 yang sama).
+  const segmentBase = c.url.pathname.startsWith("/api/app/") ? "/api/app/replay" : "/api/replay";
   const tokens = new Map<string, string>();
   for (const m of text.matchAll(/^(?!#)(\S+)$|URI="([^"]+)"/gm)) {
     try {
       const u = new URL(m[1] ?? m[2], target).href;
-      if (!tokens.has(u)) tokens.set(u, `/api/replay?t=${await sealReplay(k, { u, s: session.sid, e: opened.e })}`);
+      if (!tokens.has(u)) tokens.set(u, `${segmentBase}?t=${await sealReplay(k, { u, s: session.sid, e: opened.e })}`);
     } catch {
       /* baris tak valid ditolak oleh rewriteHlsPlaylist */
     }
