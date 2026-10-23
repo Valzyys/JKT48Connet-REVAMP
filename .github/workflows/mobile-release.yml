@@ -1,10 +1,12 @@
 name: Mobile Release
 
 # Build APK Android lalu unggah sebagai GitHub Release.
-# Jalan saat tag mobile-v* di-push, atau manual dari tab Actions.
+# Jalan saat kode mobile berubah di main, saat tag mobile-v* di-push, atau manual dari tab Actions.
 on:
   push:
+    branches: [main]
     tags: ["mobile-v*"]
+    paths: ["mobile/**", ".github/workflows/mobile-release.yml"]
   workflow_dispatch:
     inputs:
       api_base:

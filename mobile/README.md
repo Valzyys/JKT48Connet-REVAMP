@@ -46,6 +46,7 @@ APK rilis saat ini ditandatangani dengan kunci debug bawaan template, jadi hanya
 ### Unduh APK dari GitHub Releases
 
 Workflow `.github/workflows/mobile-release.yml` membangun APK dan mengunggahnya ke halaman **Releases**. Workflow ini jalan saat:
+- ada perubahan di `mobile/**` yang masuk ke `main` (release bernama `mobile-build-<nomor>`);
 - tag `mobile-v*` di-push (misalnya `git tag mobile-v1.0.1 && git push origin mobile-v1.0.1`);
 - dijalankan manual dari tab Actions → Mobile Release → Run workflow.
 
