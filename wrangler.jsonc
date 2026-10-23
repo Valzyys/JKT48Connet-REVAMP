@@ -40,7 +40,8 @@
     { "tag": "v1", "new_sqlite_classes": ["Guard"] },
     { "tag": "v2", "new_sqlite_classes": ["PushState"] }
   ],
-  // Server push ke aplikasi Android tiap 2 menit (live); jadwal/ultah/berita/update tiap 10 menit.
+  // Server push ke aplikasi Android: live dicek tiap 15 detik lewat alarm Durable Object (cron ini menyalakannya),
+  // jadwal/ultah/berita/update tiap 10 menit.
   // Tidak berbuat apa-apa sampai secret FCM_SERVICE_ACCOUNT diatur (lihat README → Server push).
   "triggers": { "crons": ["*/2 * * * *"] },
   "observability": { "enabled": true }

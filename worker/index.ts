@@ -20,7 +20,7 @@ export default {
     // Selain /api, sajikan file statis hasil `vite build` (SPA fallback diatur di wrangler.jsonc).
     return env.ASSETS.fetch(request);
   },
-  // Cron (wrangler.jsonc → triggers.crons): server push live/show/ultah/berita/update ke aplikasi (worker/push.ts).
+  // Cron (wrangler.jsonc → triggers.crons): jadwal/ultah/berita/update + menyalakan alarm live 15 detik (worker/push-do.ts).
   async scheduled(controller, env, ctx) {
     if (!env.PUSH || !env.FCM_SERVICE_ACCOUNT) return;
     ctx.waitUntil(env.PUSH.get(env.PUSH.idFromName("main")).tick(controller.scheduledTime));
