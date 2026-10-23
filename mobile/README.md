@@ -85,7 +85,9 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 **Replay**
 - Terkunci sampai 72 jam setelah live.
 - Diputar dengan Media3 lewat playlist HLS dari worker, dengan MP4 sebagai cadangan.
-- Ketuk dua kali untuk mundur atau maju 10 detik.
+- Kontrol kaca: judul & bagian, kecepatan (0,5×–2×), mundur/maju 10 detik, play, dan slider lensa; ketuk dua kali di sisi kiri/kanan untuk −10/+10 detik.
+- **Layar penuh** di jendela tersendiri: bilah sistem disembunyikan, video lanskap (Showroom) memutar layar ke lanskap. Kembali, tombol keluar, atau geser ke bawah untuk menutup. Pemutar yang sama dipakai (tidak mulai ulang).
+- Jeda otomatis saat aplikasi ke latar; layar tetap menyala selama diputar.
 
 ## Menjalankan
 
