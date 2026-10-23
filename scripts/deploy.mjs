@@ -11,6 +11,8 @@
  *        FCM_SERVICE_ACCOUNT, FCM_ANDROID_APP_ID, FCM_ANDROID_API_KEY
  *                              ← dari env bila diisi: server push ke aplikasi Android (cron tiap 2 menit).
  *                                FCM_SERVICE_ACCOUNT boleh berisi JSON-nya atau path ke file .json.
+ *                                Ganti dua yang terakhir dengan FCM_GOOGLE_SERVICES (isi/path google-services.json):
+ *                                App ID & API key aplikasi app.jkt48connect diambil otomatis dari situ.
  *
  *   npm run deploy:auto
  *   JKT48CONNECT_API_KEY=jkc_… npm run deploy:auto
@@ -119,8 +121,27 @@ if (fcm) {
   }
   put("FCM_SERVICE_ACCOUNT", JSON.stringify(sa));
 }
+const gs = process.env.FCM_GOOGLE_SERVICES ?? "";
+if (gs) {
+  let client;
+  try {
+    const json = JSON.parse(gs.trim().startsWith("{") ? gs : readFileSync(gs, "utf8"));
+    client = (json.client ?? []).find((c) => c.client_info?.android_client_info?.package_name === "app.jkt48connect");
+  } catch {
+    console.error("✗ FCM_GOOGLE_SERVICES bukan isi google-services.json yang valid");
+    process.exit(1);
+  }
+  const appId = client?.client_info?.mobilesdk_app_id;
+  const apiKey = client?.api_key?.[0]?.current_key;
+  if (!appId || !apiKey) {
+    console.error("✗ google-services.json tidak memuat aplikasi Android app.jkt48connect (cek package name di Firebase)");
+    process.exit(1);
+  }
+  put("FCM_ANDROID_APP_ID", appId);
+  put("FCM_ANDROID_API_KEY", apiKey);
+}
 for (const name of ["FCM_ANDROID_APP_ID", "FCM_ANDROID_API_KEY"]) {
-  if (process.env[name]) put(name, process.env[name]);
+  if (process.env[name] && !gs) put(name, process.env[name]);
 }
 if (!fcm && !existing.has("FCM_SERVICE_ACCOUNT"))
   console.log("· Server push belum diatur (opsional). Lihat README → Server push.");

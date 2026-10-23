@@ -160,7 +160,7 @@ Setup sekali:
    npx wrangler secret put FCM_ANDROID_API_KEY     # AIza…
    npm run deploy
    ```
-   Atau sekaligus: `FCM_SERVICE_ACCOUNT=./service-account.json FCM_ANDROID_APP_ID=… FCM_ANDROID_API_KEY=… npm run deploy:auto`. Kalau deploy lewat GitHub Actions (`deploy.yml`), isi tiga secret repo dengan nama yang sama (`FCM_SERVICE_ACCOUNT` berisi isi JSON-nya).
+   Atau sekaligus: `FCM_SERVICE_ACCOUNT=./service-account.json FCM_GOOGLE_SERVICES=./google-services.json npm run deploy:auto`. App ID dan API key diambil otomatis dari `google-services.json`. Kalau deploy lewat GitHub Actions (`deploy.yml`), cukup isi dua secret repo: `FCM_SERVICE_ACCOUNT` (isi JSON service account) dan `FCM_GOOGLE_SERVICES` (isi `google-services.json`).
 4. Buka aplikasi sekali supaya berlangganan. Halaman Tentang menulis "Dikirim langsung dari server" bila push aktif. Log pengiriman bisa dilihat dengan `npx wrangler tail`.
 
 Coba cron di lokal: `npx wrangler dev --test-scheduled`, lalu buka `http://localhost:8787/__scheduled?cron=*/2+*+*+*+*`.

@@ -26,7 +26,8 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      # Kunci rilis tetap dari secret (lihat mobile/README.md). Tanpa kunci ini tiap build memakai kunci
+      # Kunci rilis tetap dari secret ANDROID_KEYSTORE_BASE64 + ANDROID_KEYSTORE_PASSWORD (lihat mobile/README.md);
+      # ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD opsional (bawaan: jkt48connect / password keystore). Tanpa kunci ini tiap build memakai kunci
       # debug acak dari runner, sehingga APK baru tidak bisa memperbarui yang lama (harus hapus-pasang).
       - name: Kunci tanda tangan rilis
         env:

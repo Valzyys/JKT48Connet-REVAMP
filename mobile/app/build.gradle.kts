@@ -29,10 +29,12 @@ android {
 
     signingConfigs {
         if (releaseKeystore != null) create("release") {
+            val env = { name: String -> System.getenv(name)?.takeIf { it.isNotBlank() } }
             storeFile = releaseKeystore
-            storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-            keyAlias = System.getenv("SIGNING_KEY_ALIAS")
-            keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            storePassword = env("SIGNING_STORE_PASSWORD")
+            // Alias & password kunci opsional: bawaan scripts/buat-keystore.sh (alias jkt48connect, password sama).
+            keyAlias = env("SIGNING_KEY_ALIAS") ?: "jkt48connect"
+            keyPassword = env("SIGNING_KEY_PASSWORD") ?: storePassword
         }
     }
 
