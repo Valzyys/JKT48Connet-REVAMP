@@ -1,13 +1,12 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUp, ArrowUpRight, LayoutGrid, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun, Ticket, X } from "lucide-react";
+import { LayoutGrid, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun, Ticket, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Countdown } from "@/components/countdown";
 import { useIntroDone } from "@/components/intro";
-import { Logo, PIXELS, PixelCross } from "@/components/logo";
+import { Logo, PixelCross } from "@/components/logo";
 import { SignalBars, Ticker } from "@/components/motion";
 import { Img, cx } from "@/components/ui";
-import { useClock } from "@/hooks/use-clock";
 import { useTheme } from "@/hooks/use-theme";
 import { dateParts, fmtTime } from "@/lib/format";
 import { gsap } from "@/lib/gsap";
@@ -549,131 +548,6 @@ export function BirthdayCard() {
         })}
       </ul>
     </section>
-  );
-}
-
-const FOOTER_COLS: { title: string; links: { label: string; to: string }[] }[] = [
-  { title: "Jelajahi", links: NAV.filter((n) => n.group === "Utama").map((n) => ({ label: n.label, to: n.to })) },
-  { title: "Arsip", links: NAV.filter((n) => n.group === "Arsip").map((n) => ({ label: n.label, to: n.to })) },
-  {
-    title: "Info",
-    links: [
-      { label: "API untuk developer", to: "/developer" },
-      { label: "Tentang", to: "/about" },
-      { label: "Disclaimer", to: "/disclaimer" },
-      { label: "Ketentuan", to: "/terms" },
-      { label: "Privasi", to: "/privacy" },
-    ],
-  },
-];
-
-/**
- * Footer tinta di dasar kolom utama: tagline, kolom tautan, wordmark raksasa yang
- * tersusun huruf demi huruf saat discroll, dan tombol kembali ke atas.
- */
-export function Footer() {
-  const ref = useRef<HTMLElement>(null);
-  const clock = useClock();
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ctx = gsap.context(() => {
-      const tl = gsap.timeline({ scrollTrigger: { trigger: el, start: "top 85%", once: true } });
-      tl.from("[data-ft]", { y: 30, opacity: 0, duration: 0.6, stagger: 0.05, ease: "power3.out" })
-        .from("[data-fl]", { yPercent: 105, duration: 0.8, stagger: 0.045, ease: "expo.out" }, 0.2)
-        .from("[data-fpx]", { scale: 0, rotate: 90, transformOrigin: "50% 50%", duration: 0.5, stagger: { each: 0.04, from: "random" }, ease: "back.out(3)" }, 0.5);
-    }, el);
-    return () => ctx.revert();
-  }, []);
-
-  return (
-    <footer ref={ref} className="@container mx-3 mb-28 mt-16 overflow-hidden rounded-[28px] bg-nav text-white sm:mx-6 lg:mb-6">
-      <div className="grid gap-10 p-6 sm:p-10 @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <div>
-          <p data-ft className="micro flex items-center gap-2 text-white/50">
-            <SignalBars className="text-brand" /> JKT48Connect · Fan Signal
-          </p>
-          <p data-ft className="condensed mt-5 text-[clamp(2rem,4.6cqw,3.2rem)] uppercase leading-[0.88]">
-            Your oshi.
-            <br />
-            <span className="text-brand">Your front row</span> feeling.
-          </p>
-          <div data-ft className="mt-7 flex flex-wrap gap-2">
-            {SOCIALS.map((s, i) => (
-              <a
-                key={s.href}
-                href={s.href}
-                target="_blank"
-                rel="noreferrer"
-                className={cx("btn group", i === 0 ? "bg-brand text-white hover:bg-brand-strong" : "bg-white/[0.08] text-white hover:bg-white/[0.16]")}
-              >
-                {s.label}
-                <ArrowUpRight className="h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-              </a>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
-          {FOOTER_COLS.map((c) => (
-            <div key={c.title} data-ft>
-              <p className="micro text-white/40">{c.title}</p>
-              <ul className="mt-4 space-y-2.5">
-                {c.links.map((l) => (
-                  <li key={l.label}>
-                    <Link to={l.to} className="group inline-flex items-center gap-2 text-[15px] font-semibold text-white/75 transition-colors hover:text-white">
-                      <span className="h-1.5 w-1.5 scale-0 rounded-full bg-brand transition-transform duration-300 group-hover:scale-100" />
-                      <span className="-ml-3.5 transition-[margin] duration-300 group-hover:ml-0">{l.label}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="@container relative px-5 sm:px-9" aria-hidden>
-        <p className="condensed flex overflow-hidden whitespace-nowrap pb-[1.5cqw] text-[15.2cqw] uppercase leading-[0.8]">
-          {"JKT48".split("").map((c, i) => (
-            <span key={`a${i}`} data-fl className="inline-block">
-              {c}
-            </span>
-          ))}
-          {"CONNECT".split("").map((c, i) => (
-            <span key={`b${i}`} data-fl className="inline-block text-brand">
-              {c}
-            </span>
-          ))}
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 px-6 py-4 font-mono text-[11px] text-white/45 sm:px-10">
-        <span className="flex items-center gap-2 text-white/70">
-          <svg viewBox="0 0 50 50" className="h-4 w-4">
-            {PIXELS.map(([x, y]) => (
-              <rect key={`${x}-${y}`} data-fpx x={x * 10} y={y * 10} width="10" height="10" rx="1.5" className="fill-brand" />
-            ))}
-          </svg>
-          © {new Date().getFullYear()} JKT48Connect
-        </span>
-        <span>Proyek komunitas, bukan situs resmi JKT48</span>
-        <Link to="/developer" className="transition-colors hover:text-white">
-          Data: <span className="text-white/75">api.jkt48connect.app</span>
-        </Link>
-        <span className="ml-auto flex items-center gap-4">
-          <span className="num">WIB {clock}</span>
-          <button
-            type="button"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            aria-label="Kembali ke atas"
-            className="group grid h-10 w-10 place-items-center rounded-full bg-brand text-white transition-colors hover:bg-brand-strong"
-          >
-            <ArrowUp className="h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5" />
-          </button>
-        </span>
-      </div>
-    </footer>
   );
 }
 
