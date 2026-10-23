@@ -39,6 +39,18 @@ const env = {
       return new Response(
         ["#EXTM3U", "#EXT-X-PLAYLIST-TYPE:VOD", `#EXT-X-MAP:URI="${MP4}",BYTERANGE="100@0"`, "#EXTINF:2,", "#EXT-X-BYTERANGE:500@100", MP4, "#EXTINF:2,", "#EXT-X-BYTERANGE:500@600", MP4, "#EXT-X-ENDLIST", ""].join("\n"),
       );
+    if (url.href === "https://api.github.com/repos/Valzyys/JKT48Connet-REVAMP/releases/latest")
+      return Response.json({
+        tag_name: "mobile-build-7",
+        name: "JKT48Connect Android 2.2.0 (mobile-build-7)",
+        body: "Perbaikan",
+        html_url: "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/tag/mobile-build-7",
+        published_at: "2026-10-24T00:00:00Z",
+        assets: [
+          { name: "notes.txt", size: 1, browser_download_url: "https://github.com/x/notes.txt" },
+          { name: "jkt48connect.apk", size: 2000000, browser_download_url: "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/mobile-build-7/jkt48connect.apk" },
+        ],
+      });
     if (url.href === "https://jkt48.com/images/news/a.jpg") return new Response(new Uint8Array([255, 216, 255]), { headers: { "content-type": "image/jpeg" } });
     if (url.href === MP4) return new Response(new Uint8Array(10), { status: 206, headers: { "content-range": "bytes 0-9/1100", "content-length": "10" } });
     return new Response("not found", { status: 404 });
@@ -109,4 +121,17 @@ test("app media proxies jkt48.com images only, with the app token", async () => 
   assert.equal(ok.headers.get("content-type"), "image/jpeg");
   const evil = "/api/app/media?url=" + encodeURIComponent("https://evil.test/a.jpg");
   assert.equal((await call(evil, { token })).status, 403, "other hosts are refused");
+});
+
+test("app update reports the latest GitHub release, with the app token", async () => {
+  assert.equal((await call("/api/app/update")).status, 401);
+  const token = await newToken();
+  const res = await call("/api/app/update", { token });
+  assert.equal(res.status, 200);
+  const info = await res.json();
+  assert.equal(info.version, "2.2.0");
+  assert.equal(info.apk, "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/mobile-build-7/jkt48connect.apk");
+  assert.equal(info.size, 2000000);
+  assert.equal(info.notes, "Perbaikan");
+  assert.equal((await call("/api/app/update?x=1", { token })).status, 400);
 });

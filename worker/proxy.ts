@@ -77,6 +77,8 @@ export interface ProxyEnv extends SecurityEnv {
   GUARD_EPOCH?: string;
   /** Hanya untuk dev server Node (lewat proxy keluar); Workers memakai fetch bawaan. */
   UPSTREAM_FETCH?: typeof fetch;
+  /** Opsional: repo GitHub (`owner/nama`) tempat APK dirilis, untuk `/api/app/update`. */
+  APP_RELEASE_REPO?: string;
 }
 
 type Ctx = { waitUntil(p: Promise<unknown>): void };
@@ -271,6 +273,7 @@ async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Respons
  * tidak punya Origin/cookie browser, jadi:
  *   POST /api/app/session      → token `a1.…` (30 hari), dibatasi per IP
  *   GET  /api/app/<endpoint>   → data JSON yang sama dengan `/api/<endpoint>` (allowlist, cache, penjaga)
+ *   GET  /api/app/update       → versi terbaru aplikasi dari GitHub Releases (untuk pemberitahuan update)
  *   GET  /api/app/media?url=   → proxy gambar jkt48.com (host di-allowlist), sama dengan `/api/media`
  *   GET  /api/app/replay[/hls] → replay, token replay terikat ke token aplikasi
  * Semua tetap lewat status blokir penjaga (diperiksa sebelum fungsi ini) dan batas laju per token.
@@ -296,12 +299,67 @@ async function handleApp(c: Call, k: Keys): Promise<Response> {
   }
   // Gambar berita jkt48.com (menolak hotlink) — sama dengan `/api/media` web, tetapi dengan token aplikasi.
   if (url.pathname === "/api/app/media") return handleMedia(c);
+  if (url.pathname === "/api/app/update") return handleAppUpdate(c);
   if (url.pathname === "/api/app/replay") return handleReplay(c, k, session);
   if (url.pathname === "/api/app/replay/hls") return handleReplayHls(c, k, session);
 
   const body = await loadBody(c, k, session, url.pathname.replace(/^\/api\/app\//, "/api/"), "/api/app/replay");
   if (body instanceof Response) return body;
   return new Response(body, { headers: { ...API_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" } });
+}
+
+/* ───────────────────────────── Update aplikasi ───────────────────────────── */
+
+const APP_RELEASE_REPO = "Valzyys/JKT48Connet-REVAMP";
+const UPDATE_TTL = 900;
+
+type GithubRelease = {
+  tag_name?: string;
+  name?: string;
+  body?: string;
+  html_url?: string;
+  published_at?: string;
+  assets?: { name?: string; size?: number; browser_download_url?: string }[];
+};
+
+/**
+ * `GET /api/app/update` → versi terbaru dari GitHub Releases (release "latest": bukan draft/prerelease),
+ * di-cache 15 menit. Aplikasi membandingkan `version` (x.y.z dari judul/tag release) dengan versinya sendiri.
+ */
+async function handleAppUpdate(c: Call): Promise<Response> {
+  const { url, env, ctx } = c;
+  if (url.search) return deny(c, "probing", 400, "Parameter tidak valid");
+  const repo = /^[\w.-]+\/[\w.-]+$/.test(env.APP_RELEASE_REPO ?? "") ? env.APP_RELEASE_REPO! : APP_RELEASE_REPO;
+  const headers = { ...API_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" };
+  const cache = edgeCache();
+  const key = new Request(`${url.origin}/__cache/v2/app-update/${repo}`);
+  const hit = await cache?.match(key);
+  if (hit) return new Response(await hit.text(), { headers });
+
+  let res: Response;
+  try {
+    res = await (env.UPSTREAM_FETCH ?? fetch)(`https://api.github.com/repos/${repo}/releases/latest`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "JKT48Connect update check", "X-GitHub-Api-Version": "2022-11-28" },
+    });
+  } catch {
+    return json({ status: 502, message: "Info update tidak bisa diambil" }, 502);
+  }
+  if (res.status === 404) return json({ status: 404, message: "Belum ada rilis" }, 404);
+  if (!res.ok) return json({ status: 502, message: "Info update tidak bisa diambil" }, 502);
+  const r = (await res.json()) as GithubRelease;
+  const gh = (u?: string) => (typeof u === "string" && u.startsWith("https://github.com/") ? u : "");
+  const apk = r.assets?.find((a) => (a.name ?? "").toLowerCase().endsWith(".apk") && gh(a.browser_download_url));
+  const body = JSON.stringify({
+    version: /\d+\.\d+\.\d+/.exec(`${r.name ?? ""} ${r.tag_name ?? ""}`)?.[0] ?? "",
+    name: String(r.name || r.tag_name || ""),
+    notes: String(r.body ?? "").slice(0, 2000),
+    page: gh(r.html_url),
+    apk: gh(apk?.browser_download_url),
+    size: Number(apk?.size ?? 0),
+    publishedAt: String(r.published_at ?? ""),
+  });
+  if (cache) ctx.waitUntil(cache.put(key, new Response(body, { headers: { "content-type": "application/json", "cache-control": `public, max-age=${UPDATE_TTL}` } })));
+  return new Response(body, { headers });
 }
 
 /* ───────────────────────────── Admin: buka blokir ───────────────────────────── */

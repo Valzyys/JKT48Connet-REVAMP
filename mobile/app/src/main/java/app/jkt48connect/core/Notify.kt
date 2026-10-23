@@ -30,6 +30,7 @@ enum class NotifyKind(val key: String, val label: String, val hint: String) {
     Show("show", "Show dimulai", "Satu jam sebelum show theater & event"),
     Birthday("birthday", "Ulang tahun", "Pagi hari saat member berulang tahun"),
     News("news", "Berita baru", "Kabar terbaru dari jkt48.com"),
+    Update("update", "Update aplikasi", "Saat versi baru JKT48Connect tersedia"),
 }
 
 /**
@@ -148,6 +149,17 @@ object Notify {
             }
             remember("news", news.map { it.id }, before.orEmpty(), 60)
         }
+
+        // Versi baru diberitahukan sekali per versi; pop-up di aplikasi muncul saat dibuka.
+        if (enabled(context, NotifyKind.Update)) runCatching { checkUpdate(context) }
+    }
+
+    private suspend fun checkUpdate(context: Context) {
+        val u = Updater.check(context, prompt = false) ?: return
+        val before = seen("update").orEmpty()
+        if (u.version in before) return
+        post(context, NotifyKind.Update, "update-${u.version}", "Update JKT48Connect ${u.version} tersedia", "Versi kamu ${Updater.current}. Ketuk untuk memperbarui.", "update", null)
+        remember("update", listOf(u.version), before, 10)
     }
 
     private suspend fun post(context: Context, kind: NotifyKind, id: String, title: String, text: String, open: String, image: String?, big: Boolean = false) {

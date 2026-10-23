@@ -65,6 +65,13 @@ class MemberDetail(
     }
 }
 
+/** Rilis aplikasi terbaru dari GitHub Releases (lewat `/api/app/update`). */
+data class AppUpdate(val version: String, val name: String, val notes: String, val page: String, val apk: String, val size: Long, val publishedAt: String) {
+    companion object {
+        fun from(j: JSONObject) = AppUpdate(j.s("version"), j.s("name"), j.s("notes"), j.s("page"), j.s("apk"), (j.n("size") ?: 0).toLong(), j.s("publishedAt"))
+    }
+}
+
 /** Theater & live seorang member, dikumpulkan dari arsip theater dan riwayat live terbaru. */
 data class MemberActivity(val upcoming: List<TheaterShow>, val pastShows: List<TheaterShow>, val lives: List<RecentLive>)
 

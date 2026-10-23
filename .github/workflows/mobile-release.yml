@@ -26,10 +26,25 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # Kunci rilis tetap dari secret (lihat mobile/README.md). Tanpa kunci ini tiap build memakai kunci
+      # debug acak dari runner, sehingga APK baru tidak bisa memperbarui yang lama (harus hapus-pasang).
+      - name: Kunci tanda tangan rilis
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "SIGNING_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Secret ANDROID_KEYSTORE_BASE64 belum diatur: APK ditandatangani kunci debug acak dan tidak bisa memperbarui versi sebelumnya."
+          fi
       # JDK 17 dan Android SDK sudah ada di runner; platform yang kurang diunduh otomatis oleh Gradle.
       - name: Build APK
         env:
           API_BASE: ${{ inputs.api_base || vars.API_BASE }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           ./gradlew --no-daemon :app:assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/jkt48connect.apk"
@@ -39,7 +54,16 @@ jobs:
         run: |
           if [ "$GITHUB_REF_TYPE" = tag ]; then tag="$GITHUB_REF_NAME"; else tag="mobile-build-$GITHUB_RUN_NUMBER"; fi
           version=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          # Catatan rilis = pesan commit (tampil di pop-up update aplikasi), tanpa trailer.
+          {
+            git log -1 --format='%s%n%n%b' "$GITHUB_SHA" | grep -vE '^(Co-Authored-By|Claude-Session|Signed-off-by):' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+            echo
+            echo "---"
+            echo "Pasang dengan mengizinkan instalasi dari sumber tidak dikenal. Commit: $GITHUB_SHA"
+          } > "$RUNNER_TEMP/notes.md"
+          # Release "latest" (bukan prerelease) dibaca /api/app/update; aplikasi menawarkan update bila
+          # versionName di judul lebih baru dari versinya sendiri.
           gh release create "$tag" "$RUNNER_TEMP/jkt48connect.apk" \
-            --target "$GITHUB_SHA" --prerelease \
+            --target "$GITHUB_SHA" --latest \
             --title "JKT48Connect Android $version ($tag)" \
-            --notes "APK Android dari commit $GITHUB_SHA. Ditandatangani dengan kunci debug, hanya untuk dicoba (bukan untuk Play Store). Pasang dengan mengizinkan instalasi dari sumber tidak dikenal."
+            --notes-file "$RUNNER_TEMP/notes.md"

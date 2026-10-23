@@ -9,6 +9,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import app.jkt48connect.core.Notify
+import app.jkt48connect.core.Updater
 import app.jkt48connect.ui.screens.AboutScreen
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -141,13 +142,17 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
         val nav = remember { Nav() }
         LaunchedEffect(openTarget) {
             openTarget?.let {
-                nav.open(it)
+                if (it == "update") Updater.dialog = true else nav.open(it)
                 onOpened()
             }
         }
         // Izin notifikasi (Android 13+) ditanyakan sekali, setelah intro selesai.
         val context = LocalContext.current
         val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+        // Setiap aplikasi dibuka: cek versi baru di GitHub Releases → pop-up update.
+        LaunchedEffect(showIntro) {
+            if (!showIntro) runCatching { Updater.check(context) }
+        }
         LaunchedEffect(showIntro) {
             if (!showIntro && Build.VERSION.SDK_INT >= 33 && !Notify.permitted(context) && !Notify.askedOnce(context)) {
                 delay(1200)
@@ -233,6 +238,7 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
                         }
                     }
                     MenuSheet(nav)
+                    UpdateDialog()
                 }
                 if (showIntro) Intro { showIntro = false }
             }

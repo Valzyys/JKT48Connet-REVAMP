@@ -129,6 +129,7 @@ Aplikasi tidak punya cookie/Origin browser, jadi worker menyediakan jalur `/api/
 - `GET /api/app/<endpoint>` menyajikan data JSON yang sama dengan `/api/<endpoint>`, lewat allowlist, cache, dan penjaga yang sama, dibatasi per token.
 - `GET /api/app/replay[/hls]` menyajikan replay dengan token yang terikat ke token aplikasi.
 - `GET /api/app/media?url=` memproksikan gambar jkt48.com (yang menolak hotlink) untuk isi berita.
+- `GET /api/app/update` memberi versi APK terbaru dari GitHub Releases, untuk pop-up dan notifikasi update di aplikasi.
 
 Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`).
 

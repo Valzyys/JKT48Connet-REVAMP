@@ -61,6 +61,12 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 - Tiap jenis punya channel sendiri dan bisa dimatikan di halaman Tentang. Izin (Android 13+) ditanyakan sekali setelah intro.
 - Mengetuk notifikasi membuka halaman terkait (tab Live, detail show, ulang tahun, atau isi berita).
 
+**Update otomatis**
+- Setiap aplikasi dibuka, versi terpasang dibandingkan dengan release terbaru di GitHub (`GET /api/app/update`, di-cache 15 menit). Bila ada versi baru, muncul pop-up kaca berisi catatan rilis.
+- "Update sekarang" mengunduh APK lewat DownloadManager (dengan progres), lalu membuka pemasang Android. "Nanti" menunda pop-up versi itu 12 jam.
+- Versi baru juga diberitahukan lewat notifikasi (sekali per versi), dan bisa dicek manual di halaman Tentang.
+- Pemicu update adalah `versionName` di `app/build.gradle.kts`. Naikkan nilainya (mis. 2.1.0 → 2.2.0) supaya aplikasi lama menawarkan update.
+
 **Kecepatan**
 - Respons API disimpan di memori dan disk. Halaman tampil seketika dari data terakhir lalu diperbarui, dan tetap bisa dibuka saat offline.
 - Saat aplikasi dibuka, recent, arsip theater, jadwal, member, berita, dan ulang tahun dimuat lebih dulu di latar.
@@ -94,7 +100,19 @@ cd mobile
 - Bisa juga diatur lewat variabel lingkungan `API_BASE`.
 - Tanpa keduanya, dipakai nilai bawaan di `app/build.gradle.kts`.
 
-APK rilis ditandatangani dengan kunci debug, jadi hanya cocok untuk dicoba. Untuk Play Store, buat keystore sendiri dan atur `signingConfigs` di `app/build.gradle.kts`.
+### Kunci tanda tangan rilis (wajib untuk update otomatis)
+
+Android hanya mau memperbarui aplikasi bila APK baru ditandatangani kunci yang sama. Tanpa kunci tetap, tiap build CI memakai kunci debug acak, sehingga update harus hapus-pasang. Buat kuncinya sekali:
+
+```sh
+cd mobile && ./scripts/buat-keystore.sh      # menghasilkan jkt48connect-release.jks + .base64
+```
+
+Lalu tambahkan empat secret di GitHub → Settings → Secrets and variables → Actions: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`jkt48connect`), dan `ANDROID_KEY_PASSWORD`. Simpan file `.jks` dan password-nya di tempat aman, jangan di-commit (sudah di `.gitignore`). Kalau kunci hilang, pengguna harus hapus-pasang sekali lagi.
+
+Pengguna yang memasang APK lama (bertanda tangan kunci debug acak) perlu hapus-pasang satu kali ke versi berkunci tetap. Setelah itu update berikutnya bisa langsung dari pop-up. Aplikasi mendeteksi kunci yang berbeda dan menjelaskannya di pop-up.
+
+Tanpa secret ini, `assembleRelease` memakai kunci debug (cukup untuk dicoba).
 
 ### Unduh APK dari GitHub Releases
 
@@ -102,6 +120,8 @@ Workflow `.github/workflows/mobile-release.yml` membangun APK dan mengunggahnya 
 - ada perubahan di `mobile/**` yang masuk ke `main` (release bernama `mobile-build-<nomor>`);
 - tag `mobile-v*` di-push;
 - dijalankan manual dari tab Actions → Mobile Release → Run workflow.
+
+Release dibuat sebagai "latest" dengan catatan rilis dari pesan commit. Itulah yang dibaca pop-up update di aplikasi.
 
 Alamat API diambil dari input `api_base` saat dijalankan manual. Kalau kosong, dipakai variabel repo `API_BASE` (Settings → Secrets and variables → Actions → Variables).
 
@@ -132,12 +152,14 @@ app/src/main/java/app/jkt48connect/
   MainActivity.kt          edge-to-edge, warna ikon sistem ikut tema, tujuan dari notifikasi
   core/  Api.kt            klien /api/app (token, cache memori + disk), tanpa library HTTP
          Notify.kt         notifikasi live/show/ultah/berita (JobScheduler, channel per jenis)
+         Updater.kt        cek versi baru, unduh APK (DownloadManager), cek kunci, buka pemasang
          Models.kt         model data (sama dengan src/lib/shape.ts), org.json
          Format.kt         tanggal WIB, durasi, angka, hitung mundur
          Images.kt         pemuat gambar ringan (cache memori + disk, satu unduhan per URL, decode diperkecil)
   ui/    App.kt            lapisan backdrop, kepala atas, tab bar kaca, lembar menu, transisi halaman
          Navigation.kt     tab + tumpukan halaman, status muat data (cache dulu, lalu jaringan)
          Intro.kt          animasi intro saat aplikasi dibuka
+         UpdateDialog.kt   pop-up kaca "Update tersedia"
          glass/            LiquidButton, LiquidTabs, LiquidSlider, LiquidToggle, gestur seret/kilau (dari catalog Backdrop)
          components/       logo piksel, sinyal, kartu, tarik-untuk-muat-ulang, latar ambient
          screens/          Home, Lists (live, jadwal, recent, member, ulang tahun, berita), Details, About
