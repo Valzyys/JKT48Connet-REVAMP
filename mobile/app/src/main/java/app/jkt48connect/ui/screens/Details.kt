@@ -18,6 +18,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
 import app.jkt48connect.core.Images
+import app.jkt48connect.core.Favorites
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import app.jkt48connect.ui.glass.glass
 import com.kyant.shapes.Capsule
 import kotlinx.coroutines.launch
@@ -894,11 +897,22 @@ fun MemberDetailScreen(id: String, name: String, img: String) {
                     contentPadding = PaddingValues(18.dp),
                     horizontalArrangement = Arrangement.Start,
                 ) {
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Micro(if (m == null) "JKT48" else if (m.isGraduate) "Lulus" else "Member aktif", color = c.brand, dot = true)
                         VGap(6.dp)
                         Txt((m?.shortName ?: name).uppercase(), AppText.display(42.sp, c.ink))
                         Txt(m?.fullname?.ifEmpty { null } ?: m?.name ?: name, AppText.body(14.sp, c.inkSoft))
+                    }
+                    // Tandai sebagai oshi (favorit): tampil di beranda dan tab Favorit.
+                    val fav = Favorites.isFavorite(id)
+                    val pop by animateFloatAsState(if (fav) 1.15f else 1f, spring(0.4f, 600f), label = "fav")
+                    Box(
+                        Modifier.size(50.dp).graphicsLayer { scaleX = pop; scaleY = pop }
+                            .background(if (fav) c.brandGradient else Brush.linearGradient(listOf(c.ink.copy(alpha = 0.08f), c.ink.copy(alpha = 0.08f))), CircleShape)
+                            .pressable({ Favorites.toggle(id, m?.shortName ?: name, m?.img ?: img) }),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (fav) "Hapus dari favorit" else "Jadikan favorit", Modifier.size(26.dp), colorFilter = ColorFilter.tint(if (fav) Color.White else c.ink))
                     }
                 }
             }

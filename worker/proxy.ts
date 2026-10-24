@@ -36,6 +36,8 @@ import {
 } from "../src/lib/shape";
 import { canonical, H, MAX_SKEW_MS, seal, verify, WIRE_VERSION } from "../src/lib/wire";
 import { pushClientConfig, type PushEnv, type Release } from "./push";
+import { handleDonate } from "./donate";
+import type { PmEnv } from "./pm";
 import { denyPage, guardFor, INCIDENT_RE, maskIp, newIncident, REASON_LABEL, unblock, type Block, type GuardNamespace, type Reason } from "./guard";
 import {
   allow,
@@ -60,7 +62,7 @@ import {
   type Session,
 } from "./security";
 
-export interface ProxyEnv extends SecurityEnv, PushEnv {
+export interface ProxyEnv extends SecurityEnv, PushEnv, PmEnv {
   /** Secret: `wrangler secret put JKT48CONNECT_API_KEY` */
   JKT48CONNECT_API_KEY?: string;
   /** Opsional, default https://api.jkt48connect.app */
@@ -274,6 +276,7 @@ async function route(request: Request, env: ProxyEnv, ctx: Ctx): Promise<Respons
  * tidak punya Origin/cookie browser, jadi:
  *   POST /api/app/session      → token `a1.…` (30 hari), dibatasi per IP
  *   GET  /api/app/<endpoint>   → data JSON yang sama dengan `/api/<endpoint>` (allowlist, cache, penjaga)
+ *   POST /api/app/donate       → donasi QRIS MYPG (+ /<id>, /<id>/cancel, /wall; worker/donate.ts)
  *   GET  /api/app/push         → konfigurasi Firebase untuk server push (worker/push.ts)
  *   GET  /api/app/update       → versi terbaru aplikasi dari GitHub Releases (untuk pemberitahuan update)
  *   GET  /api/app/media?url=   → proxy gambar jkt48.com (host di-allowlist), sama dengan `/api/media`
@@ -290,7 +293,8 @@ async function handleApp(c: Call, k: Keys): Promise<Response> {
     const { session, token } = await issueAppToken(k);
     return json({ status: 200, token, exp: session.exp, now: Date.now() }, 200);
   }
-  if (request.method !== "GET" && request.method !== "HEAD") {
+  const donate = url.pathname === "/api/app/donate" || url.pathname.startsWith("/api/app/donate/");
+  if (request.method !== "GET" && request.method !== "HEAD" && !(donate && request.method === "POST")) {
     return deny(c, "bad_method", 405, "Method tidak diizinkan", "", { allow: "GET, HEAD" });
   }
   const read = await readAppToken(k, request);
@@ -301,6 +305,8 @@ async function handleApp(c: Call, k: Keys): Promise<Response> {
   }
   // Gambar berita jkt48.com (menolak hotlink) — sama dengan `/api/media` web, tetapi dengan token aplikasi.
   if (url.pathname === "/api/app/media") return handleMedia(c);
+  // Donasi QRIS (worker/donate.ts): key MYPG tetap di worker, tagihan terikat ke sesi aplikasi ini.
+  if (donate) return handleDonate(request, env, session.sid);
   if (url.pathname === "/api/app/update") return handleAppUpdate(c);
   // Konfigurasi Firebase (pengenal publik) untuk server push; `enabled: false` bila belum diatur di worker.
   if (url.pathname === "/api/app/push") {

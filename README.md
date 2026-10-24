@@ -120,6 +120,7 @@ Area baru `/pm` menyediakan akun, akses berbayar per member, QR MYPG di `/pm/pay
 
 Folder [`mobile/`](mobile/README.md) berisi aplikasi Android native bergaya Liquid Glass memakai [Backdrop](https://kyant.gitbook.io/backdrop):
 - **Halaman:** beranda, live, jadwal/theater, recent dengan replay HLS, member (dengan theater & live terakhir), ulang tahun, berita bergambar, dan Tentang.
+- **Donasi QRIS** (MYPG, lewat worker) dengan dinding pendukung, dan **member favorit** (oshi) di profil, tab Favorit, serta beranda.
 - **Notifikasi:** member live, show segera dimulai, ulang tahun, dan berita baru (diperiksa tiap ±15 menit, bisa diatur per jenis).
 - **Kaca interaktif:** tombol yang bisa ditarik dan membal, tab bar dengan pil yang bisa diseret, dan slider lensa.
 - **Ukuran:** APK rilis sekitar 2 MB.
@@ -132,6 +133,19 @@ Aplikasi tidak punya cookie/Origin browser, jadi worker menyediakan jalur `/api/
 - `GET /api/app/update` memberi versi APK terbaru dari GitHub Releases, untuk pop-up dan notifikasi update di aplikasi.
 
 Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test:push`.
+
+### Donasi QRIS (MYPG)
+
+Aplikasi punya halaman **Donasi** yang memakai gateway QRIS MYPG yang sama dengan PM (`worker/donate.ts`, memakai helper `gateway` di `worker/pm.ts`):
+- `POST /api/app/donate` `{ amount, name? }` membuat tagihan (Rp1.000–Rp1.000.000, maks. 5 tagihan per 10 menit per sesi).
+- `GET /api/app/donate/<id>` mengecek status ke MYPG selama masih PENDING.
+- `POST /api/app/donate/<id>/cancel` membatalkan tagihan.
+- `GET /api/app/donate/wall` mengembalikan dinding pendukung (donasi lunas: nama, nominal, waktu).
+- Tagihan terikat ke sesi aplikasi pembuatnya, jadi sesi lain tidak bisa melihat atau membatalkannya.
+- Nama pendukung disaring (huruf/angka/spasi/._-, maks. 24 karakter); kosong berarti Anonim.
+- Data disimpan di D1 `PM_DB` (tabel `donations`, migrasi `migrations/0002_donations.sql`, diterapkan otomatis oleh `npm run deploy:auto`).
+- **API key MYPG hanya disimpan sebagai secret Worker `MYPG_API_KEY`**: `npx wrangler secret put MYPG_API_KEY`, atau secret repo `MYPG_API_KEY` untuk `deploy.yml`. Jangan pernah menaruhnya di kode atau di aplikasi. Tanpa secret ini, endpoint donasi menjawab 503.
+- Tes: `npm run test:donate` (D1 lokal, MYPG tiruan).
 
 ### Server push (cron Cloudflare → aplikasi)
 

@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import app.jkt48connect.core.Notify
@@ -258,6 +259,7 @@ private fun title(r: Route): String = when (r) {
     Route.News, is Route.NewsDetail -> "Berita"
     is Route.Shots -> ""
     Route.About -> "Tentang"
+    Route.Donate -> "Donasi"
 }
 
 /** Tab utama (dipertahankan state-nya) + halaman detail yang meluncur dari kanan. */
@@ -299,6 +301,7 @@ private fun Pages(nav: Nav, modifier: Modifier) {
                 is Route.NewsDetail -> NewsDetailScreen(route.item)
                 is Route.Shots -> ShotViewer(route.urls, route.start, route.title)
                 Route.About -> AboutScreen()
+                Route.Donate -> app.jkt48connect.ui.screens.DonateScreen()
             }
         }
     }
@@ -458,6 +461,28 @@ private fun MenuSheet(nav: Nav) {
                         Txt("Pembuat, bot X & Discord, notifikasi, tema", AppText.body(12.sp, c.inkSoft), maxLines = 1)
                     }
                     androidx.compose.foundation.Image(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.inkSoft))
+                }
+                VGap(10.dp)
+                // Donasi: kaca bertint merah supaya menonjol di lembar menu.
+                LiquidButton(
+                    onClick = {
+                        nav.menuOpen = false
+                        nav.push(Route.Donate)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(60.dp),
+                    backdrop = sheetBackdrop,
+                    shape = RoundedRectangle(24.dp),
+                    tint = c.brand,
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.Start,
+                ) {
+                    androidx.compose.foundation.Image(Icons.Rounded.Favorite, null, Modifier.size(22.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Txt("Dukung JKT48Connect", AppText.body(15.sp, Color.White, 800))
+                        Txt("Donasi via QRIS · semua e-wallet", AppText.body(12.sp, Color.White.copy(alpha = 0.8f)), maxLines = 1)
+                    }
+                    androidx.compose.foundation.Image(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White))
                 }
                 VGap(22.dp)
                 Micro("Tema · tarik pilnya", color = c.brand, dot = true)

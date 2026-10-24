@@ -1,5 +1,7 @@
 package app.jkt48connect.ui.screens
 
+import app.jkt48connect.core.Favorites
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -241,7 +243,9 @@ fun MembersScreen() {
     var q by rememberSaveable { mutableStateOf("") }
     var seg by rememberSaveable { mutableIntStateOf(0) }
     val all = members.data.orEmpty()
-    val list = all.filter { (seg == 0) != it.isGraduate }.filter { q.isEmpty() || "${it.name} ${it.nickname}".contains(q, ignoreCase = true) }
+    val list = all
+        .filter { if (seg == 2) Favorites.isFavorite(it.id) else (seg == 0) != it.isGraduate }
+        .filter { q.isEmpty() || "${it.name} ${it.nickname}".contains(q, ignoreCase = true) }
     val insets = LocalInsets.current
     PullRefresh(onRefresh = { members.refresh() }) {
         LazyVerticalGrid(
@@ -268,7 +272,7 @@ fun MembersScreen() {
                     }
                     VGap(14.dp)
                     LiquidTabs(
-                        items = listOf(TabItem("Aktif"), TabItem("Lulus")),
+                        items = listOf(TabItem("Aktif"), TabItem("Lulus"), TabItem("Favorit")),
                         selectedIndex = seg,
                         onSelected = { seg = it },
                         height = 50.dp,
@@ -280,6 +284,9 @@ fun MembersScreen() {
             when {
                 members.error != null && members.data == null -> item(span = { GridItemSpan(maxLineSpan) }) { ErrorRetry(members.error!!, { members.run(true) }) }
                 members.data == null -> items(8) { Skeleton(Modifier.aspectRatio(0.7f), 24.dp) }
+                seg == 2 && list.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    Txt("Belum ada favorit. Buka profil member lalu ketuk ☆ untuk menjadikannya oshi.", AppText.body(14.sp, c.inkSoft), Modifier.padding(8.dp, 12.dp))
+                }
                 else -> itemsIndexed(list, key = { _, m -> m.id }) { i, m -> MemberCard(m, i, Modifier.staggerIn(i % 12, 35)) { nav.push(Route.Member(m.id, m.name, m.img)) } }
             }
         }
@@ -294,6 +301,11 @@ private fun MemberCard(m: Member, index: Int, modifier: Modifier, onClick: () ->
         Box(Modifier.fillMaxSize().background(PhotoScrim))
         Box(Modifier.padding(10.dp).background(c.brandGradient, CircleShape).padding(horizontal = 7.dp, vertical = 2.dp)) {
             Txt((index + 1).toString().padStart(2, '0'), AppText.mono(10.sp, Color.White, androidx.compose.ui.text.font.FontWeight.SemiBold))
+        }
+        if (Favorites.isFavorite(m.id)) {
+            Box(Modifier.align(Alignment.TopEnd).padding(10.dp).size(26.dp).background(c.brandGradient, CircleShape), contentAlignment = Alignment.Center) {
+                Image(Icons.Rounded.Star, "Favorit", Modifier.size(15.dp), colorFilter = ColorFilter.tint(Color.White))
+            }
         }
         Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
             Txt(m.shortName.uppercase(), AppText.display(22.sp, Color.White), maxLines = 1)

@@ -65,6 +65,27 @@ class MemberDetail(
     }
 }
 
+/** Tagihan donasi QRIS (worker/donate.ts). Status: PENDING, SUCCESS, EXPIRED, CANCELLED. */
+data class Donation(val id: String, val status: String, val name: String, val amount: Long, val qrImage: String, val paymentUrl: String, val expiredAt: String, val paidAt: Long?) {
+    companion object {
+        fun from(j: JSONObject) = Donation(
+            j.s("id"), j.s("status"), j.s("name"), (j.n("amount") ?: 0).toLong(), j.s("qr_image"), j.s("payment_url"), j.s("expired_at"),
+            if (j.has("paid_at") && !j.isNull("paid_at")) j.optLong("paid_at") else null,
+        )
+    }
+}
+
+data class Supporter(val name: String, val amount: Long, val paidAt: Long)
+
+data class SupporterWall(val count: Int, val supporters: List<Supporter>) {
+    companion object {
+        fun from(j: JSONObject) = SupporterWall(
+            j.n("count") ?: 0,
+            j.objs("supporters").map { Supporter(it.s("name"), (it.n("amount") ?: 0).toLong(), it.optLong("paid_at")) },
+        )
+    }
+}
+
 /** Rilis aplikasi terbaru dari GitHub Releases (lewat `/api/app/update`). */
 data class AppUpdate(val version: String, val name: String, val notes: String, val page: String, val apk: String, val size: Long, val publishedAt: String) {
     companion object {

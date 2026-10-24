@@ -49,6 +49,8 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 | Recent | Rekap live; detail berisi statistik, replay, top supporter, gift, cuplikan layar (9 petak + "+N"; penampil layar penuh gelap: geser kiri/kanan, filmstrip, ketuk dua kali/cubit untuk zoom, geser ke bawah untuk menutup) |
 | Member | Grid dengan kolom cari kaca dan pilihan aktif/lulus; profil dengan panel kaca di atas foto, theater mendatang, theater terakhir, dan live terakhir |
 | Ulang tahun, Berita | Dari tombol menu di kepala atas; isi berita menampilkan gambar dari jkt48.com |
+| Donasi | Hero merah-merah muda dengan hati melayang, chip nominal kaca, kolom nama, tagihan QRIS di jendela kaca (simpan QR ke galeri, halaman bayar, hitung mundur, cek status tiap 4 detik, animasi terima kasih), dan dinding pendukung (dari menu & Tentang) |
+| Favorit | Ketuk ☆ di profil member untuk menjadikannya oshi; tampil di tab Favorit (daftar member) dan baris "Favoritmu" di beranda, dengan penanda LIVE |
 | Tentang | Pembuat (@Valzyys), ekosistem JKT48Connect (situs, bot X, bot Discord, Public API), fitur, versi & update, notifikasi, tema, sumber resmi, kredit, dan penafian (dari menu) |
 
 **Intro**
