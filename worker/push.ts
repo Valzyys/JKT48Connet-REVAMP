@@ -1,9 +1,9 @@
 /**
  * Server push ke aplikasi Android lewat Firebase Cloud Messaging (FCM HTTP v1).
  *
- * Cron Cloudflare (wrangler.jsonc → triggers.crons) memanggil Durable Object `PushState` (push-do.ts) tiap 2 menit.
- * Tiap putaran: ambil data upstream → bandingkan dengan yang sudah dikirim → kirim ke topik FCM.
- *   - live      : tiap putaran (member mulai live)
+ * Durable Object `PushState` (push-do.ts) menjalankan putaran: ambil data upstream → bandingkan dengan yang sudah
+ * dikirim → kirim ke topik FCM. Alarm-nya berulang tiap 15 detik untuk live; cron (wrangler.jsonc) tiap 2 menit.
+ *   - live      : tiap 15 detik (member mulai live) — hampir realtime tanpa membebani kuota API
  *   - show      : tiap 10 menit (show/event dimulai ≤ 65 menit lagi)
  *   - birthday  : tiap 10 menit, mulai 07.00 WIB (sekali per member per tahun)
  *   - news      : tiap 10 menit (berita baru di halaman 1)
@@ -33,6 +33,9 @@ export interface PushEnv {
   /** "Web API key" / `current_key` di google-services.json (pengenal publik, bukan rahasia). */
   FCM_ANDROID_API_KEY?: string;
 }
+
+/** Jeda pengecekan live. Lebih rapat tidak berguna (data now_live upstream tidak diperbarui secepat itu) dan memboroskan kuota API key. */
+export const LIVE_INTERVAL_MS = 15_000;
 
 export type PushKind = "live" | "show" | "birthday" | "news" | "update";
 export const TOPIC_PREFIX = "jkc-";

@@ -49,14 +49,14 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 | Recent | Rekap live; detail berisi statistik, replay, top supporter, gift, cuplikan layar (9 petak + "+N"; penampil layar penuh gelap: geser kiri/kanan, filmstrip, ketuk dua kali/cubit untuk zoom, geser ke bawah untuk menutup) |
 | Member | Grid dengan kolom cari kaca dan pilihan aktif/lulus; profil dengan panel kaca di atas foto, theater mendatang, theater terakhir, dan live terakhir |
 | Ulang tahun, Berita | Dari tombol menu di kepala atas; isi berita menampilkan gambar dari jkt48.com |
-| Tentang | Versi, pengaturan notifikasi & tema, tautan, kredit, dan penafian (dari menu) |
+| Tentang | Pembuat (@Valzyys), ekosistem JKT48Connect (situs, bot X, bot Discord, Public API), fitur, versi & update, notifikasi, tema, sumber resmi, kredit, dan penafian (dari menu) |
 
 **Intro**
 - Splash sistem Android 12+ berwarna merah dengan salib piksel, lalu disambung intro Compose: logo mengecil sambil memancarkan gelombang sinyal, wordmark naik, dan layar terangkat seperti tirai. Ketuk untuk melewati.
 
 **Notifikasi**
 - Memberi tahu saat member mulai live, satu jam sebelum show/event, ulang tahun member (mulai pukul 07.00 WIB), dan berita baru.
-- **Server push** (bila diatur di worker, lihat README utama → Server push): cron Cloudflare mengirim pesan FCM ke topik yang dilanggan aplikasi, sehingga notifikasi datang dalam ±2 menit walau aplikasi tertutup. Konfigurasi Firebase diambil dari `/api/app/push` saat runtime, tanpa `google-services.json` di APK.
+- **Server push** (bila diatur di worker, lihat README utama → Server push): cron Cloudflare mengirim pesan FCM ke topik yang dilanggan aplikasi, sehingga notifikasi live datang dalam ±15 detik walau aplikasi tertutup (server mengecek tiap 15 detik). Konfigurasi Firebase diambil dari `/api/app/push` saat runtime, tanpa `google-services.json` di APK.
 - **Cadangan tanpa push**: `JobScheduler` memeriksa API tiap ±15 menit saat ada internet, dan tetap terjadwal setelah reboot. Cadangan ini mati otomatis selama push aktif, supaya tidak ada notifikasi ganda.
 - ID yang sudah diberitahukan disimpan di perangkat. Pemeriksaan pertama hanya mencatat, supaya tidak membanjiri.
 - Tiap jenis punya channel sendiri dan bisa dimatikan di halaman Tentang. Izin (Android 13+) ditanyakan sekali setelah intro.

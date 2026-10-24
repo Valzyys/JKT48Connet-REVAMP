@@ -7,6 +7,20 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.rounded.SmartToy
+import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -70,7 +84,29 @@ import app.jkt48connect.ui.theme.LocalColors
 import app.jkt48connect.ui.theme.ThemeController
 import app.jkt48connect.ui.theme.ThemeMode
 
-/** Halaman Tentang: versi, pengaturan notifikasi & tema, tautan, kredit, dan penafian. */
+private const val CREATOR_X = "https://x.com/valzyys"
+
+private data class Eco(val title: String, val handle: String, val desc: String, val url: String, val icon: ImageVector?)
+
+/** Saluran JKT48Connect (sama dengan halaman Tentang di situs). URL kosong = situs dari API_BASE. */
+private val ECOSYSTEM = listOf(
+    Eco("Situs web", "jkt48connect", "Live, jadwal, rekap, dan replay di browser.", "", Icons.Rounded.Language),
+    Eco("Bot X", "@JKT48Connect", "Notifikasi member live di IDN & Showroom, plus jadwal theater harian.", "https://x.com/JKT48Connect", null),
+    Eco("Bot Discord", "JKT48Connect", "Notifikasi live & jadwal untuk server fanbase, dengan perintah berita, theater, rekap, dan member.", "https://discord.com/discovery/applications/1305141693477027891", Icons.Rounded.SmartToy),
+    Eco("Public API", "api.jkt48connect.app", "Data yang sama, terbuka untuk website, aplikasi, dan bot komunitas.", "https://api.jkt48connect.app/docs", Icons.Rounded.Code),
+)
+
+private val FEATURES = listOf(
+    Triple(Icons.Rounded.LiveTv, "Live realtime", "Member yang sedang live di IDN & Showroom, langsung dari beranda."),
+    Triple(Icons.Rounded.CalendarMonth, "Jadwal theater & event", "Show mendatang dengan hitung mundur, lineup, dan setlist."),
+    Triple(Icons.Rounded.History, "Rekap & replay", "Statistik live, gift, top supporter, cuplikan, dan replay layar penuh."),
+    Triple(Icons.Rounded.Groups, "Profil member", "Biodata, sosial media, serta theater dan live terakhir."),
+    Triple(Icons.Rounded.NotificationsActive, "Notifikasi", "Live, show, ulang tahun, berita, dan update aplikasi."),
+    Triple(Icons.Rounded.SystemUpdate, "Update otomatis", "Versi baru langsung ditawarkan dan dipasang dari aplikasi."),
+)
+
+/** Halaman Tentang: pembuat, ekosistem JKT48Connect, fitur, versi, notifikasi, tema, sumber resmi, kredit, dan penafian. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AboutScreen() {
     val c = LocalColors.current
@@ -113,13 +149,82 @@ fun AboutScreen() {
                 VGap(6.dp)
                 Txt("Live, jadwal theater, rekap, dan replay member JKT48 dalam satu aplikasi.", AppText.body(14.sp, Color.White.copy(alpha = 0.85f)))
                 VGap(16.dp)
-                Txt("VERSI ${BuildConfig.VERSION_NAME} · BUILD ${BuildConfig.VERSION_CODE}", AppText.micro(Color.White.copy(alpha = 0.75f), 10.sp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("v${BuildConfig.VERSION_NAME}", "Build ${BuildConfig.VERSION_CODE}", "Android", "Fan-made").forEach {
+                        Txt(it.uppercase(), AppText.micro(Color.White, 9.5.sp), Modifier.background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 5.dp))
+                    }
+                }
             }
         }
 
+        // Pembuat
+        item { Section("Dibuat oleh", 1) }
         item {
-            VGap(12.dp)
-            Row(Modifier.fillMaxWidth().appCard(22.dp).padding(16.dp).staggerIn(1), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.fillMaxWidth().appCard(26.dp).padding(18.dp).staggerIn(2)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(58.dp).background(c.brandGradient, CircleShape), contentAlignment = Alignment.Center) {
+                        Txt("V", AppText.display(30.sp, Color.White))
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Txt("Valzyys", AppText.display(24.sp, c.ink))
+                        Txt("@Valzyys · Developer JKT48Connect", AppText.mono(12.sp, c.inkSoft))
+                    }
+                }
+                VGap(14.dp)
+                Txt(
+                    "JKT48Connect dirancang, dibangun, dan dirawat oleh Valzyys: situs web, JKT48Connect API, bot X dan Discord, sampai aplikasi Android yang sedang kamu pakai ini. Dibuat dari fans, untuk fans JKT48.",
+                    AppText.body(14.sp, c.ink, 500, 1.55f),
+                )
+                VGap(16.dp)
+                LiquidButton(onClick = { open(CREATOR_X) }, modifier = Modifier.fillMaxWidth().height(48.dp), tint = c.brand) {
+                    XGlyph(Color.White, 15.sp)
+                    Txt("Ikuti @Valzyys di X", AppText.body(14.sp, Color.White, 800))
+                }
+            }
+        }
+
+        // Ekosistem
+        item { Section("Ekosistem JKT48Connect", 3) }
+        item {
+            Txt(
+                "Selain aplikasi ini, JKT48Connect juga hadir di web, X, dan Discord. Semuanya memakai data yang sama dari JKT48Connect API.",
+                AppText.body(13.sp, c.inkSoft, 500, 1.5f),
+                Modifier.padding(horizontal = 6.dp).padding(bottom = 12.dp),
+            )
+            Column(Modifier.staggerIn(4), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                ECOSYSTEM.chunked(2).forEach { row ->
+                    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { e -> EcoTile(e, Modifier.weight(1f).fillMaxHeight()) { open(e.url.ifEmpty { Api.base }) } }
+                    }
+                }
+            }
+        }
+
+        // Fitur
+        item { Section("Fitur aplikasi", 5) }
+        item {
+            Column(Modifier.fillMaxWidth().appCard(24.dp).padding(vertical = 6.dp).staggerIn(6)) {
+                FEATURES.forEachIndexed { i, (icon, title, desc) ->
+                    if (i > 0) Box(Modifier.padding(start = 66.dp, end = 16.dp).fillMaxWidth().height(1.dp).background(c.line))
+                    Row(Modifier.padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(36.dp).background(c.brand.copy(alpha = 0.12f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                            Image(icon, null, Modifier.size(19.dp), colorFilter = ColorFilter.tint(c.brand))
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Txt(title, AppText.body(14.5.sp, c.ink, 800))
+                            Txt(desc, AppText.body(12.5.sp, c.inkSoft))
+                        }
+                    }
+                }
+            }
+        }
+
+        item { Section("Versi", 7) }
+
+        item {
+            Row(Modifier.fillMaxWidth().appCard(22.dp).padding(16.dp).staggerIn(8), verticalAlignment = Alignment.CenterVertically) {
                 val newer = Updater.available
                 Column(Modifier.weight(1f)) {
                     Txt(if (newer != null) "Versi ${newer.version} tersedia" else "Versi ${Updater.current}", AppText.body(15.sp, c.ink, 800))
@@ -155,7 +260,7 @@ fun AboutScreen() {
             }
         }
 
-        item { Section("Notifikasi", 2) }
+        item { Section("Notifikasi", 9) }
         if (!permitted) item {
             Row(Modifier.fillMaxWidth().appCard(22.dp).padding(16.dp).staggerIn(2), verticalAlignment = Alignment.CenterVertically) {
                 Image(Icons.Rounded.NotificationsActive, null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(c.brand))
@@ -204,14 +309,14 @@ fun AboutScreen() {
             }
             VGap(8.dp)
             Txt(
-                if (Push.active(context)) "Dikirim langsung dari server JKT48Connect begitu ada kabar (push)."
+                if (Push.active(context)) "Realtime: server JKT48Connect mengecek tiap 15 detik dan langsung mengirim notifikasi, walau aplikasi tertutup."
                 else "Diperiksa otomatis tiap ±15 menit saat ada internet. Penghemat baterai bisa membuat pemberitahuan sedikit terlambat.",
                 AppText.body(12.sp, c.inkSoft),
                 Modifier.padding(horizontal = 6.dp),
             )
         }
 
-        item { Section("Tema · tarik pilnya", 4) }
+        item { Section("Tema · tarik pilnya", 10) }
         item {
             LiquidTabs(
                 items = listOf(TabItem("Sistem"), TabItem("Putih"), TabItem("Gelap")),
@@ -222,11 +327,10 @@ fun AboutScreen() {
             )
         }
 
-        item { Section("Tautan", 6) }
+        item { Section("Sumber resmi", 11) }
         item {
             Column(Modifier.fillMaxWidth().appCard(24.dp).staggerIn(7)) {
                 listOf(
-                    "Situs JKT48Connect" to Api.base,
                     "Situs resmi JKT48" to "https://jkt48.com",
                     "Showroom" to "https://www.showroom-live.com",
                     "IDN Live" to "https://www.idn.app",
@@ -243,7 +347,7 @@ fun AboutScreen() {
             }
         }
 
-        item { Section("Kredit", 8) }
+        item { Section("Kredit", 12) }
         item {
             Column(Modifier.fillMaxWidth().appCard(24.dp).padding(16.dp).staggerIn(9), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf(
@@ -267,9 +371,43 @@ fun AboutScreen() {
                 AppText.body(12.sp, c.inkSoft, 500, 1.5f),
                 Modifier.padding(horizontal = 6.dp),
             )
-            VGap(18.dp)
-            Micro("Dibuat untuk fans JKT48 · © 2026", Modifier.padding(horizontal = 6.dp))
+            VGap(22.dp)
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                PixelLogo(22.dp)
+                VGap(10.dp)
+                Row {
+                    Txt("Dibuat dengan ", AppText.body(12.5.sp, c.inkSoft))
+                    Txt("♥", AppText.body(12.5.sp, c.brand, 800))
+                    Txt(" oleh ", AppText.body(12.5.sp, c.inkSoft))
+                    Txt("@Valzyys", AppText.body(12.5.sp, c.brand, 800), Modifier.pressable({ open(CREATOR_X) }))
+                }
+                VGap(4.dp)
+                Micro("Untuk fans JKT48 · © 2026 JKT48Connect")
+            }
         }
+    }
+}
+
+/** Huruf X (logo X tidak ada di set ikon Material). */
+@Composable
+private fun XGlyph(color: Color, size: androidx.compose.ui.unit.TextUnit) = Txt("X", AppText.display(size, color))
+
+@Composable
+private fun EcoTile(e: Eco, modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalColors.current
+    Column(modifier.appCard(22.dp).pressable(onClick).padding(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(38.dp).background(c.brandGradient, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                if (e.icon != null) Image(e.icon, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(Color.White)) else XGlyph(Color.White, 18.sp)
+            }
+            Spacer(Modifier.weight(1f))
+            Image(Icons.Rounded.OpenInNew, null, Modifier.size(15.dp), colorFilter = ColorFilter.tint(c.inkSoft))
+        }
+        VGap(12.dp)
+        Txt(e.title, AppText.body(15.sp, c.ink, 800))
+        Txt(e.handle, AppText.mono(11.sp, c.brand, androidx.compose.ui.text.font.FontWeight.SemiBold), maxLines = 1)
+        VGap(6.dp)
+        Txt(e.desc, AppText.body(12.sp, c.inkSoft, 500, 1.45f))
     }
 }
 

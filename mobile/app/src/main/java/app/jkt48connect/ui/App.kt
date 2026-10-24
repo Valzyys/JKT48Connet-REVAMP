@@ -454,8 +454,8 @@ private fun MenuSheet(nav: Nav) {
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Txt("Tentang & notifikasi", AppText.body(15.sp, c.ink, 800))
-                        Txt("Pemberitahuan live, show, ultah, berita · kredit", AppText.body(12.sp, c.inkSoft), maxLines = 1)
+                        Txt("Tentang aplikasi", AppText.body(15.sp, c.ink, 800))
+                        Txt("Pembuat, bot X & Discord, notifikasi, tema", AppText.body(12.sp, c.inkSoft), maxLines = 1)
                     }
                     androidx.compose.foundation.Image(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.inkSoft))
                 }

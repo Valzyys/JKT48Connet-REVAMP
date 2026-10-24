@@ -135,11 +135,11 @@ Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test
 
 ### Server push (cron Cloudflare → aplikasi)
 
-Worker mengirim notifikasi ke aplikasi Android lewat Firebase Cloud Messaging (FCM). Cron `*/2 * * * *` di `wrangler.jsonc` memanggil Durable Object `PushState` (`worker/push-do.ts`). Logikanya ada di `worker/push.ts`:
+Worker mengirim notifikasi ke aplikasi Android lewat Firebase Cloud Messaging (FCM). Durable Object `PushState` (`worker/push-do.ts`) mengecek member live tiap **15 detik** dengan alarm berulang. Cron `*/2 * * * *` di `wrangler.jsonc` menangani pengecekan 10 menitan dan menyalakan ulang alarm bila berhenti. Logikanya ada di `worker/push.ts`:
 
 | Jenis | Kapan dicek | Dikirim saat |
 |---|---|---|
-| Live | tiap 2 menit | member mulai live (IDN/Showroom) |
+| Live | tiap 15 detik | member mulai live (IDN/Showroom) |
 | Show | tiap 10 menit | show/event dimulai ≤ 65 menit lagi |
 | Ulang tahun | tiap 10 menit, mulai 07.00 WIB | hari ulang tahun member (sekali per tahun) |
 | Berita | tiap 10 menit | berita baru di jkt48.com |
