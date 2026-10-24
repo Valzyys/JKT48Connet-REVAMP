@@ -19,7 +19,8 @@
     "pm:setup:local": "node scripts/pm-setup.mjs --local",
     "test:pm": "node --test tests/pm.test.mjs",
     "test:replay": "node --test tests/replay.test.mjs tests/app-api.test.mjs",
-    "test:push": "node --test tests/push.test.mjs"
+    "test:push": "node --test tests/push.test.mjs",
+    "test:donate": "node --test tests/donate.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",

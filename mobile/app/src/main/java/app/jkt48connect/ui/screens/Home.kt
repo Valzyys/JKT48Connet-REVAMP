@@ -1,5 +1,10 @@
 package app.jkt48connect.ui.screens
 
+import androidx.compose.ui.graphics.Brush
+import app.jkt48connect.ui.components.NetImage
+import androidx.compose.foundation.layout.fillMaxSize
+import app.jkt48connect.core.Favorites
+import androidx.compose.foundation.layout.offset
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -97,6 +102,18 @@ fun HomeScreen() {
         LazyColumn(state = state, contentPadding = LocalInsets.current) {
             item { Hero() }
             item { QuickActions() }
+            if (Favorites.all.isNotEmpty()) {
+                item { SectionHead("Oshi kamu", "Favoritmu") { nav.tab = 4 } }
+                item {
+                    val liveNames = live.data.orEmpty().map { it.name.lowercase() }
+                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        itemsIndexed(Favorites.all, key = { _, f -> f.id }) { i, f ->
+                            val isLive = liveNames.any { it == f.name.lowercase() || it.startsWith(f.name.lowercase() + " ") }
+                            FavoriteBubble(f, isLive, Modifier.staggerIn(i, 40)) { nav.push(Route.Member(f.id, f.name, f.img)) }
+                        }
+                    }
+                }
+            }
             item { SectionHead("Sedang berlangsung", "Live sekarang") { nav.tab = 1 } }
             item {
                 val list = live.data
@@ -277,5 +294,26 @@ private fun NextShow(show: TheaterShow, modifier: Modifier, onClick: () -> Unit)
             Spacer(Modifier.weight(1f))
             if (show.members.isNotEmpty()) AvatarStack(show.members.map { it.img }, 28.dp, 5, ring = c.panel, extraColor = Color.White.copy(alpha = 0.6f))
         }
+    }
+}
+
+/** Avatar oshi di beranda; cincin merah + label LIVE bila sedang live. */
+@Composable
+private fun FavoriteBubble(f: Favorites.Fav, live: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalColors.current
+    Column(modifier.width(72.dp).pressable(onClick), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(contentAlignment = Alignment.BottomCenter) {
+            Box(
+                Modifier.size(70.dp).background(if (live) c.brandGradient else Brush.linearGradient(listOf(c.line, c.line)), CircleShape).padding(3.dp)
+                    .background(c.bg, CircleShape).padding(2.dp),
+            ) {
+                NetImage(f.img, Modifier.fillMaxSize().clip(CircleShape), fallback = f.name)
+            }
+            if (live) {
+                Txt("LIVE", AppText.micro(Color.White, 8.5.sp), Modifier.offset(y = 6.dp).background(c.brandGradient, RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 2.dp))
+            }
+        }
+        VGap(10.dp)
+        Txt(f.name, AppText.body(12.sp, c.ink, 700), maxLines = 1)
     }
 }

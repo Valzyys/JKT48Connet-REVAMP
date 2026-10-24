@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.ui.graphics.Brush
+import app.jkt48connect.ui.Route
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.History
@@ -112,6 +115,7 @@ fun AboutScreen() {
     val c = LocalColors.current
     val context = LocalContext.current
     val open = rememberOpenUrl()
+    val nav = app.jkt48connect.ui.LocalNav.current
 
     // Status izin dibaca ulang setiap kembali ke aplikasi (mis. setelah mengubahnya di Pengaturan).
     var tick by remember { mutableIntStateOf(0) }
@@ -181,6 +185,22 @@ fun AboutScreen() {
                     XGlyph(Color.White, 15.sp)
                     Txt("Ikuti @Valzyys di X", AppText.body(14.sp, Color.White, 800))
                 }
+            }
+        }
+
+        item {
+            VGap(12.dp)
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Brush.linearGradient(listOf(Color(0xFF2A0610), c.brand, Color(0xFFFF4D7D)))).pressable({ nav.push(Route.Donate) }).padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Image(Icons.Rounded.Favorite, null, Modifier.size(28.dp), colorFilter = ColorFilter.tint(Color.White))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Txt("Dukung JKT48Connect", AppText.body(16.sp, Color.White, 800))
+                    Txt("Donasi via QRIS untuk biaya server & fitur baru", AppText.body(12.5.sp, Color.White.copy(alpha = 0.85f)))
+                }
+                Image(Icons.Rounded.OpenInNew, null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(Color.White))
             }
         }
 

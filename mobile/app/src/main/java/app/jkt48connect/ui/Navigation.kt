@@ -29,6 +29,7 @@ sealed interface Route {
     data class NewsDetail(val item: NewsItem) : Route
     data class Shots(val urls: List<String>, val start: Int, val title: String = "") : Route
     data object About : Route
+    data object Donate : Route
 }
 
 /** Navigasi sederhana tanpa library: tab utama + tumpukan halaman detail. */
@@ -64,6 +65,7 @@ class Nav {
                 "birthday" -> push(Route.Birthday)
                 "news" -> push(Route.News)
                 "about" -> push(Route.About)
+                "donate" -> push(Route.Donate)
             }
             "theater" -> push(Route.Theater(rest.substringBefore('|'), rest.substringAfter('|', "")))
             "news" -> rest.split('|', limit = 3).let { push(Route.NewsDetail(NewsItem(it[0], it.getOrElse(2) { "" }, it.getOrElse(1) { "" }, "", ""))) }

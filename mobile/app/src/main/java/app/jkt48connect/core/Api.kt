@@ -138,6 +138,18 @@ object Api {
         }
     }
 
+    /** Permintaan tanpa cache (POST/GET) untuk aksi seperti donasi; token diperbarui sekali bila ditolak. */
+    private suspend fun send(method: String, path: String, body: JSONObject? = null): JSONObject {
+        var (status, text) = request("$base/api/app$path", method, body?.toString() ?: if (method == "POST") "{}" else null, ensureToken())
+        if (status == 401) {
+            tokenLock.withLock { token = null; prefs.edit().remove("app_token").apply() }
+            val retry = request("$base/api/app$path", method, body?.toString() ?: if (method == "POST") "{}" else null, ensureToken())
+            status = retry.first
+            text = retry.second
+        }
+        return decode(status, text) as? JSONObject ?: throw ApiException(status, "Respons tidak valid")
+    }
+
     private fun Any.list(): List<JSONObject> = (this as? JSONArray)?.objects() ?: emptyList()
     private fun Any.obj(): JSONObject = this as? JSONObject ?: JSONObject()
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
@@ -165,6 +177,10 @@ object Api {
         MemberActivity(up.sortedBy { it.date }, past.sortedByDescending { it.date }, lives.filterNotNull().flatten().filter { it.memberId == id }.distinctBy { it.id })
     }
 
+    suspend fun donate(amount: Long, name: String) = Donation.from(send("POST", "/donate", JSONObject().put("amount", amount).put("name", name)))
+    suspend fun donation(id: String) = Donation.from(send("GET", "/donate/${enc(id)}"))
+    suspend fun cancelDonation(id: String) = Donation.from(send("POST", "/donate/${enc(id)}/cancel"))
+    suspend fun supporters(f: Fetch = Fetch.Normal) = SupporterWall.from(get("/donate/wall", 60_000, f).obj())
     suspend fun pushConfig(f: Fetch = Fetch.Force) = get("/push", 6 * 3600_000, f).obj()
     suspend fun update(f: Fetch = Fetch.Normal) = AppUpdate.from(get("/update", 15 * 60_000, f).obj())
     suspend fun birthdays(f: Fetch = Fetch.Normal) = get("/next_birthday", 60 * 60_000, f).list().map(BirthdayEntry::from)

@@ -11,7 +11,7 @@ const PLANS = {
 };
 const BASE = "https://privatemessageraffz.my.id";
 const now = () => Math.floor(Date.now() / 1000);
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(
     public status: number,
     message: string,
@@ -80,7 +80,7 @@ async function body(request: Request): Promise<Record<string, string>> {
     return fail(400, "Data tidak valid.");
   }
 }
-async function limit(
+export async function limit(
   db: D1Database,
   key: string,
   max: number,
@@ -151,7 +151,7 @@ async function upstream(env: PmEnv, path: string) {
     fail(502, "Respons layanan pesan tidak valid.");
   return data;
 }
-async function gateway(
+export async function gateway(
   env: PmEnv,
   action: string,
   values: Record<string, string | number>,
@@ -187,7 +187,7 @@ async function gateway(
     fail(502, "Gateway pembayaran belum dapat memproses permintaan.");
   return data.data;
 }
-function validPaymentQr(value: unknown): value is string {
+export function validPaymentQr(value: unknown): value is string {
   if (typeof value !== "string") return false;
   try {
     const url = new URL(value);
