@@ -6,6 +6,8 @@ import { Aside, Dock, Sidebar, Topbar } from "@/components/shell";
 import { Footer } from "@/components/footer";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { NAV, navFor } from "@/lib/nav";
+import { STATIC_PAGES } from "@/lib/seo";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 const PARTICLES = 18;
 
@@ -18,6 +20,11 @@ export function RootLayout() {
   const dest = navFor(path);
   const isPm = path === "/pm" || path.startsWith("/pm/");
   const prev = useRef(path);
+
+  // Judul halaman statis (detail member/theater/berita mengganti sendiri setelah datanya termuat).
+  // Hanya rute statis yang persis: efek anak (halaman detail) jalan lebih dulu dan tidak boleh tertimpa.
+  const meta = Object.hasOwn(STATIC_PAGES, path) ? STATIC_PAGES[path] : undefined;
+  useDocumentTitle(meta?.title, meta?.description);
 
   // Ingat titik klik/tap terakhir: transisi halaman mekar dari situ.
   useEffect(() => {

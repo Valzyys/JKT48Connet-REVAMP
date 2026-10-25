@@ -20,7 +20,8 @@
     "test:pm": "node --test tests/pm.test.mjs",
     "test:replay": "node --test tests/replay.test.mjs tests/app-api.test.mjs",
     "test:push": "node --test tests/push.test.mjs",
-    "test:donate": "node --test tests/donate.test.mjs"
+    "test:donate": "node --test tests/donate.test.mjs",
+    "test:seo": "node --test tests/seo.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",

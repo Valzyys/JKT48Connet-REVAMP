@@ -1,6 +1,7 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BackLink } from "@/components/back-link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import { Page } from "@/components/page";
 import { Replay } from "@/components/replay";
 import { ScreenshotGallery } from "@/components/screenshots";
@@ -17,6 +18,7 @@ export function RecentDetailPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const recent = useQuery(q.recent(id));
   const r = recent.data;
+  useDocumentTitle(r ? `Rekap Live ${r.name}` : undefined);
   const unit = r ? pointLabel(r.pointUnit) : "";
 
   return (

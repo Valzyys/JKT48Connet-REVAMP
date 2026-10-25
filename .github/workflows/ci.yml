@@ -24,4 +24,5 @@ jobs:
       - run: npm run test:replay
       - run: npm run test:push
       - run: npm run test:donate
+      - run: npm run test:seo
       - run: npm run build

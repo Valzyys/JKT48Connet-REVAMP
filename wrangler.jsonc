@@ -14,8 +14,14 @@
     "binding": "ASSETS",
     // Semua route SPA (/member/xxx, /theater/xxx, ...) dilayani index.html.
     "not_found_handling": "single-page-application",
-    // /api/* selalu masuk Worker dulu (proxy ber-API key), bukan ke fallback SPA.
-    "run_worker_first": ["/api/*"]
+    // /api/* selalu masuk Worker dulu (proxy ber-API key), bukan ke fallback SPA. Halaman SPA, robots.txt, dan
+    // sitemap.xml juga lewat Worker supaya HTML awalnya membawa meta SEO per halaman (worker/seo.ts).
+    "run_worker_first": [
+      "/api/*", "/robots.txt", "/sitemap.xml", "/",
+      "/live", "/live/", "/theater", "/theater/*", "/schedule", "/schedule/", "/member", "/member/*",
+      "/birthday", "/birthday/", "/recent", "/recent/*", "/news", "/news/*", "/video", "/video/",
+      "/developer", "/developer/", "/about", "/about/", "/disclaimer", "/disclaimer/", "/terms", "/terms/", "/privacy", "/privacy/"
+    ]
   },
   "d1_databases": [{ "binding": "PM_DB", "database_name": "jkt48connect-pm", "migrations_dir": "migrations" }],
   "vars": {
