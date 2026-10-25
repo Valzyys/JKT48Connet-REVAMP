@@ -1,0 +1,482 @@
+[
+  {
+    "id": "s01",
+    "title": "Rapsodi",
+    "audio": "/games/audio/s01.mp3",
+    "source": "https://www.youtube.com/watch?v=Xu1wA7CfhQg"
+  },
+  {
+    "id": "s02",
+    "title": "Flying High",
+    "audio": "/games/audio/s02.mp3",
+    "source": "https://www.youtube.com/watch?v=eq0s1atl_K0"
+  },
+  {
+    "id": "s03",
+    "title": "Magic Hour",
+    "audio": "/games/audio/s03.mp3",
+    "source": "https://www.youtube.com/watch?v=mRMQsp90mFM"
+  },
+  {
+    "id": "s04",
+    "title": "Heavy Rotation",
+    "audio": "/games/audio/s04.mp3",
+    "source": "https://www.youtube.com/watch?v=mbi5V6v2peY"
+  },
+  {
+    "id": "s05",
+    "title": "Ayo Senyumlah",
+    "audio": "/games/audio/s05.mp3",
+    "source": "https://www.youtube.com/watch?v=U1BDaJkCRKQ"
+  },
+  {
+    "id": "s06",
+    "title": "Bagai Cinta Pertama",
+    "audio": "/games/audio/s06.mp3",
+    "source": "https://www.youtube.com/watch?v=pgctulw9RQc"
+  },
+  {
+    "id": "s07",
+    "title": "Fajar Sang Idola",
+    "audio": "/games/audio/s07.mp3",
+    "source": "https://www.youtube.com/watch?v=DSFV_Sog03I"
+  },
+  {
+    "id": "s08",
+    "title": "12 Seconds",
+    "audio": "/games/audio/s08.mp3",
+    "source": "https://www.youtube.com/watch?v=9iWB3ZuXOz8"
+  },
+  {
+    "id": "s09",
+    "title": "WAKAKA PEOPLE",
+    "audio": "/games/audio/s09.mp3",
+    "source": "https://www.youtube.com/watch?v=n3EpgnAqlvE"
+  },
+  {
+    "id": "s10",
+    "title": "Dekat Namun Jauh",
+    "audio": "/games/audio/s10.mp3",
+    "source": "https://www.youtube.com/watch?v=QtdsUJxiwNM"
+  },
+  {
+    "id": "s11",
+    "title": "Andai ‘Ku Bukan Idola",
+    "audio": "/games/audio/s11.mp3",
+    "source": "https://www.youtube.com/watch?v=zCcCtvbYf1M"
+  },
+  {
+    "id": "s12",
+    "title": "Oh my pumpkin!",
+    "audio": "/games/audio/s12.mp3",
+    "source": "https://www.youtube.com/watch?v=2rGeXz9IVfA"
+  },
+  {
+    "id": "s13",
+    "title": "Sampai Jumpa Lagi",
+    "audio": "/games/audio/s13.mp3",
+    "source": "https://www.youtube.com/watch?v=w27yoDEKrI8"
+  },
+  {
+    "id": "s14",
+    "title": "Cinta di Garis Horizon",
+    "audio": "/games/audio/s14.mp3",
+    "source": "https://www.youtube.com/watch?v=Be4Ltr_wmWQ"
+  },
+  {
+    "id": "s15",
+    "title": "Double Standard",
+    "audio": "/games/audio/s15.mp3",
+    "source": "https://www.youtube.com/watch?v=DWVxHmJhgz0"
+  },
+  {
+    "id": "s16",
+    "title": "Dream",
+    "audio": "/games/audio/s16.mp3",
+    "source": "https://www.youtube.com/watch?v=ZHzSb2ErQuM"
+  },
+  {
+    "id": "s17",
+    "title": "Dahulu",
+    "audio": "/games/audio/s17.mp3",
+    "source": "https://www.youtube.com/watch?v=wBmWvCJEtGQ"
+  },
+  {
+    "id": "s18",
+    "title": "Ada Aku!",
+    "audio": "/games/audio/s18.mp3",
+    "source": "https://www.youtube.com/watch?v=p49oMULiqik"
+  },
+  {
+    "id": "s19",
+    "title": "Beginner's Gamble",
+    "audio": "/games/audio/s19.mp3",
+    "source": "https://www.youtube.com/watch?v=nXD0FoRcfcw"
+  },
+  {
+    "id": "s20",
+    "title": "Raja Hati",
+    "audio": "/games/audio/s20.mp3",
+    "source": "https://www.youtube.com/watch?v=-5njqQHW_GM"
+  },
+  {
+    "id": "s21",
+    "title": "Percik Kecil (Theater Version)",
+    "audio": "/games/audio/s21.mp3",
+    "source": "https://www.youtube.com/watch?v=_2QkC1ov0A4"
+  },
+  {
+    "id": "s22",
+    "title": "Onyx",
+    "audio": "/games/audio/s22.mp3",
+    "source": "https://www.youtube.com/watch?v=RR5ZBJOZRko"
+  },
+  {
+    "id": "s23",
+    "title": "Sahabat atau Cinta",
+    "audio": "/games/audio/s23.mp3",
+    "source": "https://www.youtube.com/watch?v=M2TxwJ39fik"
+  },
+  {
+    "id": "s24",
+    "title": "Dai Dai Dai",
+    "audio": "/games/audio/s24.mp3",
+    "source": "https://www.youtube.com/watch?v=ZY3fXV-gcqQ"
+  },
+  {
+    "id": "s25",
+    "title": "Bunga yang ‘Kan Mekar Suatu Saat",
+    "audio": "/games/audio/s25.mp3",
+    "source": "https://www.youtube.com/watch?v=h1yiqAOsFb4"
+  },
+  {
+    "id": "s26",
+    "title": "City Lights",
+    "audio": "/games/audio/s26.mp3",
+    "source": "https://www.youtube.com/watch?v=jPE02Zx7Qk0"
+  },
+  {
+    "id": "s27",
+    "title": "Wish You",
+    "audio": "/games/audio/s27.mp3",
+    "source": "https://www.youtube.com/watch?v=9PhE6YGxdGI"
+  },
+  {
+    "id": "s28",
+    "title": "GO AND FIGHT!",
+    "audio": "/games/audio/s28.mp3",
+    "source": "https://www.youtube.com/watch?v=j7-Tz3nUQLk"
+  },
+  {
+    "id": "s29",
+    "title": "Waktunya Membuktikan",
+    "audio": "/games/audio/s29.mp3",
+    "source": "https://www.youtube.com/watch?v=kDZNdxJ3Las"
+  },
+  {
+    "id": "s30",
+    "title": "Suatu Saat Bertemu",
+    "audio": "/games/audio/s30.mp3",
+    "source": "https://www.youtube.com/watch?v=eW1P0lOiBM0"
+  },
+  {
+    "id": "s31",
+    "title": "Bibir yang Telah Dicuri",
+    "audio": "/games/audio/s31.mp3",
+    "source": "https://www.youtube.com/watch?v=_Qn9B9mD2bI"
+  },
+  {
+    "id": "s32",
+    "title": "#KuSangatSuka",
+    "audio": "/games/audio/s32.mp3",
+    "source": "https://www.youtube.com/watch?v=kvhNCk257WY"
+  },
+  {
+    "id": "s33",
+    "title": "Laptime Masa Remaja",
+    "audio": "/games/audio/s33.mp3",
+    "source": "https://www.youtube.com/watch?v=taE4wnmDHhU"
+  },
+  {
+    "id": "s34",
+    "title": "Belalang yang Membangkang",
+    "audio": "/games/audio/s34.mp3",
+    "source": "https://www.youtube.com/watch?v=Ztg79dr34n4"
+  },
+  {
+    "id": "s35",
+    "title": "Heart Gata Virus (JKT48V)",
+    "audio": "/games/audio/s35.mp3",
+    "source": "https://www.youtube.com/watch?v=vvKmNuXc9_0"
+  },
+  {
+    "id": "s36",
+    "title": "Sayonara Crawl",
+    "audio": "/games/audio/s36.mp3",
+    "source": "https://www.youtube.com/watch?v=5cy3vDjTfFY"
+  },
+  {
+    "id": "s37",
+    "title": "Punkish (JKT48V)",
+    "audio": "/games/audio/s37.mp3",
+    "source": "https://www.youtube.com/watch?v=bCeWCo8ICPc"
+  },
+  {
+    "id": "s38",
+    "title": "Ponytail dan Shu-Shu",
+    "audio": "/games/audio/s38.mp3",
+    "source": "https://www.youtube.com/watch?v=2wvqBMjPmqk"
+  },
+  {
+    "id": "s39",
+    "title": "Masa Depan yang Menyilaukan Mata",
+    "audio": "/games/audio/s39.mp3",
+    "source": "https://www.youtube.com/watch?v=g2QSP2xxmkg"
+  },
+  {
+    "id": "s40",
+    "title": "Seharusnya Kita Tak Bersama (Sisca)",
+    "audio": "/games/audio/s40.mp3",
+    "source": "https://www.youtube.com/watch?v=b7ONSdxXcV0"
+  },
+  {
+    "id": "s41",
+    "title": "Berdebar (Sisca)",
+    "audio": "/games/audio/s41.mp3",
+    "source": "https://www.youtube.com/watch?v=Lwkze-zNsIc"
+  },
+  {
+    "id": "s42",
+    "title": "Cara Ceroboh untuk Mencinta (Darashinai Aishikata)",
+    "audio": "/games/audio/s42.mp3",
+    "source": "https://www.youtube.com/watch?v=5V19CBzU9nk"
+  },
+  {
+    "id": "s43",
+    "title": "Eien Pressure (Selamanya Pressure)",
+    "audio": "/games/audio/s43.mp3",
+    "source": "https://www.youtube.com/watch?v=wJY2fyFXxeA"
+  },
+  {
+    "id": "s44",
+    "title": "Suki! Suki! Skip! (Suka! Suka! Skip!)",
+    "audio": "/games/audio/s44.mp3",
+    "source": "https://www.youtube.com/watch?v=hLUnG97Cd_g"
+  },
+  {
+    "id": "s45",
+    "title": "Kamonegix",
+    "audio": "/games/audio/s45.mp3",
+    "source": "https://www.youtube.com/watch?v=sNYkeHfddjQ"
+  },
+  {
+    "id": "s46",
+    "title": "Kimi No Koto Ga Suki Dakara (Karena Kusuka Dirimu)",
+    "audio": "/games/audio/s46.mp3",
+    "source": "https://www.youtube.com/watch?v=M85_iPP5_qw"
+  },
+  {
+    "id": "s47",
+    "title": "First Rabbit",
+    "audio": "/games/audio/s47.mp3",
+    "source": "https://www.youtube.com/watch?v=LgEfTUoiZpE"
+  },
+  {
+    "id": "s48",
+    "title": "Halloween Night",
+    "audio": "/games/audio/s48.mp3",
+    "source": "https://www.youtube.com/watch?v=2gDr2uZMlrA"
+  },
+  {
+    "id": "s49",
+    "title": "Value Milikku Saja",
+    "audio": "/games/audio/s49.mp3",
+    "source": "https://www.youtube.com/watch?v=8FCw4V-38ZY"
+  },
+  {
+    "id": "s50",
+    "title": "Only Today",
+    "audio": "/games/audio/s50.mp3",
+    "source": "https://www.youtube.com/watch?v=9SyM00jFEqM"
+  },
+  {
+    "id": "s51",
+    "title": "Pareo adalah Emerald",
+    "audio": "/games/audio/s51.mp3",
+    "source": "https://www.youtube.com/watch?v=YijvGYZ_hhg"
+  },
+  {
+    "id": "s52",
+    "title": "Angin Sedang Berhembus",
+    "audio": "/games/audio/s52.mp3",
+    "source": "https://www.youtube.com/watch?v=pCtV3srd300"
+  },
+  {
+    "id": "s53",
+    "title": "Papan Penanda Isi Hati",
+    "audio": "/games/audio/s53.mp3",
+    "source": "https://www.youtube.com/watch?v=nMBH5yZLYyo"
+  },
+  {
+    "id": "s54",
+    "title": "Malu Malu Lollypop",
+    "audio": "/games/audio/s54.mp3",
+    "source": "https://www.youtube.com/watch?v=7Q66pJtEGbQ"
+  },
+  {
+    "id": "s55",
+    "title": "Bersama Kamu, Pelangi Dan Mentari (Kimi To Niji To Taiyou To)",
+    "audio": "/games/audio/s55.mp3",
+    "source": "https://www.youtube.com/watch?v=4T-BZKKihc8"
+  },
+  {
+    "id": "s56",
+    "title": "Kereta Kedewasaan (Otona Ressha)",
+    "audio": "/games/audio/s56.mp3",
+    "source": "https://www.youtube.com/watch?v=9p3sL8iKeJk"
+  },
+  {
+    "id": "s57",
+    "title": "Sweet & Bitter",
+    "audio": "/games/audio/s57.mp3",
+    "source": "https://www.youtube.com/watch?v=HTDepBvFZQ0"
+  },
+  {
+    "id": "s58",
+    "title": "Musim yang Selanjutnya (Tsugi no Season)",
+    "audio": "/games/audio/s58.mp3",
+    "source": "https://www.youtube.com/watch?v=QjQnWaJQSi4"
+  },
+  {
+    "id": "s59",
+    "title": "High Tension",
+    "audio": "/games/audio/s59.mp3",
+    "source": "https://www.youtube.com/watch?v=2otuSepwPvY"
+  },
+  {
+    "id": "s60",
+    "title": "Lantang",
+    "audio": "/games/audio/s60.mp3",
+    "source": "https://www.youtube.com/watch?v=-CZdsqQbGXI"
+  },
+  {
+    "id": "s61",
+    "title": "Everyday, Kachuusha",
+    "audio": "/games/audio/s61.mp3",
+    "source": "https://www.youtube.com/watch?v=6J6OuO7UT5k"
+  },
+  {
+    "id": "s62",
+    "title": "UZA",
+    "audio": "/games/audio/s62.mp3",
+    "source": "https://www.youtube.com/watch?v=HxucHjcVQAQ"
+  },
+  {
+    "id": "s63",
+    "title": "Cinta yang Tulus, Crescendo (Junai no Crescendo)",
+    "audio": "/games/audio/s63.mp3",
+    "source": "https://www.youtube.com/watch?v=hztSeeQ_kUM"
+  },
+  {
+    "id": "s64",
+    "title": "Dirimu Melody (Kimi wa Melody)",
+    "audio": "/games/audio/s64.mp3",
+    "source": "https://www.youtube.com/watch?v=j5im1CSITnY"
+  },
+  {
+    "id": "s65",
+    "title": "Sedikit Saja I Love You",
+    "audio": "/games/audio/s65.mp3",
+    "source": "https://www.youtube.com/watch?v=b5kf7iUnfOI"
+  },
+  {
+    "id": "s66",
+    "title": "Indahnya Senyum Manismu dst.",
+    "audio": "/games/audio/s66.mp3",
+    "source": "https://www.youtube.com/watch?v=RH_2pLlHN8Y"
+  },
+  {
+    "id": "s67",
+    "title": "So Long!",
+    "audio": "/games/audio/s67.mp3",
+    "source": "https://www.youtube.com/watch?v=dZhr5mpaxPc"
+  },
+  {
+    "id": "s68",
+    "title": "Saikou Kayo (Luar Biasa)",
+    "audio": "/games/audio/s68.mp3",
+    "source": "https://www.youtube.com/watch?v=VtQfusReKKI"
+  },
+  {
+    "id": "s69",
+    "title": "LOVE TRIP",
+    "audio": "/games/audio/s69.mp3",
+    "source": "https://www.youtube.com/watch?v=JvoAvDpaN5k"
+  },
+  {
+    "id": "s70",
+    "title": "Dakishimecha Ikenai (Tidak Boleh Pelukan)",
+    "audio": "/games/audio/s70.mp3",
+    "source": "https://www.youtube.com/watch?v=WSUCoacwqHM"
+  },
+  {
+    "id": "s71",
+    "title": "Mae Shika Mukanee (Hanya Lihat Ke Depan)",
+    "audio": "/games/audio/s71.mp3",
+    "source": "https://www.youtube.com/watch?v=1eEngMCVyUE"
+  },
+  {
+    "id": "s72",
+    "title": "Beginner",
+    "audio": "/games/audio/s72.mp3",
+    "source": "https://www.youtube.com/watch?v=75LnlXWxKFQ"
+  },
+  {
+    "id": "s73",
+    "title": "Refrain Penuh Harapan (Kibouteki Refrain - Refrain Full of Hope)",
+    "audio": "/games/audio/s73.mp3",
+    "source": "https://www.youtube.com/watch?v=DL7z19KoFAM"
+  },
+  {
+    "id": "s74",
+    "title": "Gingham Check",
+    "audio": "/games/audio/s74.mp3",
+    "source": "https://www.youtube.com/watch?v=q-yVxhT-320"
+  },
+  {
+    "id": "s75",
+    "title": "Flying Get",
+    "audio": "/games/audio/s75.mp3",
+    "source": "https://www.youtube.com/watch?v=n4vbo8hKEaY"
+  },
+  {
+    "id": "s76",
+    "title": "Manatsu no Sounds Good (Musim Panas Sounds Good)",
+    "audio": "/games/audio/s76.mp3",
+    "source": "https://www.youtube.com/watch?v=4ARoGLlZQmw"
+  },
+  {
+    "id": "s77",
+    "title": "Fortune Cookie in Love (Fortune Cookie Yang Mencinta)",
+    "audio": "/games/audio/s77.mp3",
+    "source": "https://www.youtube.com/watch?v=nG1y7hj-2gA"
+  },
+  {
+    "id": "s78",
+    "title": "Yuuhi wo Miteiruka (Apakah Kau Melihat Mentari Senja)",
+    "audio": "/games/audio/s78.mp3",
+    "source": "https://www.youtube.com/watch?v=61vxWNDjjgA"
+  },
+  {
+    "id": "s79",
+    "title": "RIVER",
+    "audio": "/games/audio/s79.mp3",
+    "source": "https://www.youtube.com/watch?v=e5EIBDNdfi0"
+  },
+  {
+    "id": "s80",
+    "title": "Pesawat Kertas 365 Hari",
+    "audio": "/games/audio/s80.mp3",
+    "source": "https://www.youtube.com/watch?v=GYZpknfi5YQ"
+  }
+]

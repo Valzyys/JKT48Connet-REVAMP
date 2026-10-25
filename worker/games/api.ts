@@ -3,6 +3,7 @@ import type {GameKind,GameSession} from '../../src/lib/games/types';
 import {discordBridge,discordGameUser,type DiscordEnv} from '../discord';
 import {issueGameToken,verifyGameToken,type GameIdentity} from './auth';
 import {GameError} from './engine';
+import {QUIZ,SONGS} from './catalog';
 import members from './members.json';
 export interface GamesEnv extends DiscordEnv{GAME_ROOM?:DurableObjectNamespace;GAME_LIMITER?:{limit(input:{key:string}):Promise<{success:boolean}>}}
 const encoder=new TextEncoder();
@@ -21,7 +22,7 @@ export async function handleGames(request:Request,env:GamesEnv):Promise<Response
   const response=new Response(image.body,{headers:{'Content-Type':image.headers.get('Content-Type')!,'Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff'}});if(cache)await cache.put(key,response.clone());return response;
  }
  if(!env.SESSION_SECRET||!env.GAME_ROOM)throw new GameError('Game belum dikonfigurasi.',503);
- if(path==='/config'&&request.method==='GET')return json({client_id:env.DISCORD_CLIENT_ID||null,games:['member','quiz','memory','song'],players_max:16});
+ if(path==='/config'&&request.method==='GET')return json({client_id:env.DISCORD_CLIENT_ID||null,games:['member','quiz','memory','song'],players_max:16,catalog:{songs:SONGS.length,quiz:QUIZ.length,updated:'2026-10-25'},rounds:8});
  if(request.method==='POST'&&!gameOrigin(request,env))throw new GameError('Origin tidak diizinkan.',403);
  if(path==='/session'&&request.method==='GET'){await limited(request,env,'session');const user=await discordGameUser(request,env);return json(user?await loginResponse(env,{user,exp:Date.now()+7200000}):{authenticated:false})}
  if(path==='/guest'&&request.method==='POST'){await limited(request,env,'guest');const digits=Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n%10).join('');return json(await loginResponse(env,{user:{id:'9'+digits,name:'Pemain '+digits.slice(-4),avatar:null},exp:Date.now()+7200000,guest:true}))}

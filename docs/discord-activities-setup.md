@@ -5,9 +5,9 @@ Empat game siap dimainkan melalui `https://jkt48connect.app/games`:
 | Game | Solo | Multiplayer |
 | --- | --- | --- |
 | Tebak Member | 8 ronde, potongan foto | Soal/timer bersama, jawaban tercepat mendapat lebih banyak poin |
-| Quiz JKT48 | 8 soal | Soal/timer bersama, satu jawaban per pemain per ronde |
+| Quiz JKT48 | 8 soal acak dari bank 65 soal | Soal/timer bersama, satu jawaban per pemain per ronde |
 | Memory Card | 6 pasangan, skor + jumlah percobaan | Bergiliran, pasangan benar memberi giliran tambahan |
-| Tebak Lagu | 8 ronde dari 4 lagu | Cuplikan yang sama, jawaban dan timer diperiksa server |
+| Tebak Lagu | 8 ronde acak dari 80 lagu, tanpa pengulangan dalam satu sesi | Cuplikan yang sama, jawaban dan timer diperiksa server |
 
 Solo bisa menggunakan sesi tamu. Multiplayer memakai identitas Discord.
 Room maksimum 16 pemain dan berlaku 2 jam. Tidak ada leaderboard global, hadiah,
@@ -103,14 +103,24 @@ polling API PM, live, recent, ataupun loop permanen VPS untuk permainan.
 ## Aset dan isi game
 
 57 foto member diambil dari katalog publik situs pada 25 Oktober 2026. Foto
-bernama ID opaque pada URL proxy, tanpa menyalin ulang semua foto ke repository. Tebak Lagu memakai cuplikan 8 detik Rapsodi,
-Flying High, Magic Hour, dan Heavy Rotation dari MV resmi JKT48, disiapkan atas
-permintaan dan konfirmasi izin oleh pemilik deployment. Metadata sumber berada
-di `worker/games/catalog.ts`; tidak ada unduhan lagu saat pemain membuka game.
+bernama ID opaque pada URL proxy, tanpa menyalin ulang semua foto ke repository.
+Tebak Lagu memakai 80 cuplikan berdurasi 8 detik dari unggahan musik kanal resmi
+JKT48, mencakup MV dan lyric video yang tersedia saat kurasi 25 Oktober 2026.
+Termasuk Ayo Senyumlah, Bagai Cinta Pertama, Fajar Sang Idola, 12 Seconds,
+WAKAKA PEOPLE, Dekat Namun Jauh, Andai ‘Ku Bukan Idola, dan rilisan lama.
+Versi video ganda (staff/dance/lyric untuk lagu sama) tidak digandakan sebagai
+lagu berbeda. Katalog ini tidak mengklaim mencakup seluruh lagu panggung yang
+belum memiliki cuplikan terverifikasi. Cuplikan disiapkan atas permintaan dan
+konfirmasi izin oleh pemilik deployment. Sumber per lagu di `worker/games/songs.json`;
+soal tambahan dan sumbernya di `worker/games/quiz-expanded.json`.
+Tidak ada unduhan lagu dari YouTube ketika pemain membuka game.
+Quiz memilih delapan soal dari 65 soal; Tebak Lagu memilih delapan judul unik
+per sesi. Rematch mengacak ulang dari bank penuh. Room yang sedang berjalan
+tetap memakai susunan pertanyaan yang sudah tersimpan sampai selesai.
 Foto memakai objek media R2 yang sudah ada melalui proxy foto ber-ID opaque dan cache Cloudflare; audio dilayani Cloudflare Static Assets.
 
 Untuk menambah lagu, siapkan MP3 cuplikan yang diizinkan di `public/games/audio`,
-lalu tambahkan ID, judul, URL aset dan sumber pada `SONGS` di catalog. Empat atau
+lalu tambahkan ID, judul, URL aset dan sumber di `worker/games/songs.json`. Empat atau
 lebih judul diperlukan untuk pilihan jawaban. Untuk memperbarui member,
 perbarui `worker/games/members.json` dengan sumber foto publik R2 yang bersesuaian. Jangan
 menaruh kredensial sumber API di katalog.
@@ -141,3 +151,13 @@ Checklist uji manual sebelum distribusi publik:
 - Memory: mismatch menutup, giliran pindah, pasangan benar memberi poin sekali.
 - Launch di Discord desktop/web/mobile; pastikan URL mapping memuat audio/foto
   serta WebSocket tanpa CSP error. Uji login nyata membutuhkan akun Discord.
+
+## Berbagi hasil ke X
+
+Setelah selesai, setiap pemain (termasuk tamu solo) mendapatkan tombol
+**Bagikan hasil ke X** dan **Salin hasil**. Teks memuat nama game, skor pemain
+itu sendiri, serta peringkat multiplayer dengan posisi seri yang benar.
+Tidak menyertakan token, ID Discord, nama pemain lain, ataupun kode room privat.
+Website membuka X Web Intent; Activity menggunakan `openExternalLink` SDK.
+Pemain sendiri mengonfirmasi posting di X. Tidak memerlukan kredensial X pemain,
+tidak memakai akun bot untuk memposting skor, dan tidak mengirim otomatis.

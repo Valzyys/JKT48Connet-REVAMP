@@ -8,8 +8,8 @@ function requireThat(test:unknown,message:string,status=400):asserts test{if(!te
 export function shuffle<T>(items:T[],random=()=>crypto.getRandomValues(new Uint32Array(1))[0]/4294967296):T[]{const out=[...items];for(let i=out.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[out[i],out[j]]=[out[j],out[i]]}return out}
 function options(answer:string,others:string[]){return shuffle([answer,...others.slice(0,3)]).map((label,i)=>({id:String(i),label}))}
 export function questions(game:GameKind,members:CatalogMember[]):Question[]{
- if(game==='quiz')return shuffle(QUIZ).map((q,i)=>{const choices=options(q.a,q.other);return{id:'q'+i,prompt:q.q,options:choices,answer:choices.find(c=>c.label===q.a)!.id,explanation:q.why}});
- if(game==='song')return shuffle([...SONGS,...SONGS]).map((s,i)=>{const choices=options(s.title,shuffle(SONGS.filter(v=>v.id!==s.id).map(v=>v.title)));return{id:'s'+i,prompt:'Judul lagu yang sedang diputar adalah…',audio:s.audio,options:choices,answer:choices.find(c=>c.label===s.title)!.id,explanation:'Cuplikan lagu JKT48: '+s.title+'.'}});
+ if(game==='quiz')return shuffle(QUIZ).slice(0,8).map((q,i)=>{const choices=options(q.a,q.other);return{id:'q'+i,prompt:q.q,options:choices,answer:choices.find(c=>c.label===q.a)!.id,explanation:q.why}});
+ if(game==='song')return shuffle(SONGS).slice(0,8).map((s,i)=>{const choices=options(s.title,shuffle(SONGS.filter(v=>v.id!==s.id).map(v=>v.title)));return{id:'s'+i,prompt:'Judul lagu yang sedang diputar adalah…',audio:s.audio,options:choices,answer:choices.find(c=>c.label===s.title)!.id,explanation:'Cuplikan lagu JKT48: '+s.title+'.'}});
  if(game==='memory')return[];
  requireThat(members.length>=4,'Foto member belum tersedia. Coba lagi sebentar.',503);
  return shuffle(members).slice(0,8).map((m,i)=>{const choices=options(m.name,shuffle(members.filter(v=>v.id!==m.id).map(v=>v.name)));return{id:'m'+i,prompt:'Siapa member di potongan foto ini?',image:m.image,options:choices,answer:choices.find(c=>c.label===m.name)!.id,explanation:m.name}});
