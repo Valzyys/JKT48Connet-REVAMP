@@ -112,6 +112,24 @@ memberi poin curiga seperti percobaan mengakali lainnya, dan endpoint dibatasi 1
 langsung berlaku di isolate yang menerima permintaan; isolate lain menyusul paling lama 30 detik, lalu pengguna cukup
 memuat ulang halaman.
 
+## SEO
+
+Situs ini SPA, tetapi crawler tetap mendapat HTML yang sesuai halaman. Logikanya di `worker/seo.ts`, dan judul/deskripsi halaman statis di `src/lib/seo.ts` dipakai juga oleh klien untuk `document.title`:
+
+- **Meta per URL di HTML awal.** Semua rute halaman (lihat `run_worker_first` di `wrangler.jsonc`) melewati worker, yang menyisipkan `<title>`, meta description, canonical, Open Graph & Twitter card, dan JSON-LD dengan `HTMLRewriter`.
+- **Data terstruktur.** `WebSite` + `Organization` di semua halaman, `BreadcrumbList` di halaman detail, `ProfilePage`/`Person` untuk member, `Event` (JKT48 Theater, fX Sudirman) untuk show theater, dan `NewsArticle` untuk berita.
+- **Navigasi tanpa JavaScript.** Ada di `<noscript>`: tautan ke bagian utama situs, daftar semua member di `/member`, show terbaru di `/theater`, dan berita di `/news`. Ini membantu crawler menemukan halaman dan membantu Google memilih sitelink.
+- **Status yang benar.** Member/show/berita yang tidak ada → 404 + `noindex`. Upstream sedang bermasalah → tetap 200 dengan meta umum. `/member/` → 301 ke `/member`.
+- **`/robots.txt` dan `/sitemap.xml`** dibuat worker: halaman statis, semua member, show theater, berita, dan rekap live terbaru. `/api/` dan `/pm` tidak diindeks.
+- **PWA.** `manifest.webmanifest` dengan ikon dan *shortcuts* (Live, Theater, Member, Recent) untuk situs yang dipasang di HP.
+- **Gambar.** `og.png` (1200×630) untuk pratinjau tautan; halaman member, show, dan berita memakai foto/banner masing-masing.
+
+Data upstream untuk SEO di-cache di edge (1 jam; sitemap 6 jam). URL rekaman replay tidak pernah masuk HTML.
+
+Agar situs cepat terindeks: daftarkan domain di [Google Search Console](https://search.google.com/search-console) dan [Bing Webmaster Tools](https://www.bing.com/webmasters), lalu kirim `https://<domain>/sitemap.xml`. Bila situs bisa diakses lewat beberapa domain (mis. `*.workers.dev` dan domain sendiri), isi variabel Worker `SITE_URL` dengan domain utama supaya canonical dan sitemap selalu mengarah ke sana.
+
+Tes: `npm run test:seo`.
+
 ## Private Messages
 
 Area baru `/pm` menyediakan akun, akses berbayar per member, QR MYPG di `/pm/pay/:id`, riwayat transaksi, chat dengan pagination dan polling, serta proxy media dengan pemeriksaan akses. D1 dibuat dan dimigrasikan otomatis melalui `npm run deploy:auto`. Tambahkan secret server `PM_API_KEY` dan `MYPG_API_KEY`; token Cloudflare perlu izin D1 Edit. Panduan lengkap: [docs/pm.md](docs/pm.md).

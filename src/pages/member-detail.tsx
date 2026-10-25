@@ -1,6 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BackLink } from "@/components/back-link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import { ShowRow } from "@/components/cards";
 import { Page } from "@/components/page";
 import { ErrorState, Img, Skeleton } from "@/components/ui";
@@ -21,6 +22,7 @@ export function MemberDetailPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const member = useQuery(q.member(id));
   const m = member.data;
+  useDocumentTitle(m ? `${m.nickname && m.nickname !== m.name ? `${m.name} (${m.nickname})` : m.name} — Profil Member JKT48` : undefined, m ? `Profil ${m.fullname || m.name} JKT48: jadwal theater, live IDN & Showroom terbaru, dan sosial media.` : undefined);
 
   return (
     <Page deps={[m]}>

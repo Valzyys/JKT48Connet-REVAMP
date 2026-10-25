@@ -1,6 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useMemo } from "react";
 import { BackLink } from "@/components/back-link";
 import { Page } from "@/components/page";
@@ -52,6 +53,7 @@ export function NewsDetailPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const news = useQuery(q.news(id));
   const n = news.data;
+  useDocumentTitle(n ? `${n.title} — Berita JKT48` : undefined);
   const html = useMemo(() => (n?.content ? sanitize(n.content) : ""), [n?.content]);
 
   return (

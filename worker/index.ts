@@ -5,8 +5,9 @@ export { PushState } from "./push-do";
 import type { PushState } from "./push-do";
 
 import { handlePm, type PmEnv } from "./pm";
+import { handlePage, handleRobots, handleSitemap, isPage, siteOrigin, type SeoEnv } from "./seo";
 
-interface Env extends ProxyEnv, PmEnv {
+interface Env extends ProxyEnv, PmEnv, SeoEnv {
   ASSETS: Fetcher;
   PUSH?: DurableObjectNamespace<PushState>;
 }
@@ -17,6 +18,17 @@ export default {
     if (pathname === "/api/pm" || pathname.startsWith("/api/pm/"))
       return handlePm(request, env);
     if (pathname.startsWith("/api/")) return handleApi(request, env, ctx);
+    // SEO (worker/seo.ts): robots, sitemap, dan meta per halaman di HTML awal.
+    if (pathname === "/robots.txt") return handleRobots(request, env);
+    if (pathname === "/sitemap.xml") return handleSitemap(request, env, ctx);
+    if (request.method === "GET" || request.method === "HEAD") {
+      // "/member/" → "/member": satu URL per halaman (tidak ada duplikat di indeks).
+      if (pathname.length > 1 && pathname.endsWith("/") && isPage(pathname.slice(0, -1))) {
+        const { search } = new URL(request.url);
+        return Response.redirect(`${siteOrigin(request, env)}${pathname.slice(0, -1)}${search}`, 301);
+      }
+      if (isPage(pathname)) return handlePage(request, env, ctx);
+    }
     // Selain /api, sajikan file statis hasil `vite build` (SPA fallback diatur di wrangler.jsonc).
     return env.ASSETS.fetch(request);
   },

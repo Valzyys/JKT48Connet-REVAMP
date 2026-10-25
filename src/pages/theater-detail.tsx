@@ -1,6 +1,7 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BackLink } from "@/components/back-link";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import { Countdown } from "@/components/countdown";
 import { PixelCross } from "@/components/logo";
 import { SplitText, Tilt } from "@/components/motion";
@@ -43,6 +44,7 @@ export function TheaterDetailPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const show = useQuery(q.theater(id));
   const s = show.data;
+  useDocumentTitle(s ? `${s.title} · Show Theater JKT48` : undefined, s ? `Show theater JKT48 "${s.title}": member tampil, setlist, dan waktu show.` : undefined);
   const upcoming = s?.date ? new Date(s.date).getTime() > Date.now() : false;
   const bday = new Set(s?.birthday.map((b) => b.id));
   const d = s ? dateParts(s.date) : null;
