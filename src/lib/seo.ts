@@ -61,6 +61,7 @@ export const STATIC_PAGES: Record<string, PageMeta & { nav?: string }> = {
     h1: "Video JKT48",
     description: "Video terbaru dari kanal YouTube resmi JKT48.",
   },
+  "/discord": {title:"Dashboard Bot Discord JKT48Connect",h1:"Discord",description:"Tambahkan JKT48Connect ke server Discord dan kelola channel, role mention, serta notifikasi komunitasmu."},
   "/developer": {
     title: "JKT48Connect API untuk Developer",
     h1: "JKT48Connect API",

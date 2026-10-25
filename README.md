@@ -337,3 +337,7 @@ Diambil dari dev server dengan data asli API pada 21–22 Oktober 2026.
 ---
 
 Fan-made · tidak berafiliasi dengan JKT48 Operation Team.
+
+### Dashboard Discord
+
+Dashboard publik ada di `/discord`. Panduan OAuth, izin per server, deployment, dan pengujian: [docs/discord-auth-setup.md](docs/discord-auth-setup.md). Token bot dan Client Secret hanya digunakan di server.

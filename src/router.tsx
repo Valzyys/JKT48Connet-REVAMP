@@ -173,7 +173,12 @@ const pmRoutes = [
   }),
 );
 
+const discordRoute=createRoute({getParentRoute:parent,path:"/discord",component:lazyRouteComponent(()=>import("@/pages/discord"),"DiscordPage")});
+const discordGuildRoute=createRoute({getParentRoute:parent,path:"/discord/$guild",component:lazyRouteComponent(()=>import("@/pages/discord"),"DiscordPage")});
+
 const routeTree = rootRoute.addChildren([
+  discordRoute,
+  discordGuildRoute,
   ...pmRoutes,
   homeRoute,
   liveRoute,

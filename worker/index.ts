@@ -1,3 +1,4 @@
+import { handleDiscord, type DiscordEnv } from "./discord";
 import { handleApi, type ProxyEnv } from "./proxy";
 
 export { Guard } from "./guard-do";
@@ -7,7 +8,7 @@ import type { PushState } from "./push-do";
 import { handlePm, type PmEnv } from "./pm";
 import { handlePage, handleRobots, handleSitemap, isPage, siteOrigin, type SeoEnv } from "./seo";
 
-interface Env extends ProxyEnv, PmEnv, SeoEnv {
+interface Env extends ProxyEnv, PmEnv, SeoEnv, DiscordEnv {
   ASSETS: Fetcher;
   PUSH?: DurableObjectNamespace<PushState>;
 }
@@ -15,6 +16,7 @@ interface Env extends ProxyEnv, PmEnv, SeoEnv {
 export default {
   async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
+    if (pathname.startsWith("/api/discord/")) return handleDiscord(request, env);
     if (pathname === "/api/pm" || pathname.startsWith("/api/pm/"))
       return handlePm(request, env);
     if (pathname.startsWith("/api/")) return handleApi(request, env, ctx);
