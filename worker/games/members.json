@@ -1,0 +1,344 @@
+[
+  {
+    "id": "9a513c981d9b6d69",
+    "name": "Abigail Rachel",
+    "image": "/api/games/photo/9a513c981d9b6d69",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/abigail_rachel.jpg"
+  },
+  {
+    "id": "e9021ab56139c209",
+    "name": "Adeline Wijaya",
+    "image": "/api/games/photo/e9021ab56139c209",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/adeline_wijaya.jpg"
+  },
+  {
+    "id": "5ebf6b1c896232f0",
+    "name": "Afera Thalia",
+    "image": "/api/games/photo/5ebf6b1c896232f0",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/afera_thalia.jpg"
+  },
+  {
+    "id": "7c953d2969c8d766",
+    "name": "Angelina Christy",
+    "image": "/api/games/photo/7c953d2969c8d766",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/angelina_christy.jpg"
+  },
+  {
+    "id": "60c5eb9878503b82",
+    "name": "Anindya Ramadhani",
+    "image": "/api/games/photo/60c5eb9878503b82",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/anindya_ramadhani.jpg"
+  },
+  {
+    "id": "f2e1cfb2d86ad018",
+    "name": "Astrella Virgiananda",
+    "image": "/api/games/photo/f2e1cfb2d86ad018",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/Astrella_Virgiananda.jpg"
+  },
+  {
+    "id": "0b9b9f299740b1e1",
+    "name": "Aurellia",
+    "image": "/api/games/photo/0b9b9f299740b1e1",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/aurellia.jpg"
+  },
+  {
+    "id": "fd869b55bd894d6e",
+    "name": "Aurhel Alana",
+    "image": "/api/games/photo/fd869b55bd894d6e",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/aurhel_alana.jpg"
+  },
+  {
+    "id": "08ffe1d9e9da6678",
+    "name": "Bong Aprilli",
+    "image": "/api/games/photo/08ffe1d9e9da6678",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/Bong_Aprilli.jpg"
+  },
+  {
+    "id": "9f5ab68d55ed722f",
+    "name": "Carissa Dini",
+    "image": "/api/games/photo/9f5ab68d55ed722f",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/carissa_dini.jpg"
+  },
+  {
+    "id": "e08a267a7a0ac097",
+    "name": "Catherina Vallencia",
+    "image": "/api/games/photo/e08a267a7a0ac097",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/catherina_vallencia.jpg"
+  },
+  {
+    "id": "e7d1267dc40eb743",
+    "name": "Celline Thefani",
+    "image": "/api/games/photo/e7d1267dc40eb743",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/celline_thefani.jpg"
+  },
+  {
+    "id": "780625e3083cb283",
+    "name": "Christabella Bonita",
+    "image": "/api/games/photo/780625e3083cb283",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/christabella_bonita.jpg"
+  },
+  {
+    "id": "92c0b148c5b7d675",
+    "name": "Cornelia Vanisa",
+    "image": "/api/games/photo/92c0b148c5b7d675",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/cornelia_vanisa.jpg"
+  },
+  {
+    "id": "a2511747f7463c04",
+    "name": "Cynthia Yaputera",
+    "image": "/api/games/photo/a2511747f7463c04",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/cynthia_yaputera.jpg"
+  },
+  {
+    "id": "fcb5872ccf92467d",
+    "name": "Dena Natalia",
+    "image": "/api/games/photo/fcb5872ccf92467d",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/dena_natalia.jpg"
+  },
+  {
+    "id": "6620c95159783a88",
+    "name": "Desy Natalia",
+    "image": "/api/games/photo/6620c95159783a88",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/desy_natalia.jpg"
+  },
+  {
+    "id": "634d93540a39c412",
+    "name": "Fahira Putri",
+    "image": "/api/games/photo/634d93540a39c412",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/fahira_putri.jpg"
+  },
+  {
+    "id": "86e2bf424ec8d535",
+    "name": "Fatimah Azzahra",
+    "image": "/api/games/photo/86e2bf424ec8d535",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/fatimah_azzahra.jpg"
+  },
+  {
+    "id": "3f5d4ad746bba9a2",
+    "name": "Febriola Sinambela",
+    "image": "/api/games/photo/3f5d4ad746bba9a2",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/febriola_sinambela.jpg"
+  },
+  {
+    "id": "9962361fe4988945",
+    "name": "Feni Fitriyanti",
+    "image": "/api/games/photo/9962361fe4988945",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/2026/10/fenifitriyantiphoto-1-942dd7.jpg"
+  },
+  {
+    "id": "66e367010697936e",
+    "name": "Fiony Alveria",
+    "image": "/api/games/photo/66e367010697936e",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/fiony_alveria.jpg"
+  },
+  {
+    "id": "07f79d22648167c1",
+    "name": "Fritzy Rosmerian",
+    "image": "/api/games/photo/07f79d22648167c1",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/fritzy_rosmerian.jpg"
+  },
+  {
+    "id": "028b84069b79ce15",
+    "name": "Gabriela Abigail",
+    "image": "/api/games/photo/028b84069b79ce15",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/gabriela_abigail.jpg"
+  },
+  {
+    "id": "1239c60669a47156",
+    "name": "Gita Sekar Andarini",
+    "image": "/api/games/photo/1239c60669a47156",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/gita_sekar_andarini.jpg"
+  },
+  {
+    "id": "c558406ee7d6c902",
+    "name": "Grace Octaviani",
+    "image": "/api/games/photo/c558406ee7d6c902",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/grace_octaviani.jpg"
+  },
+  {
+    "id": "02bbd4fb4a568b6c",
+    "name": "Greesella Adhalia",
+    "image": "/api/games/photo/02bbd4fb4a568b6c",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/greesella_adhalia.jpg"
+  },
+  {
+    "id": "18289a1cf44893a7",
+    "name": "Hagia Sopia",
+    "image": "/api/games/photo/18289a1cf44893a7",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/Hagia_Sopia.jpg"
+  },
+  {
+    "id": "dd2362d46a74c5e4",
+    "name": "Heidi Suyangga",
+    "image": "/api/games/photo/dd2362d46a74c5e4",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/heidi_suyangga.jpg"
+  },
+  {
+    "id": "a266fed721fb2b31",
+    "name": "Helisma Putri",
+    "image": "/api/games/photo/a266fed721fb2b31",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/helisma_putri.jpg"
+  },
+  {
+    "id": "7b7408ede4f95b5f",
+    "name": "Hillary Abigail",
+    "image": "/api/games/photo/7b7408ede4f95b5f",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/hillary_abigail.jpg"
+  },
+  {
+    "id": "a4702c4c7bfa9606",
+    "name": "Humaira Ramadhani",
+    "image": "/api/games/photo/a4702c4c7bfa9606",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/Humaira_Ramadhani.jpg"
+  },
+  {
+    "id": "3d1edac295a374dd",
+    "name": "Indah Cahya",
+    "image": "/api/games/photo/3d1edac295a374dd",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/indah_cahya.jpg"
+  },
+  {
+    "id": "b757118ff6499ba3",
+    "name": "Jacqueline Immanuela",
+    "image": "/api/games/photo/b757118ff6499ba3",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/Jacqueline_Immanuela.jpg"
+  },
+  {
+    "id": "24ebd009cc5818fb",
+    "name": "Jazzlyn Trisha",
+    "image": "/api/games/photo/24ebd009cc5818fb",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/jazzlyn_trisha.jpg"
+  },
+  {
+    "id": "a51749836f7d5731",
+    "name": "Jemima Evodie",
+    "image": "/api/games/photo/a51749836f7d5731",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/Jemima_Evodie.jpg"
+  },
+  {
+    "id": "ce7d25c90c140f34",
+    "name": "Jessica Chandra",
+    "image": "/api/games/photo/ce7d25c90c140f34",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/jessica_chandra.jpg"
+  },
+  {
+    "id": "54f036fbaeb58264",
+    "name": "Jesslyn Elly",
+    "image": "/api/games/photo/54f036fbaeb58264",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/jesslyn_elly.jpg"
+  },
+  {
+    "id": "1808530747bd1691",
+    "name": "Kathrina Irene",
+    "image": "/api/games/photo/1808530747bd1691",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/kathrina_irene.jpg"
+  },
+  {
+    "id": "645f80bcae0afdab",
+    "name": "Lulu Salsabila",
+    "image": "/api/games/photo/645f80bcae0afdab",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/lulu_salsabila.jpg"
+  },
+  {
+    "id": "0e5ef27ecbab9db7",
+    "name": "Marsha Lenathea",
+    "image": "/api/games/photo/0e5ef27ecbab9db7",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/marsha_lenathea.jpg"
+  },
+  {
+    "id": "c438a64b73a1b585",
+    "name": "Maxine Faye",
+    "image": "/api/games/photo/c438a64b73a1b585",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/maxine_faye_lee.jpg"
+  },
+  {
+    "id": "e0f397e8219ed160",
+    "name": "Michelle Alexandra",
+    "image": "/api/games/photo/e0f397e8219ed160",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/michelle_alexandra.jpg"
+  },
+  {
+    "id": "3e7b6f7a04a8777f",
+    "name": "Michelle Levia",
+    "image": "/api/games/photo/3e7b6f7a04a8777f",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/michelle_levia.jpg"
+  },
+  {
+    "id": "86a71b7da54a31ad",
+    "name": "Mikaela Kusjanto",
+    "image": "/api/games/photo/86a71b7da54a31ad",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/Mikaela_Kusjanto.jpg"
+  },
+  {
+    "id": "d937323a14b41eb7",
+    "name": "Mutiara Azzahra",
+    "image": "/api/games/photo/d937323a14b41eb7",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/mutiara_azzahra.jpg"
+  },
+  {
+    "id": "0ff23a3af5bd074a",
+    "name": "Nayla Suji",
+    "image": "/api/games/photo/0ff23a3af5bd074a",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/nayla_suji.jpg"
+  },
+  {
+    "id": "96e10a36715f080a",
+    "name": "Nina Tutachia",
+    "image": "/api/games/photo/96e10a36715f080a",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/nina_tutachia.jpg"
+  },
+  {
+    "id": "4ff334d9563772eb",
+    "name": "Nur Intan",
+    "image": "/api/games/photo/4ff334d9563772eb",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/Nur_Intan.jpg"
+  },
+  {
+    "id": "30acd3d19b43b340",
+    "name": "Oline Manuel",
+    "image": "/api/games/photo/30acd3d19b43b340",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/oline_manuel.jpg"
+  },
+  {
+    "id": "315a7a598b123369",
+    "name": "Putry Jazyta",
+    "image": "/api/games/photo/315a7a598b123369",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/putry_jazyta.jpg"
+  },
+  {
+    "id": "eced05f3285f7194",
+    "name": "Raisha Syifa",
+    "image": "/api/games/photo/eced05f3285f7194",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/raisha_syifa.jpg"
+  },
+  {
+    "id": "e49a2815b8cac437",
+    "name": "Ralyne Van Irwan",
+    "image": "/api/games/photo/e49a2815b8cac437",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/ralyne_van_irwan.jpg"
+  },
+  {
+    "id": "ae106b2f55578aae",
+    "name": "Ribka Budiman",
+    "image": "/api/games/photo/ae106b2f55578aae",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/ribka_budiman.jpg"
+  },
+  {
+    "id": "6194753028d49c1b",
+    "name": "Shabilqis Naila",
+    "image": "/api/games/photo/6194753028d49c1b",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/shabilqis_naila.jpg"
+  },
+  {
+    "id": "7ea4fc0a7eb5441f",
+    "name": "Sona Kalyana",
+    "image": "/api/games/photo/7ea4fc0a7eb5441f",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/sona_kalyana.jpg"
+  },
+  {
+    "id": "3940f34cd6654644",
+    "name": "Victoria Kimberly",
+    "image": "/api/games/photo/3940f34cd6654644",
+    "source": "https://api.jkt48connect.app/media/jkt48/media/jkt48-member/victoria_kimberly.jpg"
+  }
+]

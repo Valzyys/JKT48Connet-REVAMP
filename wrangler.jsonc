@@ -20,7 +20,7 @@
       "/api/*", "/robots.txt", "/sitemap.xml", "/",
       "/live", "/live/", "/theater", "/theater/*", "/schedule", "/schedule/", "/member", "/member/*",
       "/birthday", "/birthday/", "/recent", "/recent/*", "/news", "/news/*", "/video", "/video/",
-      "/discord", "/discord/*", "/developer", "/developer/", "/about", "/about/", "/disclaimer", "/disclaimer/", "/terms", "/terms/", "/privacy", "/privacy/"
+      "/games", "/games/*", "/activity", "/activity/*", "/discord", "/discord/*", "/developer", "/developer/", "/about", "/about/", "/disclaimer", "/disclaimer/", "/terms", "/terms/", "/privacy", "/privacy/"
     ]
   },
   "d1_databases": [{ "binding": "PM_DB", "database_name": "jkt48connect-pm", "database_id": "006d982c-707c-45e7-91e4-60801b068299", "migrations_dir": "migrations" }],
@@ -29,6 +29,7 @@
   },
   // Rate limit /api/* (worker/security.ts). namespace_id bebas, unik per akun.
   "ratelimits": [
+    { "name": "GAME_LIMITER", "namespace_id": "4803", "simple": { "limit": 20, "period": 60 } },
     // Per sesi: semua permintaan data, gambar, dan potongan video replay.
     { "name": "API_LIMITER", "namespace_id": "4801", "simple": { "limit": 300, "period": 60 } },
     // Per IP: pembuatan sesi baru.
@@ -38,13 +39,15 @@
   // PushState (worker/push-do.ts): ID notifikasi yang sudah dikirim + token FCM untuk server push.
   "durable_objects": {
     "bindings": [
+      { "name": "GAME_ROOM", "class_name": "GameRoom" },
       { "name": "GUARD", "class_name": "Guard" },
       { "name": "PUSH", "class_name": "PushState" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Guard"] },
-    { "tag": "v2", "new_sqlite_classes": ["PushState"] }
+    { "tag": "v2", "new_sqlite_classes": ["PushState"] },
+    { "tag": "v3-games", "new_sqlite_classes": ["GameRoom"] }
   ],
   // Server push ke aplikasi Android: live dicek tiap 15 detik lewat alarm Durable Object (cron ini menyalakannya),
   // jadwal/ultah/berita/update tiap 10 menit.

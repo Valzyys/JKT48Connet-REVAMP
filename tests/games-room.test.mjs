@@ -1,0 +1,24 @@
+import{test}from'node:test';import assert from'node:assert/strict';import{Miniflare,convertV4MiniflareOptions}from'miniflare';import{build}from'esbuild';import{mkdtemp,writeFile,rm}from'node:fs/promises';import{join,resolve}from'node:path';import{tmpdir}from'node:os';
+test('real Durable Object sockets synchronize two players, isolate rooms, enforce identity and retain reconnect state',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'jkc-room-'));await build({stdin:{contents:`export {GameRoom} from '${resolve('worker/games/room.ts')}';import{handleGames}from'${resolve('worker/games/api.ts')}';export default{fetch:handleGames};`,resolveDir:process.cwd()},bundle:true,format:'esm',platform:'browser',outfile:join(dir,'worker.mjs')});await build({entryPoints:['worker/games/auth.ts'],bundle:true,format:'esm',platform:'node',outfile:join(dir,'auth.mjs')});const{issueGameToken}=await import(join(dir,'auth.mjs'));
+ const secret='synthetic-game-room-integration-secret-32-plus',origin='https://site.test';const mf=new Miniflare(convertV4MiniflareOptions({modules:true,modulesRoot:dir,scriptPath:join(dir,'worker.mjs'),compatibilityDate:'2026-10-01',durableObjects:{GAME_ROOM:{className:'GameRoom',useSQLite:true}},bindings:{SESSION_SECRET:secret,DISCORD_CLIENT_ID:'1305141693477027891'}}));
+ const alice={id:'111111111111111111',name:'Alice',avatar:null},bob={id:'222222222222222222',name:'Bob',avatar:null};const token=await issueGameToken(secret,{user:alice,exp:Date.now()+600000}),tokenB=await issueGameToken(secret,{user:bob,exp:Date.now()+600000});const sockets=[];
+ const request=(path,init={})=>mf.dispatchFetch(origin+'/api/games'+path,init);
+ function wait(ws,type,predicate=()=>true){return new Promise((resolve,reject)=>{const timeout=setTimeout(()=>{ws.removeEventListener('message',receive);reject(Error('Timed out '+type))},8000);function receive(event){const value=JSON.parse(event.data);if(value.type===type&&predicate(value)){clearTimeout(timeout);ws.removeEventListener('message',receive);resolve(value)}}ws.addEventListener('message',receive)})}
+ async function connect(code,token){const result=await request('/rooms/'+code+'/connect',{headers:{Origin:origin,Upgrade:'websocket'}});assert.equal(result.status,101);const ws=result.webSocket;ws.accept();sockets.push(ws);const state=wait(ws,'state');ws.send(JSON.stringify({type:'auth',token}));return{ws,state:(await state).room}}
+ try{
+  let r=await request('/rooms',{method:'POST',headers:{Origin:'https://evil.test'},body:'{}'});assert.equal(r.status,403);
+  r=await request('/rooms',{method:'POST',headers:{Origin:origin},body:'{}'});assert.equal(r.status,401);
+  r=await request('/rooms',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+token},body:JSON.stringify({game:'quiz',mode:'multi'})});assert.equal(r.status,200);const{code}=await r.json();assert.match(code,/^[A-HJ-NP-Z2-9]{8}$/);
+  r=await request('/rooms/'+code+'/connect',{headers:{Origin:'https://evil.test',Upgrade:'websocket'}});assert.equal(r.status,403);
+  const a=await connect(code,token),b=await connect(code,tokenB);assert.equal(b.state.players.length,2);assert.equal(b.state.host,alice.id);
+  let rejection=wait(b.ws,'error');b.ws.send(JSON.stringify({type:'start'}));assert.match((await rejection).message,/host/);
+  const startedA=wait(a.ws,'state',v=>v.room.phase==='playing'),startedB=wait(b.ws,'state',v=>v.room.phase==='playing');a.ws.send(JSON.stringify({type:'start'}));const sa=(await startedA).room,sb=(await startedB).room;assert.equal(sa.question.id,sb.question.id);assert.deepEqual(sa.question.options,sb.question.options);assert.ok(!('answer'in sa.question));
+  const one=wait(a.ws,'state',v=>v.room.players.find(p=>p.id===alice.id).answered);a.ws.send(JSON.stringify({type:'answer',round:0,choice:sa.question.options[0].id}));const answered=(await one).room;assert.ok(answered.players.find(p=>p.id===alice.id).answered);
+  rejection=wait(a.ws,'error');a.ws.send(JSON.stringify({type:'answer',round:0,choice:sa.question.options[1].id}));assert.match((await rejection).message,/sudah/);
+  a.ws.close(1000,'test reconnect');const again=await connect(code,token);assert.equal(again.state.players.length,2);assert.equal(again.state.players.find(p=>p.id===alice.id).score,answered.players.find(p=>p.id===alice.id).score);assert.equal(again.state.players.find(p=>p.id===alice.id).answered,true);
+  r=await request('/guest',{method:'POST',headers:{Origin:origin},body:'{}'});const guest=await r.json();assert.ok(guest.guest);
+  r=await request('/rooms',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+guest.token},body:JSON.stringify({game:'memory',mode:'multi'})});assert.equal(r.status,403);
+  r=await request('/rooms/ABCDEFGH/connect',{headers:{Origin:origin,Upgrade:'websocket'}});assert.equal(r.status,404);
+ }finally{for(const ws of sockets)try{ws.close()}catch{}await mf.dispose();await rm(dir,{recursive:true,force:true})}
+});

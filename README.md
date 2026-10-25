@@ -341,3 +341,7 @@ Fan-made · tidak berafiliasi dengan JKT48 Operation Team.
 ### Dashboard Discord
 
 Dashboard publik ada di `/discord`. Panduan OAuth, izin per server, deployment, dan pengujian: [docs/discord-auth-setup.md](docs/discord-auth-setup.md). Token bot dan Client Secret hanya digunakan di server.
+
+### Arcade / Discord Activities
+
+Empat game solo/multiplayer tersedia di `/games`. Mode iframe Discord memakai Embedded App SDK dan room Cloudflare Durable Objects. Setup Developer Portal, sumber media, autentikasi dan pengujian: [docs/discord-activities-setup.md](docs/discord-activities-setup.md).

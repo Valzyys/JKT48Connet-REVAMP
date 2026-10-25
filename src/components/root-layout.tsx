@@ -1,5 +1,5 @@
 import { Outlet, useRouterState } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { IntroProvider } from "@/components/intro";
 import { PixelCross } from "@/components/logo";
 import { Aside, Dock, Sidebar, Topbar } from "@/components/shell";
@@ -11,7 +11,9 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 
 const PARTICLES = 18;
 
-export function RootLayout() {
+const ActivityScreen=lazy(()=>import("@/pages/games").then(m=>({default:m.GamesPage})));
+export function RootLayout(){const path=useRouterState({select:s=>s.location.pathname});const embedded=new URLSearchParams(window.location.search).has("frame_id");return path==="/activity"||embedded?<Suspense fallback={<div className="p-6 micro">Menyiapkan permainan…</div>}><ActivityScreen/></Suspense>:<WebsiteLayout/>}
+function WebsiteLayout() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const wipe = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -19,7 +21,7 @@ export function RootLayout() {
   const tap = useRef({ x: 0, y: 0, t: 0 });
   const dest = navFor(path);
   const isPm = path === "/pm" || path.startsWith("/pm/");
-  const isWorkspace = isPm || path === "/discord" || path.startsWith("/discord/");
+  const isWorkspace = path === "/games" || isPm || path === "/discord" || path.startsWith("/discord/");
   const prev = useRef(path);
 
   // Judul halaman statis (detail member/theater/berita mengganti sendiri setelah datanya termuat).
