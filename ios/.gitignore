@@ -1,0 +1,7 @@
+# Dibuat ulang oleh XcodeGen / xcodebuild
+*.xcodeproj/
+JKT48Connect/Info.plist
+build/
+out/
+shots/
+DerivedData/
