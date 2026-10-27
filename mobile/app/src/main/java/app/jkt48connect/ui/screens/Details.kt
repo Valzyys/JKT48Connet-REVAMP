@@ -167,7 +167,7 @@ private val Pad = 16.dp
 @Composable
 private fun detailPadding() = PaddingValues(start = Pad, end = Pad, top = LocalInsets.current.calculateTopPadding(), bottom = 40.dp)
 
-/** Detail rekap: foto, statistik, replay (terkunci 72 jam), supporter, gift, dan cuplikan layar. */
+/** Detail rekap: foto, statistik, replay (IDN terkunci 72 jam; Showroom langsung), supporter, gift, dan cuplikan layar. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RecentDetailScreen(r: RecentLive) {
@@ -278,7 +278,7 @@ fun RecentDetailScreen(r: RecentLive) {
     }
 }
 
-/** Replay: terkunci dengan hitung mundur sampai 72 jam setelah live, lalu berubah jadi pemutar. */
+/** Replay: live IDN terkunci dengan hitung mundur sampai 72 jam setelah live (server), Showroom langsung jadi pemutar. */
 @Composable
 private fun ReplayPanel(d: RecentDetail, onUnlock: () -> Unit) {
     val c = LocalColors.current
@@ -296,7 +296,7 @@ private fun ReplayPanel(d: RecentDetail, onUnlock: () -> Unit) {
                     Image(Icons.Rounded.Lock, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(Color.White))
                 }
                 Spacer(Modifier.width(14.dp))
-                Txt("REPLAY · TERBUKA 72 JAM SETELAH LIVE", AppText.micro(Color.White.copy(alpha = 0.55f)), Modifier.weight(1f))
+                Txt("REPLAY IDN · TERBUKA 72 JAM SETELAH LIVE", AppText.micro(Color.White.copy(alpha = 0.55f)), Modifier.weight(1f))
             }
             VGap(14.dp)
             if (unlock != null) Countdown(d.replayUnlockAt, AppText.display(34.sp, Color.White))

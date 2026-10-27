@@ -132,6 +132,15 @@ const env = {
         next_cursor: null,
         has_more: false,
       });
+    // Live yang baru selesai 1 jam lalu: replay Showroom langsung terbuka, replay IDN masih terkunci 72 jam.
+    if (url.pathname === "/api/recent/sr-fresh" || url.pathname === "/api/recent/idn-fresh")
+      return Response.json({
+        data_id: url.pathname.split("/").pop(),
+        type: url.pathname.includes("/sr-") ? "showroom" : "idn",
+        member: { name: "Fresh" },
+        live_info: { date: { start: new Date(Date.now() - 2 * 3_600_000).toISOString(), end: new Date(Date.now() - 3_600_000).toISOString() } },
+        recordings: [{ url: MP4, stream_url: "https://media.test/live/v.m3u8", duration_ms: 60000 }],
+      });
     if (url.pathname === "/api/recent/idn-x")
       return Response.json({
         data_id: "idn-x",
@@ -211,6 +220,21 @@ test("app session issues a bearer token; data requires it", async () => {
   assert.match(idn.link, /^https:\/\/www\.idn\.app\//);
   assert.equal((await call("/api/app/does_not_exist", { token })).status, 404);
   assert.equal((await call("/api/app/now_live?x=1", { token })).status, 400, "unknown query params are rejected");
+});
+
+test("replay lock: Showroom replays open as soon as the live ends, IDN replays stay locked for 72 hours", async () => {
+  const token = await newToken();
+  const sr = await (await call("/api/app/recent/sr-fresh", { token })).json();
+  assert.equal(sr.recordings.length, 1, "Showroom replay is playable right away");
+  assert.match(sr.recordings[0].url, /^\/api\/app\/replay\?t=/);
+  assert.ok(Date.parse(sr.replayUnlockAt) <= Date.now());
+
+  const idn = await (await call("/api/app/recent/idn-fresh", { token })).json();
+  assert.deepEqual(idn.recordings, [], "IDN replay sends no URL during the lock");
+  assert.equal(idn.recordingCount, 1);
+  const hours = (Date.parse(idn.replayUnlockAt) - Date.now()) / 3_600_000;
+  assert.ok(hours > 70 && hours < 72, `IDN unlocks ~71 h from now (got ${hours.toFixed(2)})`);
+  assert.doesNotMatch(JSON.stringify(idn), /media\.test/);
 });
 
 test("replay links point to the app endpoints and are bound to the app token", async () => {
