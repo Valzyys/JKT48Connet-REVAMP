@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,6 +39,8 @@ import app.jkt48connect.core.NewsItem
 import app.jkt48connect.core.RecentLive
 import app.jkt48connect.core.TheaterShow
 import app.jkt48connect.core.daysUntil
+import app.jkt48connect.ui.LocalNav
+import app.jkt48connect.ui.Route
 import app.jkt48connect.core.fmtCompact
 import app.jkt48connect.core.fmtDate
 import app.jkt48connect.core.fmtDuration
@@ -59,12 +63,16 @@ fun rememberOpenUrl(): (String) -> Unit {
     }
 }
 
-/** Kartu besar member yang sedang live: foto penuh, pil kaca merah "LIVE" yang membiaskan foto di belakangnya. */
+/**
+ * Kartu besar member yang sedang live: foto penuh, pil kaca merah "LIVE" yang membiaskan foto di belakangnya.
+ * Live Showroom ditonton langsung di aplikasi; live IDN tidak bisa, jadi dibuka di idn.app.
+ */
 @Composable
 fun LiveCard(live: LiveSession, modifier: Modifier = Modifier, height: Dp = 260.dp) {
     val open = rememberOpenUrl()
+    val nav = LocalNav.current
     val photoBackdrop = rememberLayerBackdrop()
-    Box(modifier.height(height).fillMaxWidth().pressable({ open(live.link) }).clip(RoundedCornerShape(28.dp))) {
+    Box(modifier.height(height).fillMaxWidth().pressable({ if (live.watchable) nav.push(Route.Watch(live)) else open(live.link) }).clip(RoundedCornerShape(28.dp))) {
         Box(Modifier.fillMaxSize().layerBackdrop(photoBackdrop)) {
             NetImage(live.photo, Modifier.fillMaxSize(), alignment = if (live.banner.isNotEmpty()) Alignment.Center else Alignment.TopCenter, fallback = live.name)
             Box(Modifier.fillMaxSize().background(PhotoScrim))
@@ -79,6 +87,15 @@ fun LiveCard(live: LiveSession, modifier: Modifier = Modifier, height: Dp = 260.
             SignalBars(color = Color.White, height = 11.dp)
             Spacer(Modifier.width(7.dp))
             Txt("LIVE · ${live.platformLabel.uppercase()}", AppText.micro(Color.White))
+        }
+        // Tonton di aplikasi (Showroom) atau buka di platform asli (IDN).
+        Row(
+            Modifier.align(Alignment.TopEnd).padding(14.dp).clip(Capsule()).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 11.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Image(if (live.watchable) Icons.Rounded.PlayArrow else Icons.Rounded.OpenInNew, null, Modifier.size(14.dp), colorFilter = ColorFilter.tint(Color.White))
+            Spacer(Modifier.width(5.dp))
+            Txt(if (live.watchable) "TONTON" else "BUKA IDN", AppText.micro(Color.White))
         }
         Column(Modifier.align(Alignment.BottomStart).padding(18.dp, 0.dp, 18.dp, 16.dp)) {
             Txt(live.name.uppercase(), AppText.display(32.sp, Color.White), maxLines = 1)

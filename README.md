@@ -30,7 +30,8 @@ tema `jkt48connect`, bukan photobook.
 | Route | Isi | Endpoint |
 | --- | --- | --- |
 | `/` | Carousel banner jkt48connect, statistik, live, poster show, recent live, berita, video (+ jadwal & birthday di sidebar) | beberapa |
-| `/live` | Member yang sedang live (filter Showroom / IDN) | `GET /api/now_live?group=jkt48` |
+| `/live` | Member yang sedang live (filter Showroom / IDN). Live Showroom dibuka di `/watch/:id`, live IDN di idn.app | `GET /api/now_live?group=jkt48` |
+| `/watch/:id` | Menonton live Showroom langsung di situs (HLS dari CDN Showroom lewat hls.js): lencana LIVE, lama siaran, pilihan kualitas, live lain | `GET /api/now_live?group=jkt48` |
 | `/theater`, `/theater/:id` | Daftar show & detail: lineup, seitansai, graduation, setlist, rekaman, poster jadwal | `GET /api/theater`, `/api/theater/:id` |
 | `/schedule` | Show, exclusive, dan event per hari (WIB) | `GET /api/next_schedule`, `/api/theater` |
 | `/member`, `/member/:id` | Direktori (cari, aktif/graduated) & profil | `GET /api/member`, `/api/member/:id` |
@@ -47,6 +48,7 @@ Beberapa hal yang ditangani di sana:
 - Waktu show di daftar theater ada di `start_date`.
 - Lineup di daftar tidak membawa foto, jadi foto dicocokkan dari `/api/member`.
 - `now_live` bisa memuat sesi yang sama dua kali, jadi daftarnya dideduplikasi.
+- Hanya live **Showroom** yang bisa ditonton langsung (web dan aplikasi): `streaming_url_list` diteruskan sebagai `streams` (https saja, tanpa duplikat, kualitas tertinggi dulu). Live **IDN** selalu `streams: []` dan dibuka di idn.app. Playlist Showroom hanya ±3 potongan × 1 detik, jadi pemutar tidak mempercepat putaran untuk mengejar ujung siaran (itu menghabiskan cadangan dan membuat tersendat) dan menunggu ±3 detik cadangan setelah tersendat.
 - Item exclusive/event dari `next_schedule` tidak punya halaman detail (API membalas 502), jadi tampil tanpa link.
 - Replay di `/recent/:id` di-stream lewat `/api/replay` (token terenkripsi milik sesi, bukan URL MP4 asli) dengan pemutar custom ([`video-player.tsx`](src/components/video-player.tsx)): bar seek dengan buffer dan pratinjau waktu, lompat ±10 detik, volume (diingat), kecepatan 0.5–2×, picture-in-picture, layar penuh, kontrol yang menghilang sendiri, pintasan keyboard (spasi/K, J/L, ←/→, ↑/↓, M, F, 0–9), dan ketuk dua kali kiri/kanan di HP. Pemutar baru muncul 72 jam setelah `live_info.date.end` (`REPLAY_LOCK_HOURS` di `src/lib/shape.ts`, ditegakkan server); sebelum itu tampil panel terkunci dengan hitung mundur, dan berubah jadi pemutar dengan sendirinya saat waktunya tiba. Rekaman yang terdiri dari beberapa bagian bisa dipilih per bagian. File rekaman upstream berupa MP4 ter-fragmentasi tanpa indeks, sehingga bila diputar langsung browser harus membacanya fragmen demi fragmen sebelum bisa mulai/seek; karena itu pemutar memakai playlist HLS byte-range upstream lewat `/api/replay/hls` (diputar dengan [hls.js](https://github.com/video-dev/hls.js), dimuat hanya di halaman replay). Worker menggabungkan fragmen ±2 detik menjadi potongan ±8 detik (potongan pertama ±4 detik) supaya jumlah permintaan sedikit, lalu mengganti URL file dengan token sesi; bila HLS gagal pemutar kembali ke MP4 biasa.
 - Cuplikan live diambil dari `live_info.screenshot` (nama file = waktu tangkap, epoch ms). Semua cuplikan ditampilkan: grid 18 pertama (bisa dibuka semua) atau daftar rinci berisi nomor, menit ke- (dihitung dari awal live), dan jam WIB. Klik membuka penampil layar penuh dengan filmstrip, panah, keyboard ←/→/Esc, dan geser.
@@ -137,7 +139,7 @@ Area baru `/pm` menyediakan akun, akses berbayar per member, QR MYPG di `/pm/pay
 ## Aplikasi Android (Kotlin + Compose)
 
 Folder [`mobile/`](mobile/README.md) berisi aplikasi Android native bergaya Liquid Glass memakai [Backdrop](https://kyant.gitbook.io/backdrop):
-- **Halaman:** beranda bergaya iPhone (widget), live, jadwal/theater, recent dengan replay HLS, member (dengan theater & live terakhir), video YouTube yang bisa diputar, posting member di X/TikTok/Instagram, ulang tahun, berita bergambar, dan Tentang.
+- **Halaman:** beranda bergaya iPhone (widget), live (Showroom ditonton langsung di aplikasi, IDN dibuka di idn.app), jadwal/theater, recent dengan replay HLS, member (dengan theater & live terakhir), video YouTube yang bisa diputar, posting member di X/TikTok/Instagram, ulang tahun, berita bergambar, dan Tentang.
 - **Donasi QRIS** (MYPG, lewat worker) dengan dinding pendukung, dan **member favorit** (oshi) di profil, tab Favorit, serta beranda.
 - **Notifikasi:** member live, show segera dimulai, ulang tahun, dan berita baru (diperiksa tiap ±15 menit, bisa diatur per jenis).
 - **Kaca interaktif:** tombol yang bisa ditarik dan membal, tab bar dengan pil yang bisa diseret, dan slider lensa.

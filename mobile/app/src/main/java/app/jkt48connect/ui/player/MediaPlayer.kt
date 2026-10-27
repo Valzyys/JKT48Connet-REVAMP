@@ -10,13 +10,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Forward10
@@ -57,6 +58,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -74,25 +79,25 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.jkt48connect.core.Api
+import app.jkt48connect.core.parseInstant
 import app.jkt48connect.ui.components.NetImage
 import app.jkt48connect.ui.components.Txt
 import app.jkt48connect.ui.components.VGap
-import app.jkt48connect.ui.glass.LiquidButton
-import app.jkt48connect.ui.glass.LiquidIconButton
-import app.jkt48connect.ui.glass.LiquidSlider
+import app.jkt48connect.ui.components.pressable
 import app.jkt48connect.ui.screens.Spinner
 import app.jkt48connect.ui.theme.AppText
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -100,8 +105,10 @@ import kotlinx.coroutines.launch
  * Sumber video untuk [MediaPlayer].
  * - `hls`: playlist HLS (mulai & seek cepat); bila gagal, pemutar beralih ke `fallback` (MP4) bila ada.
  * - `auth`: kirim token aplikasi (hanya untuk URL worker sendiri, mis. replay). URL pihak lain (YouTube via
- *   api.jkt48connect.app, media TikTok/Instagram/X) diputar tanpa header supaya token tidak bocor.
- * - `qualities`: tinggi video yang tersedia (YouTube), memunculkan pil kualitas.
+ *   api.jkt48connect.app, media TikTok/Instagram/X, CDN Showroom) diputar tanpa header supaya token tidak bocor.
+ * - `qualities`: tinggi video yang tersedia dalam satu playlist (YouTube), memunculkan pil kualitas.
+ * - `live`: siaran langsung — tanpa seek/lompat/kecepatan; `liveSince` untuk lama siaran, `variants` untuk
+ *   pilihan kualitas yang berupa playlist terpisah (Showroom: label → URL, kualitas tertinggi dulu).
  */
 data class MediaSource(
     val url: String,
@@ -110,7 +117,18 @@ data class MediaSource(
     val auth: Boolean = false,
     val durationMs: Long = 0,
     val qualities: List<Int> = emptyList(),
+    val live: Boolean = false,
+    val liveSince: String = "",
+    val variants: List<Pair<String, String>> = emptyList(),
 )
+
+/**
+ * Jumlah pemutar video yang sedang tampil. Selama ada, kaca di kepala halaman hanya membiaskan latar ambient
+ * (statis) — bukan isi halaman — supaya tiap frame video tidak memaksa efek kaca dihitung ulang (penyebab tersendat).
+ */
+object PlayerPresence {
+    var count by mutableIntStateOf(0)
+}
 
 /** Status pemutar; dibagi antara tampilan di halaman dan layar penuh supaya ExoPlayer tidak dibuat ulang. */
 @Stable
@@ -131,6 +149,8 @@ private class PlayerUi(ratio: Float, durationMs: Long) {
     var fullscreen by mutableStateOf(false)
     /** 0 = otomatis (adaptif), selain itu tinggi video yang dikunci. */
     var quality by mutableIntStateOf(0)
+    /** Indeks `MediaSource.variants` yang diputar (live Showroom). */
+    var variant by mutableIntStateOf(0)
 
     fun wake() {
         controls = true
@@ -156,6 +176,15 @@ private class PlayerUi(ratio: Float, durationMs: Long) {
         wake()
     }
 
+    /** Live: kembali ke posisi terkini siaran (mis. setelah dijeda). */
+    fun goLive() {
+        player?.let {
+            it.seekToDefaultPosition()
+            it.play()
+        }
+        wake()
+    }
+
     fun nextSpeed() {
         val speeds = listOf(1f, 1.25f, 1.5f, 2f, 0.5f, 0.75f)
         speed = speeds[(speeds.indexOf(speed) + 1) % speeds.size]
@@ -177,8 +206,11 @@ private class PlayerUi(ratio: Float, durationMs: Long) {
 }
 
 /**
- * Pemutar video (Media3) dengan kontrol kaca: judul, kecepatan, kualitas, layar penuh, mundur/maju 10 detik,
- * play, dan slider lensa. Ketuk dua kali di sisi kiri/kanan untuk −10/+10 detik.
+ * Pemutar video (Media3): judul, kecepatan, kualitas, layar penuh, mundur/maju 10 detik, play, dan bar posisi.
+ * Ketuk dua kali di sisi kiri/kanan untuk −10/+10 detik. Mode live: lencana LIVE + lama siaran, tanpa seek.
+ *
+ * Kontrol sengaja tidak memakai kaca (backdrop): kaca di atas video harus menghitung ulang blur/refraksi
+ * setiap frame video dan membuat video patah-patah di banyak HP.
  * `onFatal`: dipanggil saat video tidak bisa diputar (mis. tiket HLS kedaluwarsa → pemanggil mengambil URL baru).
  */
 @OptIn(UnstableApi::class)
@@ -202,25 +234,64 @@ fun MediaPlayer(
 
     LaunchedEffect(src.url) {
         val headers = if (src.auth) runCatching { Api.authHeaders() }.getOrElse { emptyMap() } else emptyMap()
-        val source = DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers).setAllowCrossProtocolRedirects(true)
-        val exo = ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(source)).build()
+        val source = DefaultHttpDataSource.Factory()
+            .setDefaultRequestProperties(headers)
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(20_000)
+        // Live: setelah tersendat tunggu ±3 detik cadangan dulu supaya tidak langsung tersendat lagi.
+        // VOD: mulai cepat (1 detik), lalu isi cadangan sampai 50 detik ke depan.
+        val load = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(if (src.live) 4_000 else 15_000, if (src.live) 30_000 else 50_000, 1_000, if (src.live) 3_000 else 2_500)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+        val exo = ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(source))
+            .setLoadControl(load)
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+        exo.setAudioAttributes(androidx.media3.common.AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
         var usingHls = src.hls
+        var loadedVariant = -1
         fun load() {
-            val url = if (usingHls || src.fallback == null) src.url else src.fallback
+            val variantUrl = src.variants.getOrNull(ui.variant)?.second
+            val url = variantUrl ?: if (usingHls || src.fallback == null) src.url else src.fallback
             val item = MediaItem.Builder().setUri(Api.absolute(url))
-            if (usingHls) item.setMimeType(MimeTypes.APPLICATION_M3U8)
+            if (usingHls || src.live) item.setMimeType(MimeTypes.APPLICATION_M3U8)
+            if (src.live) {
+                // Playlist Showroom hanya ±3 detik. Jangan dipercepat untuk mengejar ujung siaran (itu
+                // menghabiskan cadangan → tersendat lagi); cukup sedikit diperlambat bila terlalu dekat ujung.
+                item.setLiveConfiguration(
+                    MediaItem.LiveConfiguration.Builder()
+                        .setTargetOffsetMs(6_000)
+                        .setMinOffsetMs(2_000)
+                        .setMaxOffsetMs(45_000)
+                        .setMinPlaybackSpeed(0.97f)
+                        .setMaxPlaybackSpeed(1f)
+                        .build(),
+                )
+            }
+            loadedVariant = ui.variant
             exo.setMediaItem(item.build())
             exo.prepare()
         }
         exo.addListener(object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
-                if (usingHls && src.fallback != null) {
-                    usingHls = false // HLS gagal → MP4 biasa
-                    load()
-                } else {
-                    val msg = e.localizedMessage ?: "Video belum bisa diputar"
-                    ui.error = msg
-                    onFatal?.invoke(msg)
+                when {
+                    usingHls && src.fallback != null -> {
+                        usingHls = false // HLS gagal → MP4 biasa
+                        load()
+                    }
+                    // Live tertinggal dari jendela playlist (mis. lama dijeda): lompat ke posisi terkini.
+                    e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> {
+                        exo.seekToDefaultPosition()
+                        exo.prepare()
+                    }
+                    else -> {
+                        val msg = e.localizedMessage ?: "Video belum bisa diputar"
+                        ui.error = msg
+                        onFatal?.invoke(msg)
+                    }
                 }
             }
 
@@ -233,7 +304,7 @@ fun MediaPlayer(
                 ui.buffering = state == Player.STATE_BUFFERING
                 ui.ended = state == Player.STATE_ENDED
                 if (state == Player.STATE_ENDED) ui.wake()
-                if (exo.duration > 0) ui.duration = exo.duration
+                if (exo.duration > 0 && !src.live) ui.duration = exo.duration
             }
 
             override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
@@ -244,12 +315,24 @@ fun MediaPlayer(
         exo.playWhenReady = autoplay
         ui.player = exo
         while (true) {
-            if (ui.dragging == null) ui.position = exo.currentPosition
+            if (loadedVariant != ui.variant) {
+                ui.error = null
+                load()
+                exo.play()
+            }
+            // Posisi hanya dibaca saat kontrol tampil: tidak ada rekomposisi tiap 250 ms selama menonton.
+            if (ui.dragging == null && (ui.controls || !ui.playing)) ui.position = exo.currentPosition
             if (exo.isPlaying && System.currentTimeMillis() - ui.lastTouch > 3000) ui.controls = false
             delay(250)
         }
     }
-    DisposableEffect(Unit) { onDispose { ui.player?.release() } }
+    DisposableEffect(Unit) {
+        PlayerPresence.count++
+        onDispose {
+            PlayerPresence.count--
+            ui.player?.release()
+        }
+    }
     // Aplikasi ke latar → jeda; layar tetap menyala selama video diputar.
     val lifecycle = (context as? androidx.activity.ComponentActivity)?.lifecycle
     DisposableEffect(lifecycle) {
@@ -264,22 +347,24 @@ fun MediaPlayer(
     }
 
     val maxH = LocalConfiguration.current.screenHeightDp.dp * 0.62f
-    Box(
-        modifier
-            .fillMaxWidth()
-            .heightIn(max = maxH)
-            .aspectRatio(ui.ratio, matchHeightConstraintsFirst = ui.ratio < 1f)
-            .clip(RoundedCornerShape(radius))
-            .background(Color.Black),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (!ui.fullscreen) {
-            PlayerSurface(ui, src, title, label, poster, fullscreen = false)
-        } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(Icons.Rounded.Fullscreen, null, Modifier.size(28.dp), colorFilter = ColorFilter.tint(Color.White.copy(alpha = 0.6f)))
-                VGap(6.dp)
-                Txt("Diputar di layar penuh", AppText.body(13.sp, Color.White.copy(alpha = 0.6f)))
+    Column(modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxH)
+                .aspectRatio(ui.ratio, matchHeightConstraintsFirst = ui.ratio < 1f)
+                .clip(RoundedCornerShape(radius))
+                .background(Color.Black),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!ui.fullscreen) {
+                PlayerSurface(ui, src, title, label, poster, fullscreen = false)
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Image(Icons.Rounded.Fullscreen, null, Modifier.size(28.dp), colorFilter = ColorFilter.tint(Color.White.copy(alpha = 0.6f)))
+                    VGap(6.dp)
+                    Txt("Diputar di layar penuh", AppText.body(13.sp, Color.White.copy(alpha = 0.6f)))
+                }
             }
         }
     }
@@ -289,7 +374,6 @@ fun MediaPlayer(
 /** Video + kontrol; dipakai di halaman (membulat) maupun layar penuh. */
 @Composable
 private fun PlayerSurface(ui: PlayerUi, src: MediaSource, title: String, label: String, poster: String, fullscreen: Boolean) {
-    val backdrop = rememberLayerBackdrop()
     // Kilasan "−10 / +10 detik" saat ketuk dua kali di sisi kiri/kanan.
     var flash by remember { mutableIntStateOf(0) }
     var flashTick by remember { mutableIntStateOf(0) }
@@ -303,10 +387,11 @@ private fun PlayerSurface(ui: PlayerUi, src: MediaSource, title: String, label: 
         Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(ui) {
+            .pointerInput(ui, src.live) {
                 detectTapGestures(
                     onTap = { if (ui.controls && ui.playing) ui.controls = false else ui.wake() },
                     onDoubleTap = { off ->
+                        if (src.live) return@detectTapGestures
                         val forward = off.x > size.width / 2
                         ui.seekBy(if (forward) 10_000 else -10_000)
                         flash = if (forward) 1 else -1
@@ -316,7 +401,7 @@ private fun PlayerSurface(ui: PlayerUi, src: MediaSource, title: String, label: 
             },
         contentAlignment = Alignment.Center,
     ) {
-        BoxWithConstraints(Modifier.fillMaxSize().layerBackdrop(backdrop), contentAlignment = Alignment.Center) {
+        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             // Video selalu utuh (fit) di dalam wadah.
             val boxRatio = if (maxHeight.value > 0f) maxWidth.value / maxHeight.value else ui.ratio
             val videoModifier = if (boxRatio > ui.ratio) Modifier.fillMaxHeight().aspectRatio(ui.ratio, matchHeightConstraintsFirst = true)
@@ -332,7 +417,12 @@ private fun PlayerSurface(ui: PlayerUi, src: MediaSource, title: String, label: 
             if (poster.isNotEmpty() && !ui.started) NetImage(poster, Modifier.fillMaxSize(), alignment = Alignment.Center)
         }
         when {
-            ui.error != null -> Txt("Video belum bisa diputar.\n${ui.error}", AppText.body(13.sp, Color.White.copy(alpha = 0.75f)), Modifier.background(Color.Black.copy(alpha = 0.6f)).padding(20.dp))
+            ui.error != null -> Txt(
+                if (src.live) "Siaran belum bisa diputar." else "Video belum bisa diputar.\n${ui.error}",
+                AppText.body(13.sp, Color.White.copy(alpha = 0.75f)),
+                Modifier.background(Color.Black.copy(alpha = 0.6f)).padding(20.dp),
+            )
+            ui.ended && src.live -> Txt("Siaran sudah selesai.", AppText.body(14.sp, Color.White, 700), Modifier.background(Color.Black.copy(alpha = 0.6f)).padding(20.dp))
             ui.buffering && (ui.started || ui.player?.playWhenReady == true) -> Spinner()
         }
         if (flash != 0) {
@@ -349,30 +439,40 @@ private fun PlayerSurface(ui: PlayerUi, src: MediaSource, title: String, label: 
             }
         }
         AnimatedVisibility(ui.controls || !ui.playing, enter = fadeIn(tween(160)), exit = fadeOut(tween(220)), modifier = Modifier.fillMaxSize()) {
-            PlayerControls(ui, src, title, label, fullscreen, backdrop)
+            PlayerControls(ui, src, title, label, fullscreen)
         }
     }
 }
 
+private val Scrim = Color.Black.copy(alpha = 0.42f)
+
 @Composable
-private fun PlayerControls(ui: PlayerUi, src: MediaSource, title: String, label: String, fullscreen: Boolean, backdrop: com.kyant.backdrop.Backdrop) {
+private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, size: Dp, desc: String, filled: Boolean = false, onClick: () -> Unit) {
+    Box(
+        Modifier.size(size).clip(CircleShape).background(if (filled) Color.White.copy(alpha = 0.92f) else Scrim).pressable(onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(icon, desc, Modifier.size(size * 0.5f), colorFilter = ColorFilter.tint(if (filled) Color.Black else Color.White))
+    }
+}
+
+@Composable
+private fun Pill(icon: androidx.compose.ui.graphics.vector.ImageVector?, text: String, height: Dp, color: Color = Scrim, onClick: () -> Unit) {
+    Row(
+        Modifier.height(height).clip(CircleShape).background(color).pressable(onClick).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        if (icon != null) Image(icon, null, Modifier.size(15.dp), colorFilter = ColorFilter.tint(Color.White))
+        Txt(text, AppText.mono(11.5.sp, Color.White, FontWeight.SemiBold))
+    }
+}
+
+@Composable
+private fun PlayerControls(ui: PlayerUi, src: MediaSource, title: String, label: String, fullscreen: Boolean) {
     val small = if (fullscreen) 44.dp else 36.dp
     val side = if (fullscreen) 56.dp else 46.dp
     val play = if (fullscreen) 80.dp else 64.dp
-    val glassFill = Color.White.copy(alpha = 0.14f)
-    @Composable
-    fun GlassIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, size: Dp, desc: String, onClick: () -> Unit) {
-        LiquidButton(onClick = onClick, modifier = Modifier.size(size), backdrop = backdrop, fill = glassFill, contentPadding = PaddingValues(0.dp)) {
-            Image(icon, desc, Modifier.size(size * 0.5f), colorFilter = ColorFilter.tint(Color.White))
-        }
-    }
-    @Composable
-    fun GlassPill(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, onClick: () -> Unit) {
-        LiquidButton(onClick = onClick, modifier = Modifier.height(small), backdrop = backdrop, fill = glassFill, contentPadding = PaddingValues(horizontal = 10.dp)) {
-            Image(icon, null, Modifier.size(15.dp), colorFilter = ColorFilter.tint(Color.White))
-            Txt(text, AppText.mono(11.5.sp, Color.White, FontWeight.SemiBold))
-        }
-    }
     Box(
         Modifier
             .fillMaxSize()
@@ -388,53 +488,115 @@ private fun PlayerControls(ui: PlayerUi, src: MediaSource, title: String, label:
                 Txt(title, AppText.body(if (fullscreen) 16.sp else 13.sp, Color.White, 800), maxLines = 1)
                 Txt(label, AppText.micro(Color.White.copy(alpha = 0.6f), 8.5.sp))
             }
-            if (src.qualities.size > 1) GlassPill(Icons.Rounded.HighQuality, if (ui.quality == 0) "Auto" else "${ui.quality}p") { ui.nextQuality(src.qualities) }
-            GlassPill(Icons.Rounded.Speed, if (ui.speed % 1f == 0f) "${ui.speed.toInt()}×" else "${ui.speed}×".replace('.', ',')) { ui.nextSpeed() }
-            GlassIcon(if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, small, if (fullscreen) "Keluar layar penuh" else "Layar penuh") {
+            if (src.variants.size > 1) {
+                Pill(Icons.Rounded.HighQuality, src.variants.getOrNull(ui.variant)?.first ?: "Auto", small) {
+                    ui.variant = (ui.variant + 1) % src.variants.size
+                    ui.wake()
+                }
+            }
+            if (src.qualities.size > 1) Pill(Icons.Rounded.HighQuality, if (ui.quality == 0) "Auto" else "${ui.quality}p", small) { ui.nextQuality(src.qualities) }
+            if (!src.live) Pill(Icons.Rounded.Speed, if (ui.speed % 1f == 0f) "${ui.speed.toInt()}×" else "${ui.speed}×".replace('.', ','), small) { ui.nextSpeed() }
+            RoundButton(if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, small, if (fullscreen) "Keluar layar penuh" else "Layar penuh") {
                 ui.fullscreen = !ui.fullscreen
                 ui.wake()
             }
         }
         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (fullscreen) 36.dp else 22.dp)) {
-            GlassIcon(Icons.Rounded.Replay10, side, "Mundur 10 detik") { ui.seekBy(-10_000) }
-            LiquidIconButton(
+            if (!src.live) RoundButton(Icons.Rounded.Replay10, side, "Mundur 10 detik") { ui.seekBy(-10_000) }
+            RoundButton(
                 when {
-                    ui.ended -> Icons.Rounded.Replay
+                    ui.ended && !src.live -> Icons.Rounded.Replay
                     ui.playing -> Icons.Rounded.Pause
                     else -> Icons.Rounded.PlayArrow
                 },
-                { ui.toggle() },
-                size = play,
-                iconSize = play * 0.5f,
-                iconColor = Color.White,
-                backdrop = backdrop,
-                contentDescription = if (ui.playing) "Jeda" else "Putar",
-            )
-            GlassIcon(Icons.Rounded.Forward10, side, "Maju 10 detik") { ui.seekBy(10_000) }
+                play,
+                if (ui.playing) "Jeda" else "Putar",
+                filled = true,
+            ) { ui.toggle() }
+            if (!src.live) RoundButton(Icons.Rounded.Forward10, side, "Maju 10 detik") { ui.seekBy(10_000) }
         }
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = if (fullscreen) 22.dp else 12.dp, vertical = if (fullscreen) 14.dp else 6.dp)) {
-            LiquidSlider(
-                value = { if (ui.duration > 0) (ui.position.toFloat() / ui.duration).coerceIn(0f, 1f) else 0f },
-                onValueChange = {
-                    ui.dragging = it
-                    ui.wake()
-                },
-                onValueChangeFinished = { v ->
-                    ui.player?.seekTo((v * ui.duration).toLong())
-                    ui.position = (v * ui.duration).toLong()
-                    ui.dragging = null
-                    ui.wake()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                backdrop = backdrop,
-            )
-            Row {
-                Txt(time(ui.dragging?.let { (it * ui.duration).toLong() } ?: ui.position), AppText.mono(11.sp, Color.White, FontWeight.SemiBold))
-                Spacer(Modifier.weight(1f))
-                Txt("-" + time((ui.duration - (ui.dragging?.let { (it * ui.duration).toLong() } ?: ui.position)).coerceAtLeast(0)), AppText.mono(11.sp, Color.White.copy(alpha = 0.65f)))
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = if (fullscreen) 22.dp else 12.dp, vertical = if (fullscreen) 14.dp else 8.dp)) {
+            if (src.live) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Pill(null, "● LIVE", small, Color(0xFFE1243A)) { ui.goLive() }
+                    Spacer(Modifier.width(10.dp))
+                    if (src.liveSince.isNotEmpty()) LiveClock(src.liveSince)
+                }
+            } else {
+                ScrubBar(
+                    value = { ui.dragging ?: if (ui.duration > 0) (ui.position.toFloat() / ui.duration).coerceIn(0f, 1f) else 0f },
+                    onDrag = {
+                        ui.dragging = it
+                        ui.wake()
+                    },
+                    onDone = { v ->
+                        ui.player?.seekTo((v * ui.duration).toLong())
+                        ui.position = (v * ui.duration).toLong()
+                        ui.dragging = null
+                        ui.wake()
+                    },
+                )
+                Row {
+                    Txt(time(ui.dragging?.let { (it * ui.duration).toLong() } ?: ui.position), AppText.mono(11.sp, Color.White, FontWeight.SemiBold))
+                    Spacer(Modifier.weight(1f))
+                    Txt("-" + time((ui.duration - (ui.dragging?.let { (it * ui.duration).toLong() } ?: ui.position)).coerceAtLeast(0)), AppText.mono(11.sp, Color.White.copy(alpha = 0.65f)))
+                }
             }
         }
     }
+}
+
+/**
+ * Bar posisi ringan: digambar langsung (tanpa kaca) dan nilainya dibaca saat menggambar, jadi geser/maju
+ * hanya menggambar ulang bar ini. Ketuk untuk lompat, geser untuk mencari.
+ */
+@Composable
+private fun ScrubBar(value: () -> Float, onDrag: (Float) -> Unit, onDone: (Float) -> Unit) {
+    var last by remember { mutableFloatStateOf(0f) }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .pointerInput(Unit) {
+                detectTapGestures { off -> onDone((off.x / size.width).coerceIn(0f, 1f)) }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { off ->
+                        last = (off.x / size.width).coerceIn(0f, 1f)
+                        onDrag(last)
+                    },
+                    onDragEnd = { onDone(last) },
+                    onDragCancel = { onDone(last) },
+                ) { change, _ ->
+                    change.consume()
+                    last = (change.position.x / size.width).coerceIn(0f, 1f)
+                    onDrag(last)
+                }
+            }
+            .drawBehind {
+                val h = 4.dp.toPx()
+                val y = size.height / 2 - h / 2
+                val v = value().coerceIn(0f, 1f)
+                drawRoundRect(Color.White.copy(alpha = 0.25f), Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
+                drawRoundRect(Color(0xFFE1243A), Offset(0f, y), Size(size.width * v, h), CornerRadius(h / 2))
+                drawCircle(Color.White, 7.dp.toPx(), Offset(size.width * v, size.height / 2))
+            },
+    )
+}
+
+/** Lama siaran berjalan, diperbarui tiap detik. */
+@Composable
+private fun LiveClock(since: String) {
+    val start = remember(since) { parseInstant(since)?.toEpochMilli() }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    if (start != null) Txt(time((now - start).coerceAtLeast(0)), AppText.mono(12.sp, Color.White.copy(alpha = 0.85f), FontWeight.SemiBold))
 }
 
 /**

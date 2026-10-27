@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Play } from "lucide-react";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { Tilt } from "@/components/motion";
 import { Img, Index, LiveTag, PlatformTag, cx } from "@/components/ui";
 import { useMemberPhotos } from "@/hooks/use-member-index";
@@ -8,9 +9,27 @@ import { pointLabel, type Birthday, type LiveSession, type Member, type NewsItem
 
 /* Kartu foto ─────────────────────────────────────────────────────────── */
 
+/**
+ * Tautan sebuah sesi live: live Showroom (punya stream) diputar langsung di `/watch/$id`;
+ * live IDN tidak bisa diputar di sini, jadi dibuka di idn.app.
+ */
+export function LiveLink({ l, children, ...rest }: { l: LiveSession; children: ReactNode } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "target" | "rel">) {
+  if (l.streams.length)
+    return (
+      <Link to="/watch/$id" params={{ id: l.id }} {...rest}>
+        {children}
+      </Link>
+    );
+  return (
+    <a href={l.link} target="_blank" rel="noopener noreferrer" {...rest}>
+      {children}
+    </a>
+  );
+}
+
 export function LiveCard({ l, n }: { l: LiveSession; n: number }) {
   return (
-    <a href={l.link} target="_blank" rel="noopener noreferrer" data-reveal className="group block">
+    <LiveLink l={l} data-reveal className="group block">
       <Tilt className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-surface">
         <Img src={l.img} alt={l.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
@@ -20,15 +39,21 @@ export function LiveCard({ l, n }: { l: LiveSession; n: number }) {
         <span className="absolute right-2.5 top-2.5">
           <LiveTag />
         </span>
+        {l.streams.length > 0 && (
+          <span className="absolute left-1/2 top-1/2 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-brand/90 text-white opacity-0 shadow-lg transition duration-300 group-hover:scale-100 group-hover:opacity-100">
+            <Play className="ml-0.5 h-6 w-6 fill-current" />
+          </span>
+        )}
         <div className="absolute inset-x-3 bottom-3 text-white">
           <p className="truncate text-[16px] font-extrabold leading-tight">{l.fullname || l.name}</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-white/80">
+          <p className="mt-0.5 flex items-center gap-1 truncate font-mono text-[11px] text-white/80">
             {l.platform === "idn" ? "IDN" : "Showroom"} · sejak {fmtTime(l.startedAt)}
+            {l.streams.length > 0 ? <Play className="ml-auto h-3 w-3 shrink-0 fill-current" aria-label="Tonton di sini" /> : <ArrowUpRight className="ml-auto h-3.5 w-3.5 shrink-0" aria-label="Dibuka di IDN" />}
           </p>
         </div>
       </Tilt>
       {l.title && <p className="mt-2 truncate text-[13px] text-ink-soft">“{l.title}”</p>}
-    </a>
+    </LiveLink>
   );
 }
 

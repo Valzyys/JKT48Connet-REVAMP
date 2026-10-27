@@ -97,17 +97,25 @@ data class AppUpdate(val version: String, val name: String, val notes: String, v
 /** Theater & live seorang member, dikumpulkan dari arsip theater dan riwayat live terbaru. */
 data class MemberActivity(val upcoming: List<TheaterShow>, val pastShows: List<TheaterShow>, val lives: List<RecentLive>)
 
+/** Satu pilihan kualitas stream live (HLS). */
+data class LiveStream(val label: String, val quality: Int, val url: String)
+
 data class LiveSession(
     val id: String, val name: String, val img: String, val avatar: String, val platform: String,
     val startedAt: String, val title: String, val link: String, val banner: String,
+    /** Stream HLS, kualitas tertinggi dulu. Hanya Showroom; live IDN selalu kosong → dibuka di idn.app. */
+    val streams: List<LiveStream> = emptyList(),
 ) {
     val platformLabel: String get() = platformLabel(platform)
     val photo: String get() = banner.ifEmpty { img.ifEmpty { avatar } }
+    /** Bisa ditonton langsung di aplikasi (live Showroom). */
+    val watchable: Boolean get() = streams.isNotEmpty()
 
     companion object {
         fun from(j: JSONObject) = LiveSession(
             j.s("id"), j.s("name"), j.s("img"), j.s("avatar"), j.s("platform"),
             j.s("startedAt"), j.s("title"), j.s("link"), j.s("banner"),
+            j.objs("streams").map { LiveStream(it.s("label"), it.n("quality") ?: 0, it.s("url")) }.filter { it.url.startsWith("https://") },
         )
     }
 }

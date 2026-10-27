@@ -2,6 +2,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { LayoutGrid, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun, Ticket, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { LiveLink } from "@/components/cards";
 import { Countdown } from "@/components/countdown";
 import { useIntroDone } from "@/components/intro";
 import { Logo, PixelCross } from "@/components/logo";
@@ -356,11 +357,11 @@ export function Topbar() {
         <div className="border-t border-line py-1.5 text-[12px]">
           <Ticker>
             {lives.map((l) => (
-              <a key={l.id} href={l.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-5 hover:text-brand">
+              <LiveLink key={l.id} l={l} className="flex items-center gap-2 px-5 hover:text-brand">
                 <span className="h-1.5 w-1.5 rounded-full bg-brand" />
                 <span className="font-semibold">{l.fullname || l.name}</span>
                 <span className="text-ink-soft">live di {l.platform === "idn" ? "IDN" : "Showroom"}</span>
-              </a>
+              </LiveLink>
             ))}
             {show && (
               <Link to="/theater/$id" params={{ id: show.id }} className="flex items-center gap-2 px-5 hover:text-brand">

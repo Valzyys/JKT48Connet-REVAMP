@@ -17,6 +17,7 @@ import app.jkt48connect.core.NewsItem
 import app.jkt48connect.core.Paged
 import app.jkt48connect.core.RecentLive
 import app.jkt48connect.core.SocialPost
+import app.jkt48connect.core.LiveSession
 import app.jkt48connect.core.Video
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -37,6 +38,8 @@ sealed interface Route {
     /** Posting member di X/TikTok/Instagram; `member` kosong = semua member. */
     data class Social(val platform: String = "x", val member: String = "", val memberName: String = "") : Route
     data class Post(val post: SocialPost) : Route
+    /** Menonton live Showroom di aplikasi. */
+    data class Watch(val live: LiveSession) : Route
 }
 
 /** Navigasi sederhana tanpa library: tab utama + tumpukan halaman detail. */

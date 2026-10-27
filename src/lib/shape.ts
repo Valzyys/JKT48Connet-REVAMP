@@ -142,7 +142,24 @@ export type LiveSession = {
   link: string;
   /** Kartu notifikasi live tema jkt48connect (1600×900), bila sudah dirender. */
   banner: string;
+  /**
+   * Stream HLS untuk diputar langsung di web/aplikasi, kualitas tertinggi lebih dulu. Hanya untuk Showroom;
+   * live IDN selalu kosong sehingga tetap dibuka di idn.app lewat `link`.
+   */
+  streams: LiveStream[];
 };
+
+export type LiveStream = { label: string; quality: number; url: string };
+
+/** Daftar `streaming_url_list` Showroom → stream https yang valid, tanpa duplikat, kualitas tertinggi dulu. */
+function liveStreams(platform: string, raw: unknown): LiveStream[] {
+  if (platform !== "showroom") return [];
+  const seen = new Set<string>();
+  return list(raw)
+    .map((s) => ({ label: str(s.label), quality: num(s.quality) ?? 0, url: httpUrl(s.url) }))
+    .filter((s) => s.url.startsWith("https://") && !seen.has(s.url) && seen.add(s.url))
+    .sort((a, b) => b.quality - a.quality);
+}
 
 function mapLive(l: Raw): LiveSession {
   const platform = str(l.type).toLowerCase();
@@ -165,6 +182,7 @@ function mapLive(l: Raw): LiveSession {
     title: titleParts.join(" — ").trim(),
     link: httpUrl(url, fallbackLink),
     banner: readyDesign(l.notification_designs, "banner"),
+    streams: liveStreams(platform, l.streaming_url_list),
   };
 }
 
