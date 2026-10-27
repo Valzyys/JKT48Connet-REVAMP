@@ -154,6 +154,14 @@ Aplikasi tidak punya cookie/Origin browser, jadi worker menyediakan jalur `/api/
 
 Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test:push`.
 
+### Landing page `/apps`
+
+Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs:
+- **Liquid glass web** (`src/components/liquid-glass.tsx`): `backdrop-filter: url(#filter)` dengan `feDisplacementMap`. Peta perpindahannya dibuat di canvas sesuai ukuran & radius elemen, ditambah aberasi kromatik, tepi mengilap, kilau yang mengikuti kursor, dan efek "jelly" saat ditekan. Pembiasan asli hanya di Chromium (Chrome/Edge/Android); Safari & Firefox memakai kaca buram biasa.
+- **Animasi GSAP + ScrollTrigger:** intro hero, kartu kaca melayang, lensa kaca yang bisa diseret, parallax, galeri layar yang dipin dan digeser horizontal, serta reveal per bagian.
+- **Data asli:** `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`) untuk versi & ukuran APK, plus live dan jadwal berikutnya. Tombol unduh memakai `releases/latest/download/jkt48connect.apk`.
+- Screenshot aplikasi di `public/apps/` dirender dari aplikasi asli.
+
 ### Donasi QRIS (MYPG)
 
 Aplikasi punya halaman **Donasi** yang memakai gateway QRIS MYPG yang sama dengan PM (`worker/donate.ts`, memakai helper `gateway` di `worker/pm.ts`):

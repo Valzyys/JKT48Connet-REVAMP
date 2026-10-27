@@ -47,6 +47,10 @@ export const getTheaterList = (page = 1, perpage = 12) => apiGet<Paged<TheaterSh
 export const getTheater = (id: string) => apiGet<TheaterDetail>(`/api/theater/${encodeURIComponent(id)}`);
 export const getNextSchedule = () => apiGet<TheaterShow[]>("/api/next_schedule");
 
+/** Rilis APK terbaru (GitHub Releases, lewat worker) untuk halaman /apps. */
+export type AppRelease = { version: string; name: string; notes: string; page: string; apk: string; size: number; publishedAt: string };
+export const getAppRelease = () => apiGet<AppRelease>("/api/app_release");
+
 export const getNewsList = (page = 1, perpage = 10) => apiGet<Paged<NewsItem>>("/api/news", { page, perpage });
 export const getNews = (id: string) => apiGet<NewsDetail>(`/api/news/${encodeURIComponent(id)}`);
 
