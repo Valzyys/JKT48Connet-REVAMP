@@ -43,9 +43,9 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 
 | Tab / halaman | Isi |
 |---|---|
-| Beranda | Gaya aplikasi iPhone: judul besar dengan tanggal, empat widget (live, show berikutnya dengan hitung mundur, ulang tahun, video baru), pintasan kaca (Video, Sosmed, Ultah, Berita), live sekarang, video terbaru, posting member, recent dan berita dalam daftar inset |
+| Beranda | Kartu status merah (siapa yang sedang live + show berikutnya dengan hitung mundur), pintasan kaca (Video, Sosmed, Ultah, Berita), oshi, live sekarang, video terbaru, posting member, recent dan berita dalam daftar inset. Bagian kosong disembunyikan |
 | Video | Video terbaru kanal YouTube JKT48 & JKT48 TV (filter per kanal). Diputar langsung di aplikasi (HLS dengan audio, pilihan kualitas Auto/360p–1080p, layar penuh), dengan deskripsi dan komentar publik (muat-lanjut) |
-| Sosmed | Posting publik member di X, TikTok, dan Instagram (arsip JKT48Connect): teks, foto/carousel, video yang bisa diputar, angka interaksi; bisa dibuka per member dari profilnya |
+| Sosmed | Posting publik member di X, TikTok, dan Instagram (arsip JKT48Connect): teks, foto/carousel, video yang bisa diputar, angka interaksi; bisa dibuka per member dari profilnya. Foto/video bisa **diunduh** (ikon unduh di kartu, atau "Unduh foto/video" & "Unduh semua" di detail) ke `Download/JKT48Connect` lewat DownloadManager (Android 8–9 meminta izin penyimpanan) |
 | Live | Semua member yang sedang live (IDN/Showroom), diperbarui tiap 30 detik |
 | Jadwal | Mendatang (dikelompokkan per tanggal) dan arsip theater (muat-lanjut); detail theater dengan member tampil, setlist, hitung mundur |
 | Recent | Rekap live; detail berisi statistik, replay, top supporter, gift, cuplikan layar (9 petak + "+N"; penampil layar penuh gelap: geser kiri/kanan, filmstrip, ketuk dua kali/cubit untuk zoom, geser ke bawah untuk menutup) |
@@ -87,6 +87,7 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 - Pilihannya Sistem, Putih, atau Gelap, diatur di menu dan disimpan di perangkat.
 
 **Tampilan**
+- Latar ambient di belakang kaca sengaja diam: latar bergerak memaksa semua kaca dihitung ulang di setiap frame. Animasi masuk kartu hanya diputar sesaat setelah halaman dibuka, bukan setiap baris muncul saat digulir.
 - Palet ala iOS: latar abu sistem dengan kartu putih (tema terang), hitam pekat dengan kartu abu tua (gelap).
 - Judul halaman besar dan tebal, judul bagian dengan "Semua ›", daftar inset bergaris rambut seperti aplikasi iPhone.
 

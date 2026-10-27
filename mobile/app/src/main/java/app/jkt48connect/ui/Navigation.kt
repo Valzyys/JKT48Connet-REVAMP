@@ -42,11 +42,18 @@ sealed interface Route {
 /** Navigasi sederhana tanpa library: tab utama + tumpukan halaman detail. */
 @Stable
 class Nav {
-    var tab by mutableIntStateOf(0)
+    private var tabState by mutableIntStateOf(0)
+    var tab: Int
+        get() = tabState
+        set(v) {
+            if (v != tabState) app.jkt48connect.ui.components.Motion.lastNav = System.currentTimeMillis()
+            tabState = v
+        }
     val stack = mutableStateListOf<Route>()
     var menuOpen by mutableStateOf(false)
 
     fun push(r: Route) {
+        app.jkt48connect.ui.components.Motion.lastNav = System.currentTimeMillis()
         stack.add(r)
     }
 
@@ -56,6 +63,7 @@ class Nav {
             return true
         }
         if (stack.isEmpty()) return false
+        app.jkt48connect.ui.components.Motion.lastNav = System.currentTimeMillis()
         stack.removeAt(stack.lastIndex)
         return true
     }

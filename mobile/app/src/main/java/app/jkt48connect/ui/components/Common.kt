@@ -157,19 +157,24 @@ fun PageHeader(label: String, title: String, horizontal: Dp = 20.dp, trailing: (
     }
 }
 
-/** Judul bagian ala iOS: judul tebal + keterangan abu, dan "Semua ›" berwarna aksen di kanan. */
+/** Judul bagian: label mikro merah + judul condensed (gaya Fan Signal) + tombol "Semua". */
 @Composable
 fun SectionHead(label: String, title: String, onMore: (() -> Unit)? = null) {
     val c = LocalColors.current
-    Row(Modifier.fillMaxWidth().padding(20.dp, 28.dp, 16.dp, 10.dp), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().padding(20.dp, 30.dp, 16.dp, 12.dp), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            Txt(title, AppText.title(22.sp, c.ink), maxLines = 1)
-            Txt(label, AppText.body(13.sp, c.inkSoft, 500), maxLines = 1)
+            Micro(label, color = c.brand, dot = true)
+            Spacer(Modifier.height(6.dp))
+            Txt(title.uppercase(), AppText.display(30.sp, c.ink), maxLines = 1)
         }
         if (onMore != null) {
-            Row(Modifier.pressable(onMore).padding(start = 12.dp, top = 6.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Txt("Semua", AppText.body(15.sp, c.brand, 600))
-                Image(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.brand))
+            Row(
+                Modifier.pressable(onMore).background(c.card, CircleShape).padding(12.dp, 7.dp, 9.dp, 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Txt("SEMUA", AppText.micro(c.ink, 10.sp))
+                Spacer(Modifier.width(4.dp))
+                Image(Icons.Rounded.NorthEast, null, Modifier.size(13.dp), colorFilter = ColorFilter.tint(c.brand))
             }
         }
     }
@@ -248,8 +253,18 @@ fun Modifier.pressable(onClick: () -> Unit, scale: Float = 0.97f): Modifier = co
         .clickable(interactionSource = null, indication = null, onClick = onClick)
 }
 
-/** Masuk bertahap: naik sedikit + memudar, berurutan sesuai index. */
+/** Waktu pindah halaman/tab terakhir; animasi masuk hanya diputar sesaat setelahnya. */
+object Motion {
+    @Volatile var lastNav = System.currentTimeMillis()
+}
+
+/**
+ * Masuk bertahap: naik sedikit + memudar, berurutan sesuai index. Hanya dalam ±1,2 detik setelah halaman dibuka;
+ * baris yang muncul belakangan karena digulir langsung tampil (tanpa animasi), supaya gulir tetap mulus.
+ */
 fun Modifier.staggerIn(index: Int, step: Int = 50): Modifier = composed {
+    val fresh = remember { System.currentTimeMillis() - Motion.lastNav < 1200 }
+    if (!fresh) return@composed this
     val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         delay((index.coerceIn(0, 12) * step).toLong())
@@ -407,11 +422,14 @@ fun RowScope.Gap(w: Dp) = Spacer(Modifier.width(w))
 @Composable
 fun VGap(h: Dp) = Spacer(Modifier.height(h))
 
-/** Latar ambient: cahaya merah/merah muda yang melayang pelan, supaya kaca punya warna untuk dibiaskan. */
+/**
+ * Latar ambient: cahaya merah/merah muda supaya kaca punya warna untuk dibiaskan. Sengaja diam: latar yang bergerak
+ * memaksa SEMUA kaca di atasnya dihitung ulang di setiap frame (berat, gulir jadi patah-patah).
+ */
 @Composable
 fun Ambient(modifier: Modifier = Modifier) {
     val c = LocalColors.current
-    val t by rememberInfiniteTransition(label = "amb").animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(22_000, easing = LinearEasing)), label = "t")
+    val t = 0.9f
     Canvas(modifier.fillMaxSize()) {
         drawRect(c.bg)
         val w = size.width

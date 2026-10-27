@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,29 +22,29 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Cake
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Newspaper
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.jkt48connect.core.Api
-import app.jkt48connect.core.BirthdayEntry
 import app.jkt48connect.core.Favorites
 import app.jkt48connect.core.LiveSession
 import app.jkt48connect.core.TheaterShow
-import app.jkt48connect.core.Video
-import app.jkt48connect.core.daysUntil
 import app.jkt48connect.core.fmtDate
 import app.jkt48connect.core.fmtDuration
 import app.jkt48connect.core.fmtTime
@@ -63,7 +62,6 @@ import app.jkt48connect.ui.components.GroupRow
 import app.jkt48connect.ui.components.InsetGroup
 import app.jkt48connect.ui.components.LiveCard
 import app.jkt48connect.ui.components.NetImage
-import app.jkt48connect.ui.components.PhotoScrim
 import app.jkt48connect.ui.components.PixelLogo
 import app.jkt48connect.ui.components.PullRefresh
 import app.jkt48connect.ui.components.SectionHead
@@ -71,7 +69,6 @@ import app.jkt48connect.ui.components.SignalBars
 import app.jkt48connect.ui.components.Skeleton
 import app.jkt48connect.ui.components.Txt
 import app.jkt48connect.ui.components.VGap
-import app.jkt48connect.ui.components.appCard
 import app.jkt48connect.ui.components.pressable
 import app.jkt48connect.ui.components.staggerIn
 import app.jkt48connect.ui.glass.LiquidButton
@@ -83,8 +80,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
 /**
- * Beranda ala aplikasi iPhone: judul besar dengan tanggal, empat widget (live, show berikutnya, ulang tahun,
- * video baru), pintasan kaca, lalu bagian-bagian berisi kartu dan daftar inset.
+ * Beranda: satu kartu status merah (siapa yang live + show berikutnya), pintasan kaca, lalu bagian-bagian
+ * yang hanya tampil bila ada isinya: oshi, live, video, posting member, recent, ulang tahun, berita.
  */
 @Composable
 fun HomeScreen() {
@@ -108,25 +105,19 @@ fun HomeScreen() {
         }
     }) {
         LazyColumn(state = state, contentPadding = LocalInsets.current) {
-            item { LargeTitle() }
             item {
                 val show = next.data?.let { s -> s.firstOrNull { it.category == "show" } ?: s.firstOrNull() }
-                val bday = birthdays.data?.minByOrNull { daysUntil(it.birthdate) }
-                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        LiveWidget(live.data, Modifier.weight(1f).staggerIn(1)) { nav.tab = 1 }
-                        ShowWidget(show, Modifier.weight(1f).staggerIn(2)) { show?.let { nav.push(Route.Theater(it.id, it.title)) } ?: run { nav.tab = 2 } }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        BirthdayWidget(bday, Modifier.weight(1f).staggerIn(3)) { bday?.let { nav.push(Route.Member(it.id, it.name, it.img)) } ?: nav.push(Route.Birthday) }
-                        val v = videos.data?.firstOrNull()
-                        VideoWidget(v, Modifier.weight(1f).staggerIn(4)) { v?.let { nav.push(Route.VideoDetail(it)) } ?: nav.push(Route.Videos) }
-                    }
-                }
+                StatusCard(
+                    live = live.data,
+                    show = show,
+                    onLive = { nav.tab = 1 },
+                    onShow = { show?.let { nav.push(Route.Theater(it.id, it.title)) } ?: run { nav.tab = 2 } },
+                )
             }
             item { QuickActions() }
+
             if (Favorites.all.isNotEmpty()) {
-                item { SectionHead("Member favoritmu", "Oshi kamu") { nav.tab = 4 } }
+                item { SectionHead("Favoritmu", "Oshi kamu") { nav.tab = 4 } }
                 item {
                     val liveNames = live.data.orEmpty().map { it.name.lowercase() }
                     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -137,19 +128,19 @@ fun HomeScreen() {
                     }
                 }
             }
-            item { SectionHead("IDN Live & Showroom", "Live sekarang") { nav.tab = 1 } }
-            item {
-                val list = live.data
-                when {
-                    live.error != null && list == null -> ErrorRetry(live.error!!, { live.run(true) })
-                    list == null -> Skeleton(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(240.dp), 26.dp)
-                    list.isEmpty() -> EmptyLive()
-                    else -> LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        itemsIndexed(list) { i, l -> LiveCard(l, Modifier.fillParentMaxWidth(0.84f).staggerIn(i), 240.dp) }
+
+            // Live: kartu besar hanya bila ada yang live (status "belum ada" sudah tampil di kartu atas).
+            val liveList = live.data
+            if (!liveList.isNullOrEmpty()) {
+                item { SectionHead("IDN Live · Showroom", "Live sekarang") { nav.tab = 1 } }
+                item {
+                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        itemsIndexed(liveList) { i, l -> LiveCard(l, Modifier.fillParentMaxWidth(0.84f).staggerIn(i), 250.dp) }
                     }
                 }
             }
-            item { SectionHead("YouTube JKT48 & JKT48 TV", "Video terbaru") { nav.push(Route.Videos) } }
+
+            item { SectionHead("YouTube JKT48 · JKT48 TV", "Video terbaru") { nav.push(Route.Videos) } }
             item {
                 val list = videos.data
                 when {
@@ -157,53 +148,55 @@ fun HomeScreen() {
                     list == null -> Skeleton(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(210.dp), 22.dp)
                     else -> LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         itemsIndexed(list.take(8), key = { _, v -> v.id }) { i, v ->
-                            VideoCard(v, Modifier.fillParentMaxWidth(0.72f).staggerIn(i), compact = true) { nav.push(Route.VideoDetail(v)) }
+                            VideoCard(v, Modifier.fillParentMaxWidth(0.74f).staggerIn(i), compact = true) { nav.push(Route.VideoDetail(v)) }
                         }
                     }
                 }
             }
-            item { SectionHead("X, TikTok & Instagram", "Dari member") { nav.push(Route.Social()) } }
-            item {
-                val list = posts.data
-                when {
-                    list == null && posts.error == null -> Skeleton(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(260.dp), 22.dp)
-                    list.isNullOrEmpty() -> Txt("Belum ada posting terbaru.", AppText.body(14.sp, c.inkSoft), Modifier.padding(horizontal = 20.dp))
-                    else -> LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        itemsIndexed(list, key = { _, p -> "${p.platform}${p.id}" }) { i, p ->
+
+            val postList = posts.data
+            if (postList == null && posts.error == null || !postList.isNullOrEmpty()) {
+                item { SectionHead("X · TikTok · Instagram", "Dari member") { nav.push(Route.Social()) } }
+                item {
+                    if (postList == null) Skeleton(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(260.dp), 22.dp)
+                    else LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        itemsIndexed(postList, key = { _, p -> "${p.platform}${p.id}" }) { i, p ->
                             MiniPost(p, photos[p.memberId].orEmpty(), Modifier.staggerIn(i)) { nav.push(Route.Post(p)) }
                         }
                     }
                 }
             }
-            item { SectionHead("Rekap live terbaru", "Recent") { nav.tab = 3 } }
+
+            item { SectionHead("Gift · supporter · replay", "Recent") { nav.tab = 3 } }
             item {
                 val list = recent.data?.items?.take(5)
-                if (list == null) Skeleton(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(300.dp), 20.dp)
-                else InsetGroup(Modifier.staggerIn(0)) {
+                if (list == null) Skeleton(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(300.dp), 22.dp)
+                else InsetGroup {
                     list.forEachIndexed { i, r ->
-                        if (i > 0) GroupDivider(72.dp)
+                        if (i > 0) GroupDivider(76.dp)
                         GroupRow(
                             title = r.name,
                             subtitle = "${r.platformLabel} · ${fmtDate(r.start, "d MMM")} · ${fmtTime(r.start)}",
-                            leading = { NetImage(r.img, Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)), fallback = r.name) },
-                            trailing = { Txt(fmtDuration(r.durationMs), AppText.body(14.sp, c.inkSoft, 700)) },
+                            leading = { NetImage(r.img, Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)), fallback = r.name) },
+                            trailing = { Txt(fmtDuration(r.durationMs), AppText.display(20.sp, c.ink)) },
                             onClick = { nav.push(Route.Recent(r)) },
                         )
                     }
                 }
             }
-            item { SectionHead("Rayakan bersama", "Ulang tahun") { nav.push(Route.Birthday) } }
-            item {
-                val list = birthdays.data
-                if (list == null) Spacer(Modifier.height(120.dp)) else LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    itemsIndexed(list) { i, b -> Box(Modifier.staggerIn(i)) { BirthdayBubble(b) { nav.push(Route.Member(b.id, b.name, b.img)) } } }
+
+            val bdays = birthdays.data
+            if (!bdays.isNullOrEmpty()) {
+                item { SectionHead("Rayakan bersama", "Ulang tahun") { nav.push(Route.Birthday) } }
+                item {
+                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        itemsIndexed(bdays) { i, b -> Box(Modifier.staggerIn(i)) { BirthdayBubble(b) { nav.push(Route.Member(b.id, b.name, b.img)) } } }
+                    }
                 }
             }
-            item { SectionHead("Dari jkt48.com", "Berita") { nav.push(Route.News) } }
-            news.data?.items?.take(4)?.let { list ->
+
+            news.data?.items?.take(4)?.takeIf { it.isNotEmpty() }?.let { list ->
+                item { SectionHead("Dari jkt48.com", "Berita") { nav.push(Route.News) } }
                 item {
                     InsetGroup {
                         list.forEachIndexed { i, n ->
@@ -213,6 +206,7 @@ fun HomeScreen() {
                     }
                 }
             }
+
             item {
                 Column(Modifier.fillMaxWidth().padding(top = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     PixelLogo(18.dp)
@@ -224,9 +218,12 @@ fun HomeScreen() {
     }
 }
 
-/** Judul besar ala iOS: tanggal kecil di atas, sapaan sesuai jam WIB. */
+/**
+ * Kartu status merah di atas beranda: sapaan & tanggal, berapa member yang sedang live (foto + tombol tonton),
+ * lalu show berikutnya dengan hitung mundur. Bagian atas membuka tab Live, bagian bawah membuka detail show.
+ */
 @Composable
-private fun LargeTitle() {
+private fun StatusCard(live: List<LiveSession>?, show: TheaterShow?, onLive: () -> Unit, onShow: () -> Unit) {
     val c = LocalColors.current
     val hour = nowWib().hour
     val greet = when {
@@ -235,116 +232,70 @@ private fun LargeTitle() {
         hour < 18 -> "Selamat sore"
         else -> "Selamat malam"
     }
-    Column(Modifier.padding(20.dp, 4.dp, 20.dp, 16.dp).staggerIn(0)) {
-        Txt(fmtWib(nowWib(), "EEEE, d MMMM").uppercase(), AppText.body(12.5.sp, c.brand, 800).copy(letterSpacing = androidx.compose.ui.unit.TextUnit(0.6f, androidx.compose.ui.unit.TextUnitType.Sp)))
-        Txt(greet, AppText.title(34.sp, c.ink))
-    }
-}
-
-/** Kerangka widget persegi bersudut membulat (seperti widget kecil di layar utama iPhone). */
-@Composable
-private fun Widget(modifier: Modifier, onClick: () -> Unit, background: Modifier, content: @Composable () -> Unit) {
-    Box(modifier.aspectRatio(1f).pressable(onClick).clip(RoundedCornerShape(24.dp)).then(background)) { content() }
-}
-
-@Composable
-private fun WidgetLabel(text: String, color: Color) {
-    Txt(text.uppercase(), AppText.body(11.sp, color, 800).copy(letterSpacing = androidx.compose.ui.unit.TextUnit(0.5f, androidx.compose.ui.unit.TextUnitType.Sp)), maxLines = 1)
-}
-
-/** Widget live: merah bila ada yang live (angka besar + foto), kartu biasa bila belum. */
-@Composable
-private fun LiveWidget(list: List<LiveSession>?, modifier: Modifier, onClick: () -> Unit) {
-    val c = LocalColors.current
-    val n = list?.size
-    val on = (n ?: 0) > 0
-    Widget(modifier, onClick, if (on) Modifier.background(c.brandGradient) else Modifier.appCard(24.dp)) {
-        Column(Modifier.fillMaxSize().padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SignalBars(color = if (on) Color.White else c.inkSoft, height = 12.dp, active = on)
-                Spacer(Modifier.width(6.dp))
-                WidgetLabel("Live", if (on) Color.White.copy(alpha = 0.85f) else c.inkSoft)
-            }
-            Spacer(Modifier.weight(1f))
-            Txt(n?.toString() ?: "–", AppText.display(56.sp, if (on) Color.White else c.ink))
-            Txt(if (on) "member sedang live" else "Belum ada yang live", AppText.body(12.5.sp, if (on) Color.White.copy(alpha = 0.85f) else c.inkSoft, 700), maxLines = 1)
-            if (on) {
-                VGap(8.dp)
-                AvatarStack(list.orEmpty().map { it.img.ifEmpty { it.avatar } }, 22.dp, 4, ring = Color(0xFFC3142B), extraColor = Color.White)
-            }
-        }
-    }
-}
-
-/** Widget show berikutnya: panel gelap, judul, dan hitung mundur. */
-@Composable
-private fun ShowWidget(show: TheaterShow?, modifier: Modifier, onClick: () -> Unit) {
-    val c = LocalColors.current
-    Widget(modifier, onClick, Modifier.background(c.panel).then(if (c.dark) Modifier.appCard(24.dp) else Modifier)) {
-        Column(Modifier.fillMaxSize().padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(Icons.Rounded.Timer, null, Modifier.size(14.dp), colorFilter = ColorFilter.tint(c.brand))
-                Spacer(Modifier.width(5.dp))
-                WidgetLabel("Show berikutnya", Color.White.copy(alpha = 0.6f))
-            }
-            Spacer(Modifier.weight(1f))
-            if (show == null) Skeleton(Modifier.fillMaxWidth().height(40.dp), 10.dp) else {
-                Txt(show.title, AppText.body(17.sp, Color.White, 800, 1.2f), maxLines = 2)
-                VGap(4.dp)
-                Txt("${fmtDate(show.date, "EEE, d MMM")} · ${fmtTime(show.date)}", AppText.body(11.5.sp, Color.White.copy(alpha = 0.6f), 600), maxLines = 1)
-                VGap(8.dp)
-                Box(Modifier.background(c.brandGradient, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp)) {
-                    Countdown(show.date, AppText.mono(12.sp, Color.White, FontWeight.SemiBold))
+    val n = live?.size ?: 0
+    val white70 = Color.White.copy(alpha = 0.7f)
+    Box(
+        Modifier
+            .padding(16.dp, 6.dp, 16.dp, 0.dp)
+            .shadow(24.dp, RoundedCornerShape(30.dp), ambientColor = c.brand, spotColor = c.brand)
+            .clip(RoundedCornerShape(30.dp))
+            .background(c.brandGradient)
+            .fillMaxWidth()
+            .staggerIn(0),
+    ) {
+        // Logo besar samar di pojok (diam, tanpa animasi supaya ringan).
+        PixelLogo(190.dp, Modifier.align(Alignment.TopEnd).offset(54.dp, (-36).dp).graphicsLayer { rotationZ = 18f; alpha = 0.13f }, color = Color.White)
+        Column {
+            Column(Modifier.fillMaxWidth().pressable(onLive, 0.99f).padding(20.dp, 18.dp, 20.dp, 16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PixelLogo(20.dp, color = Color.White)
+                    Spacer(Modifier.width(10.dp))
+                    Txt("$greet · ${fmtWib(nowWib(), "EEE, d MMM")}".uppercase(), AppText.micro(Color.White.copy(alpha = 0.8f), 10.sp), Modifier.weight(1f), maxLines = 1)
+                    SignalBars(color = Color.White, height = 12.dp, active = n > 0)
+                }
+                VGap(20.dp)
+                if (live == null) {
+                    Box(Modifier.size(180.dp, 84.dp).background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp)))
+                } else if (n > 0) {
+                    Txt("$n MEMBER", AppText.display(44.sp, Color.White))
+                    Txt("SEDANG LIVE", AppText.display(44.sp, Color.White).copy(drawStyle = Stroke(width = 3f)))
+                    VGap(14.dp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AvatarStack(live.map { it.img.ifEmpty { it.avatar } }, 30.dp, 5, ring = Color(0xFFD01B33), extraColor = Color.White)
+                        Spacer(Modifier.weight(1f))
+                        Row(Modifier.background(Color.White, CircleShape).padding(14.dp, 8.dp, 10.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Txt("Tonton", AppText.body(13.sp, c.brand, 800))
+                            Spacer(Modifier.width(4.dp))
+                            Image(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(15.dp), colorFilter = ColorFilter.tint(c.brand))
+                        }
+                    }
+                } else {
+                    Txt("BELUM ADA", AppText.display(44.sp, Color.White))
+                    Txt("YANG LIVE", AppText.display(44.sp, Color.White).copy(drawStyle = Stroke(width = 3f)))
+                    VGap(8.dp)
+                    Txt("Kamu dapat notifikasi begitu ada member yang mulai live.", AppText.body(13.5.sp, Color.White.copy(alpha = 0.82f)))
                 }
             }
-        }
-    }
-}
-
-/** Widget ulang tahun: foto penuh, nama, dan sisa hari. */
-@Composable
-private fun BirthdayWidget(b: BirthdayEntry?, modifier: Modifier, onClick: () -> Unit) {
-    val c = LocalColors.current
-    Widget(modifier, onClick, Modifier.background(c.surface)) {
-        if (b != null) {
-            NetImage(b.img, Modifier.fillMaxSize(), fallback = b.name)
-            Box(Modifier.fillMaxSize().background(PhotoScrim))
-        }
-        Column(Modifier.fillMaxSize().padding(14.dp)) {
-            Row(Modifier.background(Color.Black.copy(alpha = 0.35f), CircleShape).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Image(Icons.Rounded.Cake, null, Modifier.size(13.dp), colorFilter = ColorFilter.tint(Color.White))
-                Spacer(Modifier.width(4.dp))
-                WidgetLabel("Ulang tahun", Color.White)
-            }
-            Spacer(Modifier.weight(1f))
-            if (b != null) {
-                val d = daysUntil(b.birthdate)
-                Txt(b.name.substringBefore(' '), AppText.body(18.sp, Color.White, 800), maxLines = 1)
-                Txt(if (d == 0) "Hari ini 🎉" else "$d hari lagi · ${fmtDate(b.birthdate, "d MMM")}", AppText.body(12.sp, Color.White.copy(alpha = 0.85f), 700), maxLines = 1)
-            }
-        }
-    }
-}
-
-/** Widget video baru: sampul penuh dengan tombol putar. */
-@Composable
-private fun VideoWidget(v: Video?, modifier: Modifier, onClick: () -> Unit) {
-    val c = LocalColors.current
-    Widget(modifier, onClick, Modifier.background(c.surface)) {
-        if (v != null) {
-            NetImage(v.thumbnail, Modifier.fillMaxSize(), alignment = Alignment.Center)
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.25f to Color.Black.copy(alpha = 0.15f), 1f to Color.Black.copy(alpha = 0.8f))))
-        }
-        Column(Modifier.fillMaxSize().padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(22.dp).background(c.brand, CircleShape), contentAlignment = Alignment.Center) {
-                    Image(Icons.Rounded.PlayArrow, null, Modifier.size(15.dp), colorFilter = ColorFilter.tint(Color.White))
+            Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.22f)))
+            Row(Modifier.fillMaxWidth().pressable(onShow, 0.99f).padding(20.dp, 14.dp, 16.dp, 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Txt("SHOW BERIKUTNYA", AppText.micro(white70, 9.5.sp))
+                    VGap(4.dp)
+                    if (show == null) Box(Modifier.size(150.dp, 18.dp).background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(6.dp)))
+                    else {
+                        Txt(show.title, AppText.body(17.sp, Color.White, 800), maxLines = 1)
+                        Txt("${fmtDate(show.date, "EEE, d MMM")} · ${fmtTime(show.date)}", AppText.mono(11.sp, white70), maxLines = 1)
+                    }
                 }
-                Spacer(Modifier.width(6.dp))
-                WidgetLabel("Video baru", Color.White)
+                if (show != null) {
+                    Spacer(Modifier.width(10.dp))
+                    Row(Modifier.background(Color.Black.copy(alpha = 0.22f), CircleShape).padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Image(Icons.Rounded.Timer, null, Modifier.size(14.dp), colorFilter = ColorFilter.tint(Color.White))
+                        Spacer(Modifier.width(5.dp))
+                        Countdown(show.date, AppText.mono(12.sp, Color.White, FontWeight.SemiBold))
+                    }
+                }
             }
-            Spacer(Modifier.weight(1f))
-            if (v != null) Txt(v.title, AppText.body(13.5.sp, Color.White, 800, 1.25f), maxLines = 3)
         }
     }
 }
@@ -364,8 +315,8 @@ private fun QuickActions() {
         items.forEachIndexed { i, (icon, label, onClick) ->
             LiquidButton(
                 onClick = onClick,
-                modifier = Modifier.weight(1f).height(70.dp).staggerIn(i + 5, 50),
-                shape = RoundedRectangle(20.dp),
+                modifier = Modifier.weight(1f).height(72.dp).staggerIn(i + 1, 50),
+                shape = RoundedRectangle(22.dp),
                 contentPadding = PaddingValues(0.dp),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -374,22 +325,6 @@ private fun QuickActions() {
                     Txt(label, AppText.body(12.sp, c.ink, 800))
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun EmptyLive() {
-    val c = LocalColors.current
-    Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().appCard(20.dp).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).background(c.bg, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-            SignalBars(color = c.inkSoft, height = 18.dp, active = false)
-        }
-        Spacer(Modifier.width(14.dp))
-        Column {
-            Txt("Belum ada yang live", AppText.body(15.sp, c.ink, 800))
-            VGap(2.dp)
-            Txt("Cek lagi sebentar ya!", AppText.body(13.sp, c.inkSoft))
         }
     }
 }

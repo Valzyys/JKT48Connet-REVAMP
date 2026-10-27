@@ -50,7 +50,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadForOffline
+import androidx.compose.ui.platform.LocalContext
 import app.jkt48connect.core.Api
+import app.jkt48connect.core.Downloads
 import app.jkt48connect.core.ApiException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -322,6 +330,7 @@ fun SocialScreen(platform: String, member: String, memberName: String) {
     }
     // Foto member dari direktori (TikTok & Instagram tidak membawa foto profil).
     val photos = rememberLoad { Api.members(it) }.data?.associate { it.id to it.img }.orEmpty()
+    val download = rememberDownloader()
     val state = rememberLazyListState()
     LoadMoreOnEnd(state, feed) { if (feed.loaded) feed.more() }
     PullRefresh(onRefresh = { feed.refresh() }) {
@@ -348,7 +357,7 @@ fun SocialScreen(platform: String, member: String, memberName: String) {
                 !feed.loaded && feed.items.isEmpty() -> items(3) { Skeleton(Modifier.padding(bottom = 14.dp).fillMaxWidth().height(260.dp), 24.dp) }
                 feed.items.isEmpty() -> item { Txt("Belum ada posting yang terarsip.", AppText.body(14.sp, c.inkSoft), Modifier.padding(8.dp)) }
                 else -> itemsIndexed(feed.items, key = { i, p -> "${p.platform}${p.id}$i" }) { i, p ->
-                    PostCard(p, photos[p.memberId].orEmpty(), Modifier.padding(bottom = 14.dp).staggerIn(i % 8)) { nav.push(Route.Post(p)) }
+                    PostCard(p, photos[p.memberId].orEmpty(), Modifier.padding(bottom = 14.dp).staggerIn(i % 8), onDownload = { download(downloadItems(p)) }) { nav.push(Route.Post(p)) }
                 }
             }
             feed.error?.let { e -> if (feed.items.isNotEmpty()) item { ErrorRetry(e, { feed.more() }) } }
@@ -382,7 +391,7 @@ private fun Metric(icon: ImageVector, value: Long?) {
 
 /** Kartu posting: kepala (foto, nama, @username, waktu), teks, pratinjau media, dan angka interaksi. */
 @Composable
-fun PostCard(p: SocialPost, photo: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun PostCard(p: SocialPost, photo: String, modifier: Modifier = Modifier, onDownload: (() -> Unit)? = null, onClick: () -> Unit) {
     val c = LocalColors.current
     Column(modifier.fillMaxWidth().pressable(onClick, 0.985f).appCard(24.dp).padding(14.dp)) {
         PostHeader(p, photo)
@@ -395,8 +404,21 @@ fun PostCard(p: SocialPost, photo: String, modifier: Modifier = Modifier, onClic
             MediaPreview(p)
         }
         VGap(12.dp)
-        PostMetrics(p)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { PostMetrics(p) }
+            if (p.media.isNotEmpty() && onDownload != null) {
+                Box(
+                    Modifier.size(34.dp).background(c.brand.copy(alpha = 0.1f), CircleShape).pressable(onDownload),
+                    contentAlignment = Alignment.Center,
+                ) { Image(Icons.Rounded.Download, "Unduh media", Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.brand)) }
+            }
+        }
     }
+}
+
+/** Semua media posting sebagai daftar unduhan (nama file: platform_username_id[_n]). */
+fun downloadItems(p: SocialPost): List<Downloads.Item> = p.media.mapIndexed { i, m ->
+    Downloads.Item(m.url, m.isVideo, Downloads.fileName("${p.platform}_${p.username.ifEmpty { p.memberName }}_${p.id}" + (if (p.media.size > 1) "_${i + 1}" else ""), m.url, m.isVideo))
 }
 
 @Composable
@@ -520,6 +542,20 @@ fun PostDetailScreen(p: SocialPost) {
                     }
                 }
             }
+            VGap(12.dp)
+            // Unduh media ke Download/JKT48Connect: yang sedang tampil, atau semuanya sekaligus.
+            val download = rememberDownloader()
+            val items = downloadItems(p)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LiquidButton(onClick = { download(listOf(items[pager.currentPage.coerceIn(0, items.lastIndex)])) }, modifier = Modifier.weight(1f).height(48.dp)) {
+                    Image(Icons.Rounded.Download, null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.brand))
+                    Txt(if (p.media[pager.currentPage.coerceIn(0, p.media.lastIndex)].isVideo) "Unduh video" else "Unduh foto", AppText.body(14.sp, c.ink, 800), maxLines = 1)
+                }
+                if (items.size > 1) LiquidButton(onClick = { download(items) }, modifier = Modifier.weight(1f).height(48.dp)) {
+                    Image(Icons.Rounded.DownloadForOffline, null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.brand))
+                    Txt("Unduh semua (${items.size})", AppText.body(14.sp, c.ink, 800), maxLines = 1)
+                }
+            }
             VGap(14.dp)
         }
         item {
@@ -543,6 +579,38 @@ fun PostDetailScreen(p: SocialPost) {
             Micro("Arsip publik · angka terakhir terlihat, bisa berbeda dari aslinya", color = c.inkSoft, size = 9f)
         }
     }
+}
+
+/**
+ * Pengunduh media: di Android 8–9 meminta izin penyimpanan dulu, lalu mengantrekan unduhan dan memberi tahu
+ * lewat toast. File tersimpan di folder Download/JKT48Connect (tampil di galeri & file manager).
+ */
+@Composable
+fun rememberDownloader(): (List<Downloads.Item>) -> Unit {
+    val context = LocalContext.current
+    var pending by remember { mutableStateOf<List<Downloads.Item>>(emptyList()) }
+    fun start(items: List<Downloads.Item>) {
+        val n = Downloads.enqueue(context, items)
+        val msg = if (n > 0) "Mengunduh $n file ke Download/${Downloads.FOLDER}" else "Gagal memulai unduhan"
+        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+    }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) start(pending) else android.widget.Toast.makeText(context, "Izin penyimpanan dibutuhkan untuk mengunduh", android.widget.Toast.LENGTH_SHORT).show()
+        pending = emptyList()
+    }
+    return { items ->
+        val needs = Build.VERSION.SDK_INT < 29 &&
+            ContextCompatCheck.denied(context, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        if (needs) {
+            pending = items
+            permission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else start(items)
+    }
+}
+
+private object ContextCompatCheck {
+    fun denied(context: android.content.Context, perm: String) =
+        context.checkSelfPermission(perm) != android.content.pm.PackageManager.PERMISSION_GRANTED
 }
 
 /** Pratinjau posting terbaru (beranda): baris kartu kecil yang bisa digeser. */
