@@ -250,9 +250,14 @@ private fun StatusCard(live: List<LiveSession>?, show: TheaterShow?, onLive: () 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         AvatarStack(live.map { it.img.ifEmpty { it.avatar } }, 30.dp, 5, ring = Color(0xFFD01B33), extraColor = Color.White)
                         Spacer(Modifier.weight(1f))
-                        Row(Modifier.background(Color.White, CircleShape).padding(14.dp, 8.dp, 10.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        LiquidButton(
+                            onClick = onLive,
+                            modifier = Modifier.height(36.dp),
+                            tint = Color.White,
+                            contentPadding = PaddingValues(start = 14.dp, end = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
                             Txt("Tonton", AppText.body(13.sp, c.brand, 800))
-                            Spacer(Modifier.width(4.dp))
                             Image(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(15.dp), colorFilter = ColorFilter.tint(c.brand))
                         }
                     }

@@ -239,10 +239,12 @@ fun LiquidTabs(
     modifier: Modifier = Modifier,
     height: Dp = 64.dp,
     backdrop: Backdrop = LocalBackdrop.current,
+    /** Segmen di dalam halaman: wadah kaca lebih pekat & pil kaca bertint merah. Tab bar: wadah bening & pil abu. */
+    segmented: Boolean = false,
 ) {
     val c = LocalColors.current
     val accent = c.brand
-    val container = clearGlassFill()
+    val container = if (segmented) glassFill() else clearGlassFill()
     val count = items.size
     val tabsBackdrop = rememberLayerBackdrop()
     val haptic = LocalHapticFeedback.current
@@ -397,7 +399,12 @@ fun LiquidTabs(
                     onDrawSurface = {
                         val p = drag.pressProgress
                         // Pil terpilih abu netral seperti tab bar iOS 26 (ikon & label yang merah, bukan pilnya).
-                        drawRect((if (c.dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.07f)), alpha = 1f - p)
+                        val pill = when {
+                            segmented -> accent.copy(alpha = if (c.dark) 0.30f else 0.16f)
+                            c.dark -> Color.White.copy(alpha = 0.14f)
+                            else -> Color.Black.copy(alpha = 0.07f)
+                        }
+                        drawRect(pill, alpha = 1f - p)
                         drawRect(Color.Black.copy(alpha = 0.03f * p))
                     },
                 )

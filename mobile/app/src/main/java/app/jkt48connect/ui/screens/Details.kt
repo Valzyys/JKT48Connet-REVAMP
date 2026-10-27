@@ -304,7 +304,9 @@ private fun ReplayPanel(d: RecentDetail, onUnlock: () -> Unit) {
             if (unlock != null) Countdown(d.replayUnlockAt, AppText.display(34.sp, Color.White))
             if (unlock != null && System.currentTimeMillis() > unlock) {
                 VGap(10.dp)
-                Txt("Muat replay", AppText.body(14.sp, c.brand, 800), Modifier.pressable(onUnlock))
+                LiquidButton(onClick = onUnlock, modifier = Modifier.height(40.dp), tint = Color.White) {
+                    Txt("Muat replay", AppText.body(14.sp, c.brand, 800))
+                }
             }
             VGap(14.dp)
             Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))) {
@@ -329,10 +331,12 @@ private fun ReplayPanel(d: RecentDetail, onUnlock: () -> Unit) {
             Spacer(Modifier.width(4.dp))
             Txt("REPLAY", AppText.micro(Color.White.copy(alpha = 0.6f)), Modifier.weight(1f))
             if (d.recordings.size > 1) d.recordings.indices.forEach { i ->
-                Box(
-                    Modifier.padding(start = 6.dp).clip(CircleShape)
-                        .then(if (i == part) Modifier.background(c.brandGradient) else Modifier.background(Color.White.copy(alpha = 0.1f)))
-                        .pressable({ part = i }).padding(horizontal = 10.dp, vertical = 5.dp)
+                LiquidButton(
+                    onClick = { part = i },
+                    modifier = Modifier.padding(start = 6.dp).height(30.dp),
+                    tint = if (i == part) c.brand else Color.Unspecified,
+                    fill = if (i == part) Color.Transparent else Color.White.copy(alpha = 0.12f),
+                    contentPadding = PaddingValues(horizontal = 10.dp),
                 ) { Txt("Bagian ${i + 1}", AppText.body(11.sp, Color.White, 700)) }
             }
         }
@@ -560,14 +564,16 @@ fun MemberDetailScreen(id: String, name: String, img: String) {
                     // Tandai sebagai oshi (favorit): tampil di beranda dan tab Favorit.
                     val fav = Favorites.isFavorite(id)
                     val pop by animateFloatAsState(if (fav) 1.15f else 1f, spring(0.4f, 600f), label = "fav")
-                    Box(
-                        Modifier.size(50.dp).graphicsLayer { scaleX = pop; scaleY = pop }
-                            .background(if (fav) c.brandGradient else Brush.linearGradient(listOf(c.ink.copy(alpha = 0.08f), c.ink.copy(alpha = 0.08f))), CircleShape)
-                            .pressable({ Favorites.toggle(id, m?.shortName ?: name, m?.img ?: img) }),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Image(if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (fav) "Hapus dari favorit" else "Jadikan favorit", Modifier.size(26.dp), colorFilter = ColorFilter.tint(if (fav) Color.White else c.ink))
-                    }
+                    LiquidIconButton(
+                        if (fav) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        { Favorites.toggle(id, m?.shortName ?: name, m?.img ?: img) },
+                        Modifier.graphicsLayer { scaleX = pop; scaleY = pop },
+                        size = 50.dp,
+                        iconSize = 24.dp,
+                        tint = if (fav) c.brand else Color.Unspecified,
+                        contentDescription = if (fav) "Hapus dari favorit" else "Jadikan favorit",
+                        backdrop = photoBackdrop,
+                    )
                 }
             }
         }
