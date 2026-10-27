@@ -13,3 +13,10 @@ JKT48CONNECT_API_KEY=jkc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 # Private Messages (server only; never use a VITE_ prefix)
 PM_API_KEY=
 MYPG_API_KEY=
+
+# Discord dashboard (server only; see docs/discord-auth-setup.md)
+DISCORD_CLIENT_ID=1305141693477027891
+DISCORD_CLIENT_SECRET=
+DISCORD_REDIRECT_URI=http://localhost:5173/api/discord/auth/callback
+DISCORD_BOT_API_URL=https://dash.jkt48connect.com/internal/discord-guild
+DISCORD_BOT_API_TOKEN=

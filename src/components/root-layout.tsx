@@ -19,6 +19,7 @@ export function RootLayout() {
   const tap = useRef({ x: 0, y: 0, t: 0 });
   const dest = navFor(path);
   const isPm = path === "/pm" || path.startsWith("/pm/");
+  const isWorkspace = isPm || path === "/discord" || path.startsWith("/discord/");
   const prev = useRef(path);
 
   // Judul halaman statis (detail member/theater/berita mengganti sendiri setelah datanya termuat).
@@ -130,7 +131,7 @@ export function RootLayout() {
 
   return (
     // Private Messages ikut shell situs, tapi tanpa intro (dibuka untuk membaca/membayar) dan tanpa sidebar kanan.
-    <IntroProvider skip={isPm}>
+    <IntroProvider skip={isWorkspace}>
       <a href="#konten" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-brand focus:px-4 focus:py-2 focus:text-white">
         Lewati ke konten
       </a>
@@ -142,7 +143,7 @@ export function RootLayout() {
             <div ref={content} className="relative z-10 bg-bg">
               <Outlet />
             </div>
-            <div ref={wipe} aria-hidden className={`pointer-events-none fixed inset-0 z-[5] hidden overflow-hidden lg:left-[var(--side-pad)] ${isPm ? "" : "xl:right-[340px]"}`}>
+            <div ref={wipe} aria-hidden className={`pointer-events-none fixed inset-0 z-[5] hidden overflow-hidden lg:left-[var(--side-pad)] ${isWorkspace ? "" : "xl:right-[340px]"}`}>
               <div data-disc className="absolute inset-0 bg-brand" />
               <div data-disc className="absolute inset-0 bg-brand-strong" />
               <span data-ring className="absolute rounded-full border-[3px] border-butter" />
@@ -162,7 +163,7 @@ export function RootLayout() {
           </main>
           <Footer />
         </div>
-        {!isPm && <Aside />}
+        {!isWorkspace && <Aside />}
       </div>
       <Dock />
     </IntroProvider>

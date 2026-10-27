@@ -8,6 +8,7 @@ import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { fileURLToPath, URL } from "node:url";
 import { handleApi, type ProxyEnv } from "./worker/proxy";
+import { handleDiscord, type DiscordEnv } from "./worker/discord";
 import { handlePm, type PmEnv } from "./worker/pm";
 import { getPlatformProxy } from "wrangler";
 
@@ -75,7 +76,7 @@ function proxiedFetch(agent: HttpsProxyAgent<string>): typeof fetch {
  * Dev/preview server menjalankan worker/proxy.ts yang SAMA dengan produksi (sesi, allowlist,
  * normalisasi, kunci replay), bukan meneruskan request mentah ke upstream.
  */
-function apiPlugin(env: ProxyEnv & PmEnv): Plugin {
+function apiPlugin(env: ProxyEnv & PmEnv & DiscordEnv): Plugin {
   let platform: ReturnType<typeof getPlatformProxy<PmEnv>> | undefined;
   const handler: Connect.NextHandleFunction = (req, res, next) => {
     if (!req.url?.startsWith("/api/")) return next();
@@ -85,7 +86,7 @@ function apiPlugin(env: ProxyEnv & PmEnv): Plugin {
         if (v !== undefined && !k.startsWith(":"))
           headers.set(k, Array.isArray(v) ? v.join(", ") : v);
       let body: Uint8Array<ArrayBuffer> | undefined;
-      if (req.method === "POST") {
+      if (["POST", "PUT", "DELETE"].includes(req.method || "")) {
         const chunks: Buffer[] = [];
         for await (const c of req) chunks.push(c as Buffer);
         body = new Uint8Array(Buffer.concat(chunks));
@@ -95,8 +96,9 @@ function apiPlugin(env: ProxyEnv & PmEnv): Plugin {
         { method: req.method, headers, body },
       );
       const isPm = new URL(request.url).pathname.startsWith("/api/pm/");
-      if (isPm) platform ??= getPlatformProxy<PmEnv>();
-      const response = isPm
+      const isDiscord = new URL(request.url).pathname.startsWith("/api/discord/");
+      if (isPm || isDiscord) platform ??= getPlatformProxy<PmEnv>();
+      const response = isDiscord ? await handleDiscord(request,{...env,PM_DB:(await platform!).env.PM_DB}) : isPm
         ? await handlePm(request, {
             ...env,
             PM_DB: (await platform!).env.PM_DB,
