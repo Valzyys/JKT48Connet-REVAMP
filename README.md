@@ -137,7 +137,7 @@ Area baru `/pm` menyediakan akun, akses berbayar per member, QR MYPG di `/pm/pay
 ## Aplikasi Android (Kotlin + Compose)
 
 Folder [`mobile/`](mobile/README.md) berisi aplikasi Android native bergaya Liquid Glass memakai [Backdrop](https://kyant.gitbook.io/backdrop):
-- **Halaman:** beranda, live, jadwal/theater, recent dengan replay HLS, member (dengan theater & live terakhir), ulang tahun, berita bergambar, dan Tentang.
+- **Halaman:** beranda bergaya iPhone (widget), live, jadwal/theater, recent dengan replay HLS, member (dengan theater & live terakhir), video YouTube yang bisa diputar, posting member di X/TikTok/Instagram, ulang tahun, berita bergambar, dan Tentang.
 - **Donasi QRIS** (MYPG, lewat worker) dengan dinding pendukung, dan **member favorit** (oshi) di profil, tab Favorit, serta beranda.
 - **Notifikasi:** member live, show segera dimulai, ulang tahun, dan berita baru (diperiksa tiap ±15 menit, bisa diatur per jenis).
 - **Kaca interaktif:** tombol yang bisa ditarik dan membal, tab bar dengan pil yang bisa diseret, dan slider lensa.
@@ -149,6 +149,8 @@ Aplikasi tidak punya cookie/Origin browser, jadi worker menyediakan jalur `/api/
 - `GET /api/app/replay[/hls]` menyajikan replay dengan token yang terikat ke token aplikasi.
 - `GET /api/app/media?url=` memproksikan gambar jkt48.com (yang menolak hotlink) untuk isi berita.
 - `GET /api/app/update` memberi versi APK terbaru dari GitHub Releases, untuk pop-up dan notifikasi update di aplikasi.
+- `GET /api/app/jkt48_youtube/<id>` memberi detail video dengan playlist HLS bertiket dari api.jkt48connect.app (± 3 jam; aplikasi mengambil ulang bila kedaluwarsa), dan `/comments?cursor=` untuk komentar publik.
+- `GET /api/app/x/tweets`, `/api/app/tiktok/posts`, `/api/app/instagram/posts` (`member`, `before`, `limit` ≤ 40) memberi posting publik member dalam satu bentuk yang sama (`SocialPost` di `src/lib/shape.ts`). Hanya media yang sudah siap dan URL http(s) yang diteruskan.
 
 Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test:push`.
 

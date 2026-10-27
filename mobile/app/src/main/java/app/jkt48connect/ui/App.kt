@@ -60,6 +60,8 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Sensors
+import androidx.compose.material.icons.rounded.SmartDisplay
+import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -260,6 +262,10 @@ private fun title(r: Route): String = when (r) {
     is Route.Shots -> ""
     Route.About -> "Tentang"
     Route.Donate -> "Donasi"
+    Route.Videos -> "Video YouTube"
+    is Route.VideoDetail -> r.video.channel.ifEmpty { "Video" }
+    is Route.Social -> if (r.memberName.isNotEmpty()) "Postingan ${r.memberName}" else "Sosmed member"
+    is Route.Post -> r.post.platformLabel
 }
 
 /** Tab utama (dipertahankan state-nya) + halaman detail yang meluncur dari kanan. */
@@ -302,6 +308,10 @@ private fun Pages(nav: Nav, modifier: Modifier) {
                 is Route.Shots -> ShotViewer(route.urls, route.start, route.title)
                 Route.About -> AboutScreen()
                 Route.Donate -> app.jkt48connect.ui.screens.DonateScreen()
+                Route.Videos -> app.jkt48connect.ui.screens.VideosScreen()
+                is Route.VideoDetail -> app.jkt48connect.ui.screens.VideoDetailScreen(route.video)
+                is Route.Social -> app.jkt48connect.ui.screens.SocialScreen(route.platform, route.member, route.memberName)
+                is Route.Post -> app.jkt48connect.ui.screens.PostDetailScreen(route.post)
             }
         }
     }
@@ -438,6 +448,17 @@ private fun MenuSheet(nav: Nav) {
                     MenuTile(Icons.Rounded.Newspaper, "Berita", "Kabar terbaru dari jkt48.com", Modifier.weight(1f), sheetBackdrop) {
                         nav.menuOpen = false
                         nav.push(Route.News)
+                    }
+                }
+                VGap(10.dp)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MenuTile(Icons.Rounded.SmartDisplay, "Video", "YouTube JKT48 & JKT48 TV, putar langsung", Modifier.weight(1f), sheetBackdrop) {
+                        nav.menuOpen = false
+                        nav.push(Route.Videos)
+                    }
+                    MenuTile(Icons.Rounded.Forum, "Sosmed", "Posting member di X, TikTok, Instagram", Modifier.weight(1f), sheetBackdrop) {
+                        nav.menuOpen = false
+                        nav.push(Route.Social())
                     }
                 }
                 VGap(10.dp)

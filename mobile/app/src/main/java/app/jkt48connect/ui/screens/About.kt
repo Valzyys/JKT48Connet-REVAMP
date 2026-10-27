@@ -18,6 +18,8 @@ import androidx.compose.ui.graphics.Brush
 import app.jkt48connect.ui.Route
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.SmartDisplay
+import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LiveTv
@@ -104,6 +106,8 @@ private val FEATURES = listOf(
     Triple(Icons.Rounded.CalendarMonth, "Jadwal theater & event", "Show mendatang dengan hitung mundur, lineup, dan setlist."),
     Triple(Icons.Rounded.History, "Rekap & replay", "Statistik live, gift, top supporter, cuplikan, dan replay layar penuh."),
     Triple(Icons.Rounded.Groups, "Profil member", "Biodata, sosial media, serta theater dan live terakhir."),
+    Triple(Icons.Rounded.SmartDisplay, "Video YouTube", "Video terbaru JKT48 & JKT48 TV, diputar langsung dengan pilihan kualitas dan komentar."),
+    Triple(Icons.Rounded.Forum, "Sosmed member", "Posting terbaru member di X, TikTok, dan Instagram, termasuk foto dan video."),
     Triple(Icons.Rounded.NotificationsActive, "Notifikasi", "Live, show, ulang tahun, berita, dan update aplikasi."),
     Triple(Icons.Rounded.SystemUpdate, "Update otomatis", "Versi baru langsung ditawarkan dan dipasang dari aplikasi."),
 )

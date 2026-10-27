@@ -393,7 +393,8 @@ export function shapeRecent(r: Raw, id: string): RecentDetail {
       .map((g) => ({ name: str(g.name), img: g.image_available === false ? "" : httpUrl(g.img), num: num(g.num), users: num(g.user_count) }))
       .filter((g) => g.name)
       .sort((a, b) => (b.num ?? 0) - (a.num ?? 0)),
-    giftsPartial: info.gift?.status === "partial",
+    // Rincian gift bisa kosong walau total gold ada (`gift_events_not_captured`): tetap ditandai parsial.
+    giftsPartial: info.gift?.status === "partial" || info.gift?.reason === "gift_events_not_captured",
     fans: list(r.fans)
       .map((f) => ({ name: str(f.name), avatar: httpUrl(f.avatar_url), amount: num(f.gold, f.point, f.reported_gold) }))
       .filter((f) => f.name),
@@ -418,7 +419,18 @@ export function shapeRecent(r: Raw, id: string): RecentDetail {
 
 /* ───────────────────────────── YouTube ───────────────────────────── */
 
-export type Video = { id: string; title: string; url: string; date: string; thumbnail: string; channel: string; views: number | null };
+/** `playable`: upstream menyediakan HLS publik (diputar di aplikasi lewat detail, bukan dari daftar). */
+export type Video = { id: string; title: string; url: string; date: string; thumbnail: string; channel: string; views: number | null; playable: boolean };
+
+const YT_ID = /^[A-Za-z0-9_-]{6,20}$/;
+
+/** URL pemutar hanya dari domain API JKT48Connect (playlist bertiket, tanpa API key). */
+function playbackUrl(v: unknown): string {
+  const u = httpUrl(v);
+  if (!u) return "";
+  const host = new URL(u).hostname;
+  return u.startsWith("https://") && (host === "jkt48connect.app" || host.endsWith(".jkt48connect.app")) ? u : "";
+}
 
 export function shapeVideos(raw: unknown): Video[] {
   return list(raw)
@@ -432,7 +444,197 @@ export function shapeVideos(raw: unknown): Video[] {
         thumbnail: httpUrl(v.thumbnails?.high?.url, id && `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
         channel: str(v.channelTitle, "JKT48"),
         views: num(v.statistics?.viewCount),
+        playable: v.playback?.format === "m3u8" && !!playbackUrl(v.playback?.url),
       };
     })
     .filter((v) => v.url);
+}
+
+export type VideoPlayback = { url: string; qualities: number[]; expiresAt: number | null };
+export type VideoDetail = Video & { description: string; duration: number | null; comments: number | null; playback: VideoPlayback | null };
+
+/** Detail video: `playback.url` = playlist HLS bertiket (± 3 jam), audio dan video dalam segmen yang sama. */
+export function shapeVideo(v: Raw, id: string): VideoDetail {
+  const vid = YT_ID.test(str(v.id)) ? str(v.id) : id;
+  const url = v.playback?.format === "m3u8" ? playbackUrl(v.playback?.url) : "";
+  return {
+    id: vid,
+    title: str(v.title),
+    url: httpUrl(v.url, `https://www.youtube.com/watch?v=${vid}`),
+    date: str(v.date, v.published_at, v.upload_date),
+    thumbnail: httpUrl(v.thumbnail, `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`),
+    channel: str(v.channel_title, v.channelTitle, "JKT48"),
+    views: num(v.view_count, v.statistics?.viewCount),
+    playable: !!url,
+    description: str(v.description).slice(0, 4000),
+    duration: num(v.duration),
+    comments: num(v.comment_count),
+    playback: url
+      ? {
+          url,
+          qualities: (Array.isArray(v.playback?.qualities) ? (v.playback.qualities as unknown[]) : []).map((q) => num(q)).filter((q): q is number => q !== null),
+          expiresAt: num(v.playback?.expires_at),
+        }
+      : null,
+  };
+}
+
+export type VideoComment = { id: string; text: string; author: string; avatar: string; uploader: boolean; when: string; likes: number | null; replies: number | null };
+export type VideoComments = { status: string; total: number | null; items: VideoComment[]; cursor: string; hasMore: boolean };
+
+export function shapeVideoComments(raw: Raw): VideoComments {
+  return {
+    status: str(raw?.status, "available"),
+    total: num(raw?.total_count),
+    items: list(raw?.comments)
+      .map((c) => ({
+        id: str(c.id),
+        text: str(c.text).slice(0, 2000),
+        author: str(c.author?.name),
+        avatar: httpUrl(c.author?.avatar),
+        uploader: c.author?.is_uploader === true,
+        when: str(c.published_text),
+        likes: num(c.likes),
+        replies: num(c.reply_count),
+      }))
+      .filter((c) => c.id && c.text),
+    cursor: /^[A-Za-z0-9_-]{1,300}$/.test(str(raw?.next_cursor)) ? str(raw.next_cursor) : "",
+    hasMore: raw?.has_more === true,
+  };
+}
+
+/* ───────────────────────────── Sosial media member (X, TikTok, Instagram) ───────────────────────────── */
+
+export type SocialPlatform = "x" | "tiktok" | "instagram";
+export type SocialMedia = { type: "image" | "video"; url: string; thumb: string; width: number | null; height: number | null };
+export type SocialPost = {
+  platform: SocialPlatform;
+  id: string;
+  url: string;
+  text: string;
+  /** Waktu unggah; bila sumber tidak memberikannya, waktu pertama kali terlihat (`dateApprox`). */
+  date: string;
+  dateApprox: boolean;
+  member: { id: string; name: string; img: string };
+  author: { username: string; name: string; avatar: string };
+  likes: number | null;
+  comments: number | null;
+  reposts: number | null;
+  views: number | null;
+  media: SocialMedia[];
+};
+export type SocialPage = { items: SocialPost[]; cursor: string; hasMore: boolean };
+
+/** Media arsip R2 (`{status, url}`) yang sudah siap. */
+function ready(m: Raw | null | undefined): string {
+  return m?.status === "ready" ? httpUrl(m.url) : "";
+}
+
+function socialPage(raw: Raw, key: string, map: (p: Raw) => SocialPost): SocialPage {
+  return {
+    items: list(raw, key)
+      .map(map)
+      .filter((p) => p.id && p.url),
+    cursor: /^\d{1,25}$/.test(str(raw?.next_cursor)) ? str(raw.next_cursor) : "",
+    hasMore: raw?.has_more === true,
+  };
+}
+
+const digits = (v: unknown) => (/^\d{1,25}$/.test(str(v)) ? str(v) : "");
+
+export function shapeTweets(raw: Raw): SocialPage {
+  return socialPage(raw, "tweets", (t) => {
+    const m: Raw = t.member ?? {};
+    return {
+      platform: "x",
+      id: digits(t.id),
+      url: httpUrl(t.url),
+      text: str(t.text).slice(0, 4000),
+      date: str(t.created_at, t.first_seen_at),
+      dateApprox: !str(t.created_at),
+      member: { id: str(m.id), name: str(m.name, t.author?.name), img: httpUrl(m.img) },
+      // Avatar `_normal` X berukuran 48 px; varian 200 px lebih tajam di layar HP.
+      author: { username: str(t.author?.username), name: str(t.author?.name), avatar: httpUrl(t.author?.avatar).replace("_normal.", "_200x200.") },
+      likes: num(t.metrics?.likes),
+      comments: num(t.metrics?.replies),
+      reposts: num(t.metrics?.reposts),
+      views: num(t.metrics?.views),
+      media: list(t.media)
+        .map((x): SocialMedia | null => {
+          const thumb = httpUrl(x.url);
+          if (x.type === "photo") return thumb ? { type: "image", url: thumb, thumb, width: null, height: null } : null;
+          // Video/GIF: MP4 progresif bitrate tertinggi yang masih ringan untuk HP (≤ 2,5 Mbps).
+          const mp4 = list(x.variants)
+            .filter((v) => v.content_type === "video/mp4" && httpUrl(v.url))
+            .sort((a, b) => (num(b.bitrate) ?? 0) - (num(a.bitrate) ?? 0));
+          const pick = mp4.find((v) => (num(v.bitrate) ?? 0) <= 2_500_000) ?? mp4[mp4.length - 1];
+          return pick ? { type: "video", url: httpUrl(pick.url), thumb, width: null, height: null } : null;
+        })
+        .filter((x): x is SocialMedia => !!x),
+    };
+  });
+}
+
+export function shapeTiktokPosts(raw: Raw): SocialPage {
+  return socialPage(raw, "posts", (p) => {
+    const md: Raw = p.media ?? {};
+    const thumb = ready(md.thumbnail);
+    const video = ready(md.video);
+    const images = list(md.images).map(ready).filter(Boolean);
+    return {
+      platform: "tiktok",
+      id: digits(p.id),
+      url: httpUrl(p.url),
+      text: str(p.text).slice(0, 4000),
+      date: str(p.created_at, p.first_seen_at),
+      dateApprox: !str(p.created_at),
+      member: { id: str(p.member?.member), name: str(p.member?.name, p.author?.name), img: "" },
+      author: { username: str(p.author?.username), name: str(p.author?.name), avatar: "" },
+      likes: num(p.metrics?.likes),
+      comments: num(p.metrics?.comments),
+      reposts: num(p.metrics?.shares),
+      views: num(p.metrics?.views),
+      media: video
+        ? [{ type: "video", url: video, thumb, width: num(md.width), height: num(md.height) }]
+        : images.length
+          ? images.map((u) => ({ type: "image" as const, url: u, thumb: u, width: null, height: null }))
+          : thumb
+            ? [{ type: "image", url: thumb, thumb, width: num(md.width), height: num(md.height) }]
+            : [],
+    };
+  });
+}
+
+export function shapeInstagramPosts(raw: Raw): SocialPage {
+  return socialPage(raw, "posts", (p) => {
+    const md: Raw = p.media ?? {};
+    const thumb = ready(md.thumbnail);
+    const video = ready(md.video);
+    let media: SocialMedia[] = list(md.items)
+      .map((it): SocialMedia | null => {
+        const t = ready(it.thumbnail);
+        const v = ready(it.video);
+        if (it.type === "video" && v) return { type: "video", url: v, thumb: t, width: num(it.width), height: num(it.height) };
+        return t ? { type: "image", url: t, thumb: t, width: num(it.width), height: num(it.height) } : null;
+      })
+      .filter((x): x is SocialMedia => !!x);
+    if (!media.length && video) media = [{ type: "video", url: video, thumb, width: num(md.width), height: num(md.height) }];
+    if (!media.length) media = list(md.images).map(ready).filter(Boolean).map((u) => ({ type: "image", url: u, thumb: u, width: null, height: null }));
+    if (!media.length && thumb) media = [{ type: "image", url: thumb, thumb, width: num(md.width), height: num(md.height) }];
+    return {
+      platform: "instagram",
+      id: digits(p.id),
+      url: httpUrl(p.url),
+      text: str(p.text).slice(0, 4000),
+      date: str(p.created_at, p.first_seen_at),
+      dateApprox: !str(p.created_at),
+      member: { id: str(p.member?.member), name: str(p.member?.name, p.author?.name), img: "" },
+      author: { username: str(p.author?.username), name: str(p.author?.name), avatar: "" },
+      likes: num(p.metrics?.likes),
+      comments: num(p.metrics?.comments),
+      reposts: null,
+      views: num(p.metrics?.views),
+      media,
+    };
+  });
 }

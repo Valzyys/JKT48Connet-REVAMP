@@ -16,6 +16,8 @@ import app.jkt48connect.core.Fetch
 import app.jkt48connect.core.NewsItem
 import app.jkt48connect.core.Paged
 import app.jkt48connect.core.RecentLive
+import app.jkt48connect.core.SocialPost
+import app.jkt48connect.core.Video
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -30,6 +32,11 @@ sealed interface Route {
     data class Shots(val urls: List<String>, val start: Int, val title: String = "") : Route
     data object About : Route
     data object Donate : Route
+    data object Videos : Route
+    data class VideoDetail(val video: Video) : Route
+    /** Posting member di X/TikTok/Instagram; `member` kosong = semua member. */
+    data class Social(val platform: String = "x", val member: String = "", val memberName: String = "") : Route
+    data class Post(val post: SocialPost) : Route
 }
 
 /** Navigasi sederhana tanpa library: tab utama + tumpukan halaman detail. */
@@ -66,6 +73,8 @@ class Nav {
                 "news" -> push(Route.News)
                 "about" -> push(Route.About)
                 "donate" -> push(Route.Donate)
+                "videos" -> push(Route.Videos)
+                "social" -> push(Route.Social())
             }
             "theater" -> push(Route.Theater(rest.substringBefore('|'), rest.substringAfter('|', "")))
             "news" -> rest.split('|', limit = 3).let { push(Route.NewsDetail(NewsItem(it[0], it.getOrElse(2) { "" }, it.getOrElse(1) { "" }, "", ""))) }
@@ -172,6 +181,70 @@ class PagedLoad<T>(private val scope: CoroutineScope, private val block: suspend
             error = e
         }
     }
+}
+
+/** Satu halaman daftar bercursor (posting sosial media, komentar): `next` kosong = habis. */
+data class Cursor<T>(val items: List<T>, val next: String, val hasMore: Boolean)
+
+/** Daftar dengan muat-lanjut berbasis cursor; halaman pertama tampil dulu dari cache. */
+@Stable
+class CursorLoad<T>(private val scope: CoroutineScope, private val block: suspend (cursor: String, fetch: Fetch) -> Cursor<T>) {
+    val items = mutableStateListOf<T>()
+    var error by mutableStateOf<Throwable?>(null)
+        private set
+    var loading by mutableStateOf(false)
+        private set
+    var loaded by mutableStateOf(false)
+        private set
+    private var next = ""
+    var hasMore by mutableStateOf(true)
+        private set
+
+    fun more() {
+        if (loading || !hasMore) return
+        loading = true
+        scope.launch {
+            try {
+                val first = !loaded
+                if (first && items.isEmpty()) runCatching { block("", Fetch.Cache) }.getOrNull()?.let { items.addAll(it.items) }
+                val p = block(next, Fetch.Normal)
+                if (first) items.clear()
+                items.addAll(p.items)
+                next = p.next
+                hasMore = p.hasMore && p.next.isNotEmpty()
+                loaded = true
+                error = null
+            } catch (e: Throwable) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                error = e
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    suspend fun refresh() {
+        try {
+            val p = block("", Fetch.Force)
+            items.clear()
+            items.addAll(p.items)
+            next = p.next
+            hasMore = p.hasMore && p.next.isNotEmpty()
+            loaded = true
+            error = null
+        } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            error = e
+        }
+    }
+}
+
+@Composable
+fun <T> rememberCursor(vararg keys: Any?, block: suspend (cursor: String, fetch: Fetch) -> Cursor<T>): CursorLoad<T> {
+    val scope = rememberCoroutineScope()
+    val load = remember(*keys) { CursorLoad(scope, block) }
+    LaunchedEffect(load) { load.more() }
+    return load
 }
 
 @Composable
