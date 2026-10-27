@@ -47,5 +47,4 @@ jobs:
           # Opsional: gateway QRIS MYPG untuk PM dan donasi aplikasi. Kosong = dilewati (secret lama tetap).
           MYPG_API_KEY: ${{ secrets.MYPG_API_KEY }}
           PM_API_KEY: ${{ secrets.PM_API_KEY }}
-          MYPG_API_KEY: ${{ secrets.MYPG_API_KEY }}
           TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
