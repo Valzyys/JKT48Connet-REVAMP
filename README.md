@@ -161,7 +161,7 @@ Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test
 Folder [`ios/`](ios/README.md) berisi aplikasi iPhone native (SwiftUI) dengan isi yang sama seperti aplikasi Android dan jalur `/api/app` yang sama.
 - **Liquid Glass asli:** dibangun dengan SDK iOS 26, jadi tab bar, bilah navigasi, dan kontrol pemutar memakai kaca sistem. Kartu, pil, dan tombol memakai `glassEffect` interaktif dalam `GlassEffectContainer`. iOS 16–25 memakai material blur.
 - **Live Showroom & replay** diputar di aplikasi (AVPlayer: Picture-in-Picture, AirPlay, suara tetap jalan saat layar terkunci). Live IDN dibuka di idn.app, replay IDN terkunci 72 jam.
-- **Pemasangan:** `.ipa` tanpa tanda tangan dari GitHub Releases (`ios-build-N`, tidak ditandai *latest*), dipasang lewat Sideloadly / AltStore / SideStore (Apple ID gratis: pasang ulang tiap 7 hari) atau TrollStore. Panduan lengkap di [`ios/README.md`](ios/README.md).
+- **Pemasangan langsung dari iPhone, tanpa PC:** Scarlet, ESign, Feather, atau SideStore, lewat file `.ipa` atau repo/sumber dengan tautan tetap di prerelease `ios-latest` (`jkt48connect.ipa`, `scarlet.json`, `repo.json`). Rilis iOS tidak pernah ditandai *latest*. Cara dari komputer (Sideloadly/AltStore) dan TrollStore juga ada. Panduan lengkap di [`ios/README.md`](ios/README.md#memasang-ipa).
 - **CI:** `.github/workflows/ios.yml` (build + tangkapan layar simulator, prerelease `ios-preview`) dan `ios-release.yml` (rilis dari `main`).
 
 ### Landing page `/apps`

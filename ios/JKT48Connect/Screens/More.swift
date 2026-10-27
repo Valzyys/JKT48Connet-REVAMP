@@ -162,10 +162,10 @@ struct AboutView: View {
 
                 Micro("Memasang ulang aplikasi", color: Theme.brand).padding(.top, 8)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Aplikasi iPhone dipasang lewat sideload (file .ipa). Dengan Apple ID gratis, pasang ulang lewat Sideloadly / AltStore / SideStore paling lambat tiap 7 hari supaya tidak kedaluwarsa. File .ipa terbaru ada di halaman Rilis GitHub.")
+                    Text("Aplikasi ini dipasang lewat sideload. Untuk update, tambahkan repo JKT48Connect di Scarlet / ESign / Feather / SideStore, atau unduh file .ipa terbaru lalu buka dengan aplikasi tersebut. Kalau aplikasi tiba-tiba tidak bisa dibuka, sertifikat pemasangnya kedaluwarsa: pasang ulang saja, data tetap tersimpan.")
                         .font(.footnote).foregroundStyle(Theme.ink)
-                    Button { openURL(URL(string: "https://jkt48connect.app/apps")!) } label: {
-                        Label("Halaman unduhan", systemImage: "arrow.down.circle.fill").font(.footnote.weight(.heavy)).foregroundStyle(Theme.brand)
+                    Button { openURL(URL(string: "https://github.com/Valzyys/JKT48Connet-REVAMP/blob/main/ios/README.md#memasang-ipa")!) } label: {
+                        Label("Panduan pasang & update", systemImage: "arrow.down.circle.fill").font(.footnote.weight(.heavy)).foregroundStyle(Theme.brand)
                     }
                     .buttonStyle(.plain)
                 }

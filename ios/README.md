@@ -16,34 +16,67 @@ Aplikasi dibangun dengan SDK iOS 26 (Xcode 26):
 
 ## Memasang (.ipa)
 
-Aplikasi tidak ada di App Store, jadi dipasang lewat *sideload*. File `jkt48connect.ipa` **tanpa tanda tangan**
-ada di [GitHub Releases](https://github.com/Valzyys/JKT48Connet-REVAMP/releases?q=ios-build&expanded=true)
-(tag `ios-build-N`). Alat sideload menandatanganinya dengan Apple ID kamu saat memasang.
+Aplikasi tidak ada di App Store, jadi dipasang lewat *sideload*. Semua cara di bawah bisa langsung dari iPhone,
+**tanpa PC dan tanpa kabel**. Tautan tetap (selalu versi terbaru, prerelease `ios-latest`):
 
-### Sideloadly (Windows / macOS), paling mudah
+| Untuk | Tautan |
+| --- | --- |
+| File aplikasi | `https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest/jkt48connect.ipa` |
+| Repo Scarlet | `https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest/scarlet.json` |
+| Sumber ESign / Feather / SideStore / AltStore | `https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest/repo.json` |
 
-1. Pasang [Sideloadly](https://sideloadly.io) dan iTunes/iCloud versi situs Apple (untuk Windows).
-2. Sambungkan iPhone dengan kabel, buka Sideloadly, seret `jkt48connect.ipa` ke jendelanya.
-3. Masukkan Apple ID (boleh akun gratis), klik **Start**.
-4. Di iPhone: **Pengaturan → Umum → VPN & Manajemen Perangkat** → percayai Apple ID kamu.
-5. iOS 16 ke atas: aktifkan **Pengaturan → Privasi & Keamanan → Mode Pengembang**, lalu mulai ulang iPhone.
+> **Penting soal sertifikat.** iPhone hanya menjalankan aplikasi yang ditandatangani sertifikat Apple. Pemasang di
+> iPhone memakai sertifikat milik layanan pihak ketiga (Scarlet) atau sertifikat yang kamu impor (ESign/Feather).
+> Apple kadang mencabut sertifikat bersama tersebut; kalau itu terjadi, JKT48Connect (dan aplikasi lain dari
+> pemasang yang sama) tidak bisa dibuka sampai pemasangnya mendapat sertifikat baru dan aplikasi dipasang ulang.
+> Data dan favorit tetap tersimpan. Aplikasi ini tidak butuh login atau izin khusus.
 
-### AltStore / SideStore
+### Cara 1 · Scarlet (paling mudah)
 
-Pasang [AltStore](https://altstore.io) atau [SideStore](https://sidestore.io), lalu buka `jkt48connect.ipa`
-dari aplikasi Files → bagikan ke AltStore/SideStore. SideStore bisa memperbarui tanda tangan tanpa komputer.
+1. Di Safari iPhone, buka situs resmi Scarlet (`usescarlet.com`) lalu pasang Scarlet dari sana.
+2. Buka **Pengaturan → Umum → VPN & Manajemen Perangkat**, ketuk profil Scarlet, lalu **Percayai**.
+3. iOS 16 ke atas: aktifkan **Pengaturan → Privasi & Keamanan → Mode Pengembang**. iPhone akan mulai ulang.
+4. Pilih salah satu:
+   - **Lewat repo (bisa update):** di Scarlet buka **Repos → +**, tempel tautan *Repo Scarlet* di atas, lalu
+     ketuk JKT48Connect → **Get**.
+   - **Lewat file:** unduh *File aplikasi* di Safari, buka di aplikasi **File**, ketuk lama `jkt48connect.ipa` →
+     **Bagikan → Scarlet** → **Install**.
+5. Kalau ada versi baru, buka repo di Scarlet lalu pasang lagi di atas versi lama (data tetap ada).
 
-### TrollStore
+### Cara 2 · ESign
 
-Di versi iOS yang didukung [TrollStore](https://github.com/opa334/TrollStore), buka `.ipa` dengan TrollStore.
-Aplikasi terpasang permanen tanpa perlu diperbarui tiap 7 hari.
+1. Pasang ESign beserta sertifikatnya (file `.p12` + `.mobileprovision` dan kata sandinya: sertifikat developer
+   sendiri atau dari penyedia sertifikat), lalu impor sertifikat di menu ESign.
+2. Tambahkan sumber: **Sources → +** → tempel tautan *Sumber ESign/Feather* di atas. Atau unduh *File aplikasi*
+   di Safari lalu **Bagikan → ESign**.
+3. Ketuk JKT48Connect → **Signature** → **Install**.
 
-### Batas Apple ID gratis
+### Cara 3 · Feather
 
-- Tanda tangan berlaku **7 hari**. Setelah itu aplikasi tidak bisa dibuka sampai dipasang ulang
-  (Sideloadly: ulangi langkah di atas; AltStore/SideStore: *Refresh*). Data & favorit tetap tersimpan.
-- Maksimal 3 aplikasi sideload aktif per perangkat.
-- Akun Apple Developer berbayar memperpanjang masa berlaku menjadi 1 tahun.
+1. Pasang [Feather](https://github.com/claration/Feather) dan impor sertifikatmu (`.p12` + `.mobileprovision`).
+2. Tambahkan sumber dengan membuka tautan ini di Safari (langsung membuka Feather):
+   `feather://source/https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest/repo.json`.
+   Atau unduh *File aplikasi* lalu **Bagikan → Feather**.
+3. Pilih JKT48Connect → **Sign** → **Install**.
+
+### Cara 4 · SideStore (Apple ID sendiri, tanpa sertifikat pihak ketiga)
+
+Setelah SideStore terpasang (pemasangan awalnya butuh komputer sekali), aplikasi bisa dipasang dan diperbarui dari
+iPhone: **Sources → +** → tempel tautan *Sumber … SideStore* di atas. Dengan Apple ID gratis, ketuk **Refresh** di
+SideStore paling lambat tiap 7 hari (bisa otomatis di latar).
+
+### Cara lain
+
+- **TrollStore** (iOS versi tertentu): buka `jkt48connect.ipa` dengan TrollStore. Terpasang permanen.
+- **Dari komputer:** Sideloadly / AltStore dengan Apple ID sendiri (sambungkan kabel, seret `.ipa`).
+  Dengan Apple ID gratis, pasang ulang tiap 7 hari.
+
+### Kalau aplikasi tidak bisa dibuka
+
+- *"Pengembang Tidak Dipercaya"*: percayai profil di **Pengaturan → Umum → VPN & Manajemen Perangkat**.
+- *"Tidak Lagi Tersedia" / langsung tertutup*: sertifikatnya kedaluwarsa atau dicabut. Pasang ulang dari
+  pemasang yang sama setelah sertifikatnya diperbarui, atau pakai cara lain di atas.
+- *Mode Pengembang tidak muncul*: pasang aplikasinya dulu sekali, lalu menu itu akan muncul.
 
 ## Build
 
@@ -70,7 +103,9 @@ mkdir -p out/Payload && cp -R build/Build/Products/Release-iphoneos/JKT48Connect
 - `.github/workflows/ios.yml`: tiap push ke cabang (selain `main`) yang mengubah `ios/**`, build `.ipa` dan ambil
   tangkapan layar simulator. Hasilnya diunggah ke prerelease **`ios-preview`**.
 - `.github/workflows/ios-release.yml`: tiap perubahan `ios/**` di `main`, rilis **`ios-build-N`** berisi
-  `jkt48connect.ipa`. Rilis ini **tidak** ditandai *latest*, supaya `releases/latest/download/jkt48connect.apk`
+  `jkt48connect.ipa` (versi `mayor.minor.N`), lalu memperbarui prerelease tetap **`ios-latest`**:
+  `jkt48connect.ipa`, `icon.png`, `repo.json`, dan `scarlet.json` (dibuat oleh `scripts/repo.py`).
+  Keduanya **tidak** ditandai *latest*, supaya `releases/latest/download/jkt48connect.apk`
   (tombol unduh Android dan cek update aplikasi Android) tetap menunjuk rilis APK.
 
 Untuk tangkapan layar, aplikasi membaca variabel lingkungan `JKC_TAB` (`home`, `live`, `schedule`, `recent`,
