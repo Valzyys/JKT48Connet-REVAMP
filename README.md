@@ -158,8 +158,8 @@ Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test
 
 Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs:
 - **Liquid glass web** (`src/components/liquid-glass.tsx`): `backdrop-filter: url(#filter)` dengan `feDisplacementMap`. Peta perpindahannya dibuat di canvas sesuai ukuran & radius elemen, ditambah aberasi kromatik, tepi mengilap, kilau yang mengikuti kursor, dan efek "jelly" saat ditekan. Pembiasan asli hanya di Chromium (Chrome/Edge/Android); Safari & Firefox memakai kaca buram biasa.
-- **Animasi GSAP + ScrollTrigger:** intro hero, kartu kaca melayang, lensa kaca yang bisa diseret, parallax, galeri layar yang dipin dan digeser horizontal, serta reveal per bagian.
-- **Data asli:** `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`) untuk versi & ukuran APK, plus live dan jadwal berikutnya. Tombol unduh memakai `releases/latest/download/jkt48connect.apk`.
+- **Animasi GSAP + ScrollTrigger:** intro hero, kartu kaca berisi data asli yang bisa diseret dan membal, deretan foto member yang bergerak di belakang kaca, parallax, galeri layar yang dipin dan digeser horizontal, serta reveal per bagian.
+- **Data asli:** `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`) untuk versi, ukuran, tanggal, dan ringkasan rilis APK, plus live, show berikutnya, ulang tahun terdekat, dan foto member. Tombol unduh memakai `releases/latest/download/jkt48connect.apk`.
 - Screenshot aplikasi di `public/apps/` dirender dari aplikasi asli.
 
 ### Donasi QRIS (MYPG)
