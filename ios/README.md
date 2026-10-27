@@ -16,6 +16,8 @@ Aplikasi dibangun dengan SDK iOS 26 (Xcode 26):
 
 ## Memasang (.ipa)
 
+Panduan yang sama (dengan tautan yang bisa disalin dan tombol sekali ketuk untuk Feather) ada di situs: **[jkt48connect.app/apps#panduan-iphone](https://jkt48connect.app/apps#panduan-iphone)**.
+
 Aplikasi tidak ada di App Store, jadi dipasang lewat *sideload*. Semua cara di bawah bisa langsung dari iPhone,
 **tanpa PC dan tanpa kabel**. Tautan tetap (selalu versi terbaru, prerelease `ios-latest`):
 

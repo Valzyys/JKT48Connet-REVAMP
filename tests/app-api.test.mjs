@@ -164,6 +164,16 @@ const env = {
           { name: "jkt48connect.apk", size: 2000000, browser_download_url: "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/mobile-build-7/jkt48connect.apk" },
         ],
       });
+    if (url.href === "https://api.github.com/repos/Valzyys/JKT48Connet-REVAMP/releases/tags/ios-latest")
+      return Response.json({
+        tag_name: "ios-latest",
+        name: "JKT48Connect iOS 1.0.4 (terbaru)",
+        published_at: "2026-10-27T00:00:00Z",
+        assets: [
+          { name: "repo.json", size: 1, browser_download_url: "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest/repo.json" },
+          { name: "jkt48connect.ipa", size: 1800000, browser_download_url: "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest/jkt48connect.ipa" },
+        ],
+      });
     if (url.href === "https://jkt48.com/images/news/a.jpg") return new Response(new Uint8Array([255, 216, 255]), { headers: { "content-type": "image/jpeg" } });
     if (url.href === MP4) return new Response(new Uint8Array(10), { status: 206, headers: { "content-range": "bytes 0-9/1100", "content-length": "10" } });
     return new Response("not found", { status: 404 });
@@ -281,6 +291,13 @@ test("app update reports the latest GitHub release, with the app token", async (
   assert.equal(info.apk, "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/mobile-build-7/jkt48connect.apk");
   assert.equal(info.size, 2000000);
   assert.equal(info.notes, "Perbaikan");
+  // Rilis iPhone ikut dilaporkan untuk halaman /apps (aplikasi Android mengabaikannya).
+  assert.deepEqual(info.ios, {
+    version: "1.0.4",
+    ipa: "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest/jkt48connect.ipa",
+    size: 1800000,
+    publishedAt: "2026-10-27T00:00:00Z",
+  });
   assert.equal((await call("/api/app/update?x=1", { token })).status, 400);
 });
 

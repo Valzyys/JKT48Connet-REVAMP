@@ -18,8 +18,11 @@ import { STATIC_PAGES } from "@/lib/seo";
 /** APK selalu bernama sama di setiap rilis, jadi tautan "latest" GitHub selalu menuju versi terbaru. */
 const LATEST_APK = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/latest/download/jkt48connect.apk";
 /** .ipa iPhone di prerelease tetap "ios-latest" (rilis "latest" milik APK). Dibuka di Safari iPhone lalu "Bagikan → Scarlet/ESign/Feather". */
-const IOS_IPA = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest/jkt48connect.ipa";
-const IOS_GUIDE = "https://github.com/Valzyys/JKT48Connet-REVAMP/blob/main/ios/README.md#memasang-ipa";
+const IOS_BASE = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest";
+const IOS_IPA = `${IOS_BASE}/jkt48connect.ipa`;
+/** Repo Scarlet dan sumber AltStore (dibaca SideStore, Feather, ESign); URL tetap, diperbarui tiap rilis iPhone. */
+const IOS_SCARLET = `${IOS_BASE}/scarlet.json`;
+const IOS_SOURCE = `${IOS_BASE}/repo.json`;
 const GITHUB_STAR = "https://github.com/JKT48Connect/JKT48Connect-APP";
 const REVIEW_INTENT = `https://x.com/intent/post?text=${encodeURIComponent("Pakai aplikasi JKT48Connect buat pantau live, jadwal theater & recent member JKT48. Menurutku: ")}&url=${encodeURIComponent("https://jkt48connect.app/apps")}&hashtags=JKT48ConnectApp`;
 const REVIEW_SEARCH = "https://x.com/search?q=%23JKT48ConnectApp&f=live";
@@ -44,7 +47,9 @@ const FAQ = [
   { q: "Kenapa tidak ada di Play Store?", a: "JKT48Connect proyek fans yang dirilis langsung lewat GitHub Releases. Setiap APK ditandatangani kunci yang sama, jadi update berikutnya bisa langsung dipasang di atas versi lama." },
   { q: "Aman dipasang?", a: "APK dibangun otomatis dari kode sumber di GitHub. Aplikasi tidak meminta akun, kontak, atau lokasi. Izin yang dipakai: internet, notifikasi, dan memasang update." },
   { q: "Butuh Android versi berapa?", a: "Android 8.0 (Oreo) ke atas." },
-  { q: "Ada untuk iPhone?", a: "Ada, sebagai file .ipa yang bisa dipasang langsung dari iPhone tanpa PC: unduh lewat tombol iPhone, lalu buka dengan Scarlet, ESign, atau Feather (atau tambahkan repo JKT48Connect di aplikasi itu supaya bisa update). Panduan lengkap ada di tautan \"Cara pasang di iPhone\". Tanpa memasang apa pun, situs jkt48connect.app isinya sama." },
+  { q: "Ada untuk iPhone?", a: "Ada, sebagai file .ipa yang dipasang langsung dari iPhone tanpa PC lewat Scarlet, ESign, Feather, atau SideStore. Langkah lengkapnya ada di bagian Panduan → iPhone di halaman ini. Tanpa memasang apa pun, situs jkt48connect.app isinya sama." },
+  { q: "Bagaimana cara update?", a: "Android: pop-up update muncul sendiri di aplikasi, ketuk Update sekarang (data tetap). iPhone: kalau kamu menambahkan repo JKT48Connect di Scarlet/ESign/Feather/SideStore, versi baru muncul di sana; atau unduh .ipa terbaru dan pasang di atas versi lama." },
+  { q: "Butuh iOS versi berapa?", a: "iOS 16 ke atas. Di iOS 26 tampilannya memakai Liquid Glass asli Apple; di iOS 16–25 memakai efek blur bawaan." },
   { q: "Apakah resmi dari JKT48?", a: "Bukan. JKT48Connect dibuat oleh fans dan tidak berafiliasi dengan JKT48 Operation Team." },
 ];
 
@@ -76,6 +81,13 @@ export function AppsPage() {
   const next = useQuery(q.nextSchedule());
   const birthdays = useQuery(q.birthdays());
   const apk = release.data?.apk || LATEST_APK;
+  const ios = release.data?.ios;
+  const ipa = ios?.ipa || IOS_IPA;
+  // Tab panduan: Android / iPhone; tautan #panduan-iphone dan perangkat iPhone langsung membuka tab iPhone.
+  const [guide, setGuide] = useState<"android" | "iphone">("android");
+  useEffect(() => {
+    if (location.hash === "#panduan-iphone" || /iPhone|iPad|iPod/.test(navigator.userAgent)) setGuide("iphone");
+  }, []);
   const version = release.data?.version;
   const size = fmtSize(release.data?.size);
   const summary = releaseSummary(release.data);
@@ -162,7 +174,7 @@ export function AppsPage() {
             <div className="relative">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <span data-hero-badge className="inline-flex items-center gap-2.5 rounded-lg border border-white/55 px-3.5 py-2 font-mono text-[12px] uppercase tracking-[0.14em]">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#f7c548]" /> Aplikasi Android <span aria-hidden>↗</span>
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#f7c548]" /> Android &amp; iPhone <span aria-hidden>↗</span>
                 </span>
                 <span data-hero-badge className="flex items-center gap-2.5 font-mono text-[11px] uppercase leading-tight tracking-[0.12em] text-white/85">
                   <Equalizer />
@@ -344,11 +356,14 @@ export function AppsPage() {
                 <a href={apk} className="inline-flex items-center gap-2.5 rounded-xl bg-[#fff7ec] px-6 py-4 text-[17px] font-extrabold tracking-[-0.02em] text-[#e1243a] shadow-[0_10px_24px_rgb(120_10_25/0.35)] transition-transform hover:-translate-y-0.5 active:scale-95">
                   Unduh APK <Arrow className="h-5 w-5" />
                 </a>
-                <a href={IOS_IPA} className="inline-flex items-center gap-2.5 rounded-xl border-2 border-[#fff7ec]/70 px-5 py-[14px] text-[17px] font-extrabold tracking-[-0.02em] text-[#fff7ec] transition-transform hover:-translate-y-0.5 active:scale-95">
-                  iPhone (.ipa) <Arrow className="h-5 w-5" />
+                <a href={ipa} className="inline-flex items-center gap-2.5 rounded-xl border-2 border-[#fff7ec]/70 px-5 py-[14px] text-[17px] font-extrabold tracking-[-0.02em] text-[#fff7ec] transition-transform hover:-translate-y-0.5 active:scale-95">
+                  iPhone (.ipa){ios?.version ? ` · v${ios.version}` : ""} <Arrow className="h-5 w-5" />
                 </a>
-                <a href={IOS_GUIDE} target="_blank" rel="noopener noreferrer" className="micro underline decoration-white/40 underline-offset-4 hover:decoration-white">
-                  Cara pasang di iPhone ↗
+                <a href="#panduan" onClick={() => setGuide("iphone")} className="micro underline decoration-white/40 underline-offset-4 hover:decoration-white">
+                  Cara pasang di iPhone ↓
+                </a>
+                <a href="#panduan" onClick={() => setGuide("android")} className="micro underline decoration-white/40 underline-offset-4 hover:decoration-white">
+                  Cara pasang APK ↓
                 </a>
                 {release.data?.page && (
                   <a href={release.data.page} target="_blank" rel="noopener noreferrer" className="micro underline decoration-white/40 underline-offset-4 hover:decoration-white">
@@ -360,12 +375,16 @@ export function AppsPage() {
             <div className="flex flex-col justify-between gap-8">
               <Mascot caption="< siap dipasang >" className="self-center md:self-end" />
               <p className="font-mono text-[12px] leading-relaxed text-white/80">
-                Pertama kali pasang APK? Buka file yang terunduh, izinkan pemasangan dari browser atau file manager bila diminta, lalu ketuk Pasang. Versi berikutnya muncul sendiri di aplikasi dan terpasang di atas versi lama.
+                Pertama kali pasang? Ikuti Panduan di bawah: Android cukup izinkan pemasangan APK sekali; iPhone dipasang lewat Scarlet, ESign, Feather, atau SideStore langsung dari HP, tanpa PC.
+                {ios?.version ? ` iPhone v${ios.version} · ${fmtSize(ios.size)} · ${fmtDate(ios.publishedAt)}.` : ""}
               </p>
             </div>
           </div>
         </div>
       </section>
+
+      {/* ───── Panduan pasang & update: Android dan iPhone ───── */}
+      <Guide tab={guide} onTab={setGuide} apk={apk} ipa={ipa} version={version} iosVersion={ios?.version} />
 
       {/* ───── Ulasan + FAQ ───── */}
       <section id="faq" className="relative mx-auto max-w-6xl px-4 pb-20 md:px-8 md:pb-28">
@@ -412,6 +431,7 @@ function TopBar({ apk, version }: { apk: string; version?: string }) {
         <nav className="hidden items-center gap-5 font-mono text-[11px] uppercase tracking-[0.14em] md:flex">
           <a href="#fitur" className="opacity-70 hover:opacity-100">Fitur</a>
           <a href="#unduh" className="opacity-70 hover:opacity-100">Unduh</a>
+          <a href="#panduan" className="opacity-70 hover:opacity-100">Panduan</a>
           <a href="#faq" className="opacity-70 hover:opacity-100">FAQ</a>
         </nav>
         <span className="hidden rounded bg-[#1d1517]/[0.06] px-2 py-0.5 font-mono text-[11px] sm:inline">{version ? `v${version}` : "—"}</span>
@@ -608,6 +628,283 @@ function FaqItem({ n, q: question, a }: { n: string; q: string; a: string }) {
       </button>
       <div ref={body} className="h-0 overflow-hidden opacity-0">
         <p className="max-w-xl pb-6 pl-9 text-[15px] leading-relaxed text-[#1d1517]/70">{a}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────────── Panduan ───────────────────────────── */
+
+type Step = { t: string; d: ReactNode };
+
+const ANDROID_STEPS: Step[] = [
+  { t: "Unduh APK", d: "Ketuk Unduh APK. Filenya kecil (±2,5 MB) dan diambil langsung dari GitHub Releases." },
+  {
+    t: "Izinkan pemasangan",
+    d: (
+      <>
+        Buka <b>jkt48connect.apk</b> dari notifikasi unduhan atau aplikasi File. Bila muncul peringatan aplikasi tak dikenal, ketuk <b>Setelan</b> → aktifkan <b>Izinkan dari sumber ini</b> untuk browser/file manager, lalu kembali.
+      </>
+    ),
+  },
+  { t: "Pasang", d: <>Ketuk <b>Pasang</b>. Kalau Play Protect bertanya, pilih <b>Detail lainnya → Tetap pasang</b>. Aplikasi tidak meminta akun, kontak, atau lokasi.</> },
+  { t: "Izinkan notifikasi", d: "Saat pertama dibuka, izinkan notifikasi (Android 13+) supaya kamu tahu begitu member mulai live, show akan mulai, ulang tahun, dan berita baru." },
+  { t: "Update otomatis", d: <>Versi baru muncul sebagai pop-up di aplikasi. Ketuk <b>Update sekarang</b>: terpasang di atas versi lama, data &amp; oshi tetap ada.</> },
+];
+
+const ANDROID_TIPS: Step[] = [
+  { t: "Notifikasi live telat?", d: <>Pengaturan → Aplikasi → JKT48Connect → Baterai → <b>Tidak dibatasi</b>. Xiaomi/Redmi/POCO: aktifkan <b>Mulai otomatis</b>. Oppo/realme/vivo: izinkan berjalan di latar. Samsung: keluarkan dari <b>Aplikasi tidur</b>.</> },
+  { t: "“Aplikasi tidak terpasang”", d: "Biasanya karena versi lama di HP ditandatangani kunci yang berbeda (rilis paling awal). Hapus versi lama sekali, lalu pasang lagi. Setelah itu update berikutnya langsung terpasang di atasnya." },
+  { t: "“Ada masalah saat mengurai paket”", d: "Unduhan belum selesai atau Android di bawah 8.0. Unduh ulang APK dari halaman ini sampai selesai." },
+  { t: "Update di aplikasi gagal", d: "Unduh APK terbaru langsung dari halaman ini lalu pasang di atas versi lama. Datamu tidak hilang." },
+];
+
+type Method = { id: string; name: string; tag: string; steps: Step[]; action?: { label: string; href: string } };
+
+const IOS_METHODS: Method[] = [
+  {
+    id: "scarlet",
+    name: "Scarlet",
+    tag: "Paling mudah · tanpa PC",
+    steps: [
+      { t: "Pasang Scarlet", d: <>Buka situs resmi Scarlet (<b>usescarlet.com</b>) di Safari, lalu pasang Scarlet dari sana.</> },
+      { t: "Percayai profil", d: <>Pengaturan → Umum → <b>VPN &amp; Manajemen Perangkat</b> → ketuk profil Scarlet → <b>Percayai</b>.</> },
+      { t: "Mode Pengembang", d: <>iOS 16 ke atas: Pengaturan → Privasi &amp; Keamanan → <b>Mode Pengembang</b> → aktifkan. iPhone akan mulai ulang.</> },
+      { t: "Pasang JKT48Connect", d: <>Di Scarlet buka <b>Repos → +</b>, tempel <b>Repo Scarlet</b> di atas, lalu ketuk JKT48Connect → <b>Get</b>. Atau unduh .ipa, buka di aplikasi File, tahan file → <b>Bagikan → Scarlet → Install</b>.</> },
+      { t: "Update", d: "Buka repo JKT48Connect di Scarlet dan pasang versi baru di atas versi lama. Data tetap ada." },
+    ],
+  },
+  {
+    id: "esign",
+    name: "ESign",
+    tag: "Tanpa PC · butuh sertifikat",
+    steps: [
+      { t: "Pasang ESign + sertifikat", d: <>Pasang ESign, lalu impor sertifikat (<b>.p12</b> + <b>.mobileprovision</b> dan kata sandinya): sertifikat developer sendiri atau dari penyedia sertifikat.</> },
+      { t: "Tambahkan sumber", d: <>Buka <b>Sources → +</b>, tempel <b>Sumber ESign/Feather/SideStore</b> di atas. Atau unduh .ipa lalu <b>Bagikan → ESign</b>.</> },
+      { t: "Tanda tangani & pasang", d: <>Ketuk JKT48Connect → <b>Signature</b> → <b>Install</b>. Bila diminta, percayai profilnya di VPN &amp; Manajemen Perangkat.</> },
+    ],
+  },
+  {
+    id: "feather",
+    name: "Feather",
+    tag: "Tanpa PC · butuh sertifikat",
+    action: { label: "Tambahkan sumber ke Feather", href: `feather://source/${IOS_SOURCE}` },
+    steps: [
+      { t: "Pasang Feather + sertifikat", d: <>Pasang Feather, lalu impor sertifikatmu (<b>.p12</b> + <b>.mobileprovision</b>).</> },
+      { t: "Tambahkan sumber", d: <>Ketuk tombol <b>Tambahkan sumber ke Feather</b> di bawah (langsung membuka Feather), atau tempel Sumber di menu Sources. Bisa juga unduh .ipa lalu <b>Bagikan → Feather</b>.</> },
+      { t: "Pasang", d: <>Pilih JKT48Connect → <b>Sign</b> → <b>Install</b>.</> },
+    ],
+  },
+  {
+    id: "sidestore",
+    name: "SideStore",
+    tag: "Apple ID sendiri",
+    steps: [
+      { t: "Pasang SideStore", d: <>Ikuti panduan di <b>sidestore.io</b>. Pemasangan awal SideStore butuh komputer sekali; setelah itu semuanya dari iPhone.</> },
+      { t: "Tambahkan sumber", d: <>Buka <b>Sources → +</b>, tempel <b>Sumber ESign/Feather/SideStore</b> di atas, lalu pasang JKT48Connect.</> },
+      { t: "Refresh tiap 7 hari", d: "Dengan Apple ID gratis, tanda tangannya berlaku 7 hari. Ketuk Refresh di SideStore sebelum itu (bisa otomatis di latar)." },
+    ],
+  },
+  {
+    id: "trollstore",
+    name: "TrollStore",
+    tag: "iOS tertentu · permanen",
+    steps: [
+      { t: "Cek dukungan", d: <>TrollStore hanya bisa di versi iOS tertentu (lihat daftar di halaman TrollStore).</> },
+      { t: "Pasang", d: <>Unduh .ipa, buka di aplikasi File, tahan file → <b>Bagikan → TrollStore → Install</b>. Terpasang permanen tanpa perlu refresh.</> },
+    ],
+  },
+  {
+    id: "pc",
+    name: "Dari komputer",
+    tag: "Sideloadly",
+    steps: [
+      { t: "Siapkan Sideloadly", d: <>Pasang <b>Sideloadly</b> (Windows/macOS). Di Windows, pasang juga iTunes &amp; iCloud versi dari situs Apple.</> },
+      { t: "Pasang", d: <>Sambungkan iPhone dengan kabel, seret <b>jkt48connect.ipa</b> ke Sideloadly, masukkan Apple ID (boleh gratis), klik <b>Start</b>.</> },
+      { t: "Percayai & aktifkan", d: <>Percayai profil di VPN &amp; Manajemen Perangkat dan aktifkan Mode Pengembang. Apple ID gratis: pasang ulang tiap 7 hari.</> },
+    ],
+  },
+];
+
+const IOS_TROUBLE: Step[] = [
+  { t: "“Pengembang Tidak Dipercaya”", d: <>Pengaturan → Umum → VPN &amp; Manajemen Perangkat → ketuk profilnya → <b>Percayai</b>.</> },
+  { t: "Aplikasi langsung tertutup / “Tidak lagi tersedia”", d: "Sertifikatnya kedaluwarsa atau dicabut Apple. Pasang ulang dari pemasang yang sama setelah sertifikatnya diperbarui, atau pakai cara lain. Data & oshi tetap tersimpan." },
+  { t: "Mode Pengembang tidak muncul", d: "Menu itu baru muncul setelah ada aplikasi sideload yang terpasang. Pasang dulu sekali, lalu buka lagi Privasi & Keamanan." },
+  { t: ".ipa tidak terunduh", d: <>Di Safari, tahan tombol unduh → <b>Unduh File Tertaut</b>, lalu buka dari aplikasi File (folder Unduhan).</> },
+];
+
+/**
+ * Panduan lengkap di halaman (tidak perlu membuka GitHub): pilih Android atau iPhone, langkah bernomor, tips,
+ * dan kalau ada masalah. iPhone: tautan tetap (.ipa, repo Scarlet, sumber AltStore) yang bisa disalin, lalu
+ * pilihan cara pasang tanpa PC.
+ */
+function Guide({ tab, onTab, apk, ipa, version, iosVersion }: { tab: "android" | "iphone"; onTab: (t: "android" | "iphone") => void; apk: string; ipa: string; version?: string; iosVersion?: string }) {
+  const [method, setMethod] = useState(IOS_METHODS[0].id);
+  const m = IOS_METHODS.find((x) => x.id === method) ?? IOS_METHODS[0];
+  return (
+    <section id="panduan" className="relative mx-auto max-w-6xl scroll-mt-20 px-4 pb-20 md:px-8 md:pb-28">
+      <span id="panduan-iphone" className="absolute -top-20" aria-hidden />
+      <SectionHead label="JKT48Connect / Panduan" tag="Pasang & update" />
+      <div className="grid gap-8 pt-10 md:grid-cols-[0.8fr_1.2fr] md:items-end">
+        <div>
+          <Big text="Panduan" className="text-[clamp(3.2rem,7vw,5.6rem)]" />
+          <p data-in className="mt-4 max-w-sm text-[16px] leading-relaxed text-[#1d1517]/70">
+            Semua cara pasang, update, dan solusi masalah ada di sini. Pilih perangkatmu.
+          </p>
+        </div>
+        <div data-in role="tablist" aria-label="Pilih perangkat" className="grid grid-cols-2 gap-3">
+          {(
+            [
+              ["android", "Android", `APK${version ? ` · v${version}` : ""} · Android 8+`],
+              ["iphone", "iPhone", `.ipa${iosVersion ? ` · v${iosVersion}` : ""} · iOS 16+`],
+            ] as const
+          ).map(([id, label, sub]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => onTab(id)}
+              className={`rounded-2xl border p-4 text-left transition-transform active:scale-[0.98] ${tab === id ? "border-[#e1243a] bg-[#e1243a] text-[#fff7ec] shadow-[0_10px_24px_rgb(225_36_58/0.3)]" : "border-[#1d1517]/15 bg-[#fbf7f0] hover:border-[#1d1517]/40"}`}
+            >
+              <span className="block text-[clamp(1.5rem,3vw,2rem)] font-extrabold leading-none tracking-[-0.045em]">{label}</span>
+              <span className={`micro mt-2 block ${tab === id ? "text-white/80" : "text-[#1d1517]/60"}`}>{sub}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "android" ? (
+        <div className="pt-10">
+          <Steps steps={ANDROID_STEPS} />
+          <div className="mt-6 flex flex-wrap items-center gap-4">
+            <a href={apk} className="inline-flex items-center gap-2.5 rounded-xl bg-[#e1243a] px-6 py-4 text-[17px] font-extrabold tracking-[-0.02em] text-white shadow-[0_10px_24px_rgb(225_36_58/0.3)] transition-transform hover:-translate-y-0.5 active:scale-95">
+              Unduh APK{version ? ` v${version}` : ""} <Arrow className="h-5 w-5" />
+            </a>
+            <span className="micro text-[#1d1517]/60">Gratis · tanpa akun · tanpa iklan</span>
+          </div>
+          <SubHead label="Kalau ada masalah" />
+          <Faqish items={ANDROID_TIPS} />
+        </div>
+      ) : (
+        <div className="pt-10">
+          <p className="max-w-2xl text-[16px] leading-relaxed text-[#1d1517]/75">
+            JKT48Connect belum ada di App Store, jadi dipasang lewat <b>sideload</b>. Pilih salah satu cara di bawah; Scarlet, ESign, dan Feather bisa langsung dari iPhone, <b>tanpa PC dan tanpa kabel</b>. Simpan tautan berikut, semuanya selalu menunjuk versi terbaru.
+          </p>
+          <div className="mt-6 overflow-hidden rounded-2xl border border-[#1d1517]/15 bg-[#fbf7f0]">
+            <CopyRow label="File aplikasi (.ipa)" value={ipa} href={ipa} />
+            <CopyRow label="Repo Scarlet" value={IOS_SCARLET} />
+            <CopyRow label="Sumber ESign / Feather / SideStore / AltStore" value={IOS_SOURCE} />
+          </div>
+
+          <SubHead label="Pilih cara pasang" />
+          <div role="tablist" aria-label="Cara pasang" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 md:flex-wrap md:overflow-visible">
+            {IOS_METHODS.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                role="tab"
+                aria-selected={method === x.id}
+                onClick={() => setMethod(x.id)}
+                className={`shrink-0 rounded-xl border px-4 py-2.5 text-left transition-colors ${method === x.id ? "border-[#1d1517] bg-[#1d1517] text-[#fff7ec]" : "border-[#1d1517]/15 bg-[#fbf7f0] hover:border-[#1d1517]/40"}`}
+              >
+                <span className="block text-[15px] font-extrabold tracking-[-0.02em]">{x.name}</span>
+                <span className={`block font-mono text-[10px] uppercase tracking-[0.1em] ${method === x.id ? "text-white/70" : "text-[#1d1517]/55"}`}>{x.tag}</span>
+              </button>
+            ))}
+          </div>
+          <div className="pt-5">
+            <Steps steps={m.steps} />
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              {m.action && (
+                <a href={m.action.href} className="inline-flex items-center gap-2.5 rounded-xl bg-[#1d1517] px-5 py-3.5 text-[16px] font-extrabold tracking-[-0.02em] text-[#fff7ec] transition-transform hover:-translate-y-0.5 active:scale-95">
+                  {m.action.label} <Arrow className="h-5 w-5" />
+                </a>
+              )}
+              <a href={ipa} className="inline-flex items-center gap-2.5 rounded-xl bg-[#e1243a] px-5 py-3.5 text-[16px] font-extrabold tracking-[-0.02em] text-white shadow-[0_10px_24px_rgb(225_36_58/0.3)] transition-transform hover:-translate-y-0.5 active:scale-95">
+                Unduh .ipa{iosVersion ? ` v${iosVersion}` : ""} <Arrow className="h-5 w-5" />
+              </a>
+            </div>
+          </div>
+
+          <div className="mt-10 rounded-2xl border border-[#d9a400]/40 bg-[#fff3c4] p-5 text-[15px] leading-relaxed text-[#5a4300]">
+            <p className="micro mb-2 text-[#8a6500]">Penting soal sertifikat</p>
+            iPhone hanya menjalankan aplikasi yang ditandatangani sertifikat Apple. Scarlet memakai sertifikat bersama milik layanannya; ESign dan Feather memakai sertifikat yang kamu impor. Apple kadang mencabut sertifikat bersama: kalau itu terjadi, JKT48Connect (dan aplikasi lain dari pemasang yang sama) tidak bisa dibuka sampai dipasang ulang setelah sertifikatnya diperbarui. Data dan oshi tetap tersimpan. Aplikasi ini tidak meminta login atau izin khusus.
+          </div>
+
+          <SubHead label="Kalau ada masalah" />
+          <Faqish items={IOS_TROUBLE} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SubHead({ label }: { label: string }) {
+  return <p className="micro mb-4 mt-12 border-b border-[#1d1517]/20 pb-3 text-[#1d1517]/70">{label}</p>;
+}
+
+/** Langkah bernomor dalam kartu krem, 1–3 kolom. */
+function Steps({ steps }: { steps: Step[] }) {
+  return (
+    <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {steps.map((s, i) => (
+        <li key={s.t} className="rounded-2xl border border-[#1d1517]/12 bg-[#fbf7f0] p-5" style={{ backgroundImage: PLUS_INK }}>
+          <span className="font-mono text-[12px] font-semibold text-[#e1243a]">{pad2(i + 1)}</span>
+          <p className="mt-2 text-[18px] font-extrabold tracking-[-0.03em]">{s.t}</p>
+          <p className="mt-1.5 text-[15px] leading-relaxed text-[#1d1517]/70">{s.d}</p>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Daftar masalah → solusi (selalu terbuka, mudah dipindai). */
+function Faqish({ items }: { items: Step[] }) {
+  return (
+    <dl className="grid gap-x-10 gap-y-6 md:grid-cols-2">
+      {items.map((x) => (
+        <div key={x.t}>
+          <dt className="text-[16px] font-extrabold tracking-[-0.02em]">{x.t}</dt>
+          <dd className="mt-1 text-[15px] leading-relaxed text-[#1d1517]/70">{x.d}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Baris tautan dengan tombol salin (dan buka bila `href`). */
+function CopyRow({ label, value, href }: { label: string; value: string; href?: string }) {
+  const [done, setDone] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const t = document.createElement("textarea");
+      t.value = value;
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand("copy");
+      t.remove();
+    }
+    setDone(true);
+    window.setTimeout(() => setDone(false), 1600);
+  };
+  return (
+    <div className="flex flex-col gap-3 border-t border-[#1d1517]/10 p-4 first:border-t-0 sm:flex-row sm:items-center">
+      <div className="min-w-0 flex-1">
+        <p className="micro text-[#1d1517]/60">{label}</p>
+        <p className="mt-1 truncate font-mono text-[12.5px] text-[#1d1517]">{value}</p>
+      </div>
+      <div className="flex shrink-0 gap-2">
+        {href && (
+          <a href={href} className="rounded-lg border border-[#1d1517]/20 px-3.5 py-2 text-[13px] font-extrabold hover:border-[#1d1517]/50">
+            Unduh
+          </a>
+        )}
+        <button type="button" onClick={copy} className={`rounded-lg px-3.5 py-2 text-[13px] font-extrabold text-white transition-colors ${done ? "bg-[#1f8a4c]" : "bg-[#1d1517]"}`}>
+          {done ? "Tersalin ✓" : "Salin"}
+        </button>
       </div>
     </div>
   );
