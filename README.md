@@ -161,7 +161,7 @@ Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test
 Folder [`ios/`](ios/README.md) berisi aplikasi iPhone native (SwiftUI) dengan isi yang sama seperti aplikasi Android dan jalur `/api/app` yang sama.
 - **Liquid Glass asli:** dibangun dengan SDK iOS 26, jadi tab bar, bilah navigasi, dan kontrol pemutar memakai kaca sistem. Kartu, pil, dan tombol memakai `glassEffect` interaktif dalam `GlassEffectContainer`. iOS 16–25 memakai material blur.
 - **Live Showroom & replay** diputar di aplikasi (AVPlayer: Picture-in-Picture, AirPlay, suara tetap jalan saat layar terkunci). Live IDN dibuka di idn.app, replay IDN terkunci 72 jam.
-- **Pemasangan langsung dari iPhone, tanpa PC:** Scarlet, ESign, Feather, atau SideStore, lewat file `.ipa` atau repo/sumber dengan tautan tetap di prerelease `ios-latest` (`jkt48connect.ipa`, `scarlet.json`, `repo.json`). Rilis iOS tidak pernah ditandai *latest*. Cara dari komputer (Sideloadly/AltStore) dan TrollStore juga ada. Panduan lengkap di [`ios/README.md`](ios/README.md#memasang-ipa).
+- **Pemasangan langsung dari iPhone, tanpa PC:** Scarlet, ESign, Feather, atau SideStore, lewat file `.ipa` atau repo/sumber dengan tautan tetap di prerelease `ios-latest` (`jkt48connect.ipa`, `scarlet.json`, `repo.json`). Rilis iOS tidak pernah ditandai *latest*. Cara dari komputer (Sideloadly/AltStore) dan TrollStore juga ada. Panduan lengkap untuk pengguna ada di halaman [`/apps`](https://jkt48connect.app/apps#panduan) (bagian Panduan: Android & iPhone), detail teknis di [`ios/README.md`](ios/README.md#memasang-ipa).
 - **CI:** `.github/workflows/ios.yml` (build + tangkapan layar simulator, prerelease `ios-preview`) dan `ios-release.yml` (rilis dari `main`).
 
 ### Landing page `/apps`
@@ -171,7 +171,8 @@ Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs
 - **Kartu live:** kartu notifikasi live asli dari live yang sedang berlangsung (`banner` di `/api/now_live`, gambar yang sama dengan notifikasi di aplikasi), bergantian otomatis.
 - **Fitur:** enam kartu bergaya banner dengan screenshot asli.
 - **Hari ini:** jumlah member live, show berikutnya (jam WIB, hitung mundur), dan ulang tahun terdekat.
-- **Unduh:** versi, ringkasan rilis, ukuran, dan tanggal dari `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`).
+- **Unduh:** versi, ringkasan rilis, ukuran, dan tanggal dari `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`, ditambah `ios`: versi, ukuran, dan tanggal rilis iPhone dari prerelease `ios-latest`). Tombol APK dan .ipa.
+- **Panduan (`#panduan`):** pilihan Android / iPhone (perangkat iPhone & tautan `#panduan-iphone` langsung membuka iPhone). Android: langkah pasang, izin, notifikasi, update, dan solusi masalah. iPhone: tautan tetap .ipa, repo Scarlet, dan sumber ESign/Feather/SideStore yang bisa disalin; cara pasang Scarlet, ESign, Feather (tombol sekali ketuk `feather://`), SideStore, TrollStore, dan dari komputer; catatan sertifikat; solusi masalah.
 - **Animasi GSAP + ScrollTrigger** hanya memakai transform/opacity (plus stroke garis lengkung sekali saat masuk). Posisi trigger dihitung ulang saat tinggi halaman berubah. Bila animasi sistem dimatikan, halaman hanya memakai transisi pudar.
 - Screenshot aplikasi di `public/apps/` dirender dari aplikasi asli.
 

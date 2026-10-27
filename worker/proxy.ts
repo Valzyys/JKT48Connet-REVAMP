@@ -396,6 +396,26 @@ export async function fetchLatestRelease(env: ProxyEnv): Promise<AppRelease | nu
   };
 }
 
+/** Rilis iPhone di prerelease tetap `ios-latest` (.ipa tanpa tanda tangan); null bila belum ada atau gagal. */
+type IosRelease = { version: string; ipa: string; size: number; publishedAt: string };
+
+async function fetchIosRelease(env: ProxyEnv): Promise<IosRelease | null> {
+  const repo = /^[\w.-]+\/[\w.-]+$/.test(env.APP_RELEASE_REPO ?? "") ? env.APP_RELEASE_REPO! : APP_RELEASE_REPO;
+  const res = await (env.UPSTREAM_FETCH ?? fetch)(`https://api.github.com/repos/${repo}/releases/tags/ios-latest`, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "JKT48Connect update check", "X-GitHub-Api-Version": "2022-11-28" },
+  });
+  if (!res.ok) return null;
+  const r = (await res.json()) as GithubRelease;
+  const ipa = r.assets?.find((a) => a.name === "jkt48connect.ipa" && (a.browser_download_url ?? "").startsWith("https://github.com/"));
+  if (!ipa) return null;
+  return {
+    version: /\d+\.\d+\.\d+/.exec(`${r.name ?? ""}`)?.[0] ?? "",
+    ipa: String(ipa.browser_download_url),
+    size: Number(ipa.size ?? 0),
+    publishedAt: String(r.published_at ?? ""),
+  };
+}
+
 /**
  * `GET /api/app/update` → versi terbaru dari GitHub Releases (release "latest": bukan draft/prerelease),
  * di-cache 15 menit. Aplikasi membandingkan `version` (x.y.z dari judul/tag release) dengan versinya sendiri.
@@ -407,22 +427,26 @@ async function handleAppUpdate(c: Call): Promise<Response> {
   return new Response(body, { headers: { ...API_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" } });
 }
 
-/** JSON rilis APK terbaru (di-cache di edge), dipakai `/api/app/update` (aplikasi) dan `/api/app_release` (halaman /apps). */
+/**
+ * JSON rilis APK terbaru (di-cache di edge), dipakai `/api/app/update` (aplikasi) dan `/api/app_release` (halaman /apps).
+ * `ios` berisi rilis iPhone (`ios-latest`) untuk halaman /apps; aplikasi Android mengabaikannya.
+ */
 async function appReleaseBody(c: Call): Promise<string | Response> {
   const { url, env, ctx } = c;
   const cache = edgeCache();
-  const key = new Request(`${url.origin}/__cache/v2/app-update/${env.APP_RELEASE_REPO ?? ""}`);
+  const key = new Request(`${url.origin}/__cache/v3/app-update/${env.APP_RELEASE_REPO ?? ""}`);
   const hit = await cache?.match(key);
   if (hit) return hit.text();
 
   let release: AppRelease | null;
+  let ios: IosRelease | null;
   try {
-    release = await fetchLatestRelease(env);
+    [release, ios] = await Promise.all([fetchLatestRelease(env), fetchIosRelease(env).catch(() => null)]);
   } catch {
     return json({ status: 502, message: "Info update tidak bisa diambil" }, 502);
   }
   if (!release) return json({ status: 404, message: "Belum ada rilis" }, 404);
-  const body = JSON.stringify(release);
+  const body = JSON.stringify({ ...release, ios });
   if (cache) ctx.waitUntil(cache.put(key, new Response(body, { headers: { "content-type": "application/json", "cache-control": `public, max-age=${UPDATE_TTL}` } })));
   return body;
 }

@@ -65,9 +65,9 @@ export const STATIC_PAGES: Record<string, PageMeta & { nav?: string }> = {
   "/discord": {title:"Dashboard Bot Discord JKT48Connect",h1:"Discord",description:"Tambahkan JKT48Connect ke server Discord dan kelola channel, role mention, serta notifikasi komunitasmu."},
   "/apps": {
     nav: "Aplikasi",
-    title: "Aplikasi Android JKT48Connect — Unduh APK Gratis",
-    h1: "Aplikasi JKT48Connect untuk Android",
-    description: "Unduh aplikasi JKT48Connect untuk Android: notifikasi live IDN & Showroom, jadwal theater, recent & replay, video YouTube, dan posting sosmed member JKT48. Gratis, tanpa iklan.",
+    title: "Aplikasi JKT48Connect Android & iPhone — Unduh & Panduan Pasang",
+    h1: "Aplikasi JKT48Connect untuk Android dan iPhone",
+    description: "Unduh aplikasi JKT48Connect untuk Android (APK) dan iPhone (.ipa): notifikasi live IDN & Showroom, jadwal theater, recent & replay, video YouTube, sosmed member JKT48, plus panduan pasang tanpa PC lewat Scarlet, ESign, Feather. Gratis, tanpa iklan.",
   },
   "/developer": {
     title: "JKT48Connect API untuk Developer",

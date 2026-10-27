@@ -164,7 +164,7 @@ struct AboutView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Aplikasi ini dipasang lewat sideload. Untuk update, tambahkan repo JKT48Connect di Scarlet / ESign / Feather / SideStore, atau unduh file .ipa terbaru lalu buka dengan aplikasi tersebut. Kalau aplikasi tiba-tiba tidak bisa dibuka, sertifikat pemasangnya kedaluwarsa: pasang ulang saja, data tetap tersimpan.")
                         .font(.footnote).foregroundStyle(Theme.ink)
-                    Button { openURL(URL(string: "https://github.com/Valzyys/JKT48Connet-REVAMP/blob/main/ios/README.md#memasang-ipa")!) } label: {
+                    Button { openURL(URL(string: "https://jkt48connect.app/apps#panduan-iphone")!) } label: {
                         Label("Panduan pasang & update", systemImage: "arrow.down.circle.fill").font(.footnote.weight(.heavy)).foregroundStyle(Theme.brand)
                     }
                     .buttonStyle(.plain)
