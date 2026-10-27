@@ -156,6 +156,14 @@ Aplikasi tidak punya cookie/Origin browser, jadi worker menyediakan jalur `/api/
 
 Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test:push`.
 
+## Aplikasi iPhone (SwiftUI, .ipa)
+
+Folder [`ios/`](ios/README.md) berisi aplikasi iPhone native (SwiftUI) dengan isi yang sama seperti aplikasi Android dan jalur `/api/app` yang sama.
+- **Liquid Glass asli:** dibangun dengan SDK iOS 26, jadi tab bar, bilah navigasi, dan kontrol pemutar memakai kaca sistem. Kartu, pil, dan tombol memakai `glassEffect` interaktif dalam `GlassEffectContainer`. iOS 16–25 memakai material blur.
+- **Live Showroom & replay** diputar di aplikasi (AVPlayer: Picture-in-Picture, AirPlay, suara tetap jalan saat layar terkunci). Live IDN dibuka di idn.app, replay IDN terkunci 72 jam.
+- **Pemasangan:** `.ipa` tanpa tanda tangan dari GitHub Releases (`ios-build-N`, tidak ditandai *latest*), dipasang lewat Sideloadly / AltStore / SideStore (Apple ID gratis: pasang ulang tiap 7 hari) atau TrollStore. Panduan lengkap di [`ios/README.md`](ios/README.md).
+- **CI:** `.github/workflows/ios.yml` (build + tangkapan layar simulator, prerelease `ios-preview`) dan `ios-release.yml` (rilis dari `main`).
+
 ### Landing page `/apps`
 
 Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs, dengan gaya grafis yang sama seperti kartu "live notice" JKT48Connect dari API: kertas krem bergrid "+", garis lengkung pink, wordmark dengan asterisk merah, label mono, panel merah membulat, judul tebal rapat dengan titik kotak kuning, foto polaroid miring, dan maskot ASCII "ON AIR!". Selalu tema terang.
