@@ -28,6 +28,82 @@ const env = {
     const url = new URL(String(input));
     upstreamCalls.push({ url: url.href, range: new Headers(init.headers).get("Range") });
     if (url.pathname === "/api/now_live") return Response.json([]);
+    if (url.pathname === "/api/jkt48_youtube/hAHv54gxD60")
+      return Response.json({
+        id: "hAHv54gxD60",
+        title: "Mini Live",
+        channel_title: "JKT48",
+        duration: 7165,
+        view_count: 354082,
+        comment_count: 459,
+        url: "https://www.youtube.com/watch?v=hAHv54gxD60",
+        playback: { status: "ready", format: "m3u8", qualities: [360, 720], expires_at: 1793093535, url: "https://api.jkt48connect.app/media/youtube/hAHv54gxD60/1793093535.sig/index.m3u8" },
+      });
+    if (url.pathname === "/api/jkt48_youtube/evilVideo1")
+      return Response.json({ id: "evilVideo1", title: "x", playback: { format: "m3u8", url: "https://evil.test/a.m3u8" } });
+    if (url.pathname === "/api/jkt48_youtube/hAHv54gxD60/comments")
+      return Response.json({
+        status: "available",
+        total_count: 459,
+        comments: [{ id: "c1", text: "Keren!", author: { name: "@fan", avatar: "https://yt3.ggpht.com/a", is_uploader: false }, published_text: "2 days ago", likes: 3, reply_count: 1 }],
+        next_cursor: url.searchParams.get("cursor") ? "" : "s1Hz_next-1",
+        has_more: !url.searchParams.get("cursor"),
+      });
+    if (url.pathname === "/api/x/tweets")
+      return Response.json({
+        tweets: [
+          {
+            id: "2114965881151524905",
+            url: "https://x.com/Levi_JKT48/status/2114965881151524905",
+            text: "BALIKPAPAN",
+            created_at: "2026-10-27T06:22:14Z",
+            author: { username: "Levi_JKT48", name: "Michelle Levia", avatar: "https://pbs.twimg.com/profile_images/1/a_normal.jpg" },
+            metrics: { likes: 211, reposts: 22, replies: 25, views: "5526" },
+            media: [
+              {
+                type: "video",
+                url: "https://pbs.twimg.com/thumb.jpg",
+                variants: [
+                  { url: "https://video.twimg.com/a.m3u8", content_type: "application/x-mpegURL", bitrate: null },
+                  { url: "https://video.twimg.com/360.mp4", content_type: "video/mp4", bitrate: 832000 },
+                  { url: "https://video.twimg.com/720.mp4", content_type: "video/mp4", bitrate: 2176000 },
+                  { url: "https://video.twimg.com/1080.mp4", content_type: "video/mp4", bitrate: 8000000 },
+                ],
+              },
+              { type: "photo", url: "javascript:alert(1)" },
+            ],
+            member: { id: "michelle-levia", name: "Michelle Levia", img: "https://api.jkt48connect.app/media/levi.jpg" },
+          },
+        ],
+        next_cursor: "2114961101884674151",
+        has_more: true,
+      });
+    if (url.pathname === "/api/instagram/posts")
+      return Response.json({
+        posts: [
+          {
+            id: "4016457109647055400",
+            url: "https://www.instagram.com/p/De9UnYMGtoo/",
+            text: "Princess",
+            created_at: null,
+            first_seen_at: "2026-10-26T12:55:00Z",
+            author: { username: "jkt48.olla" },
+            member: { member: "febriola-sinambela", name: "Febriola Sinambela" },
+            metrics: { likes: 11429, comments: 175, views: null },
+            media: {
+              type: "carousel",
+              thumbnail: { status: "ready", url: "https://api.jkt48connect.app/media/instagram/x/thumbnail" },
+              items: [
+                { type: "image", width: 3071, height: 4096, thumbnail: { status: "ready", url: "https://api.jkt48connect.app/media/instagram/x/image-0" } },
+                { type: "video", thumbnail: { status: "ready", url: "https://api.jkt48connect.app/media/instagram/x/image-1" }, video: { status: "ready", url: "https://api.jkt48connect.app/media/instagram/x/video-1" } },
+                { type: "image", thumbnail: { status: "pending", url: null } },
+              ],
+            },
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+      });
     if (url.pathname === "/api/recent/idn-x")
       return Response.json({
         data_id: "idn-x",
@@ -141,4 +217,57 @@ test("app push config is disabled until Firebase is configured on the worker", a
   const res = await call("/api/app/push", { token: await newToken() });
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { enabled: false });
+});
+
+test("YouTube detail returns a playable HLS link from the API domain only; comments page with a cursor", async () => {
+  const token = await newToken();
+  const v = await (await call("/api/app/jkt48_youtube/hAHv54gxD60", { token })).json();
+  assert.equal(v.playable, true);
+  assert.equal(v.duration, 7165);
+  assert.equal(v.comments, 459);
+  assert.match(v.playback.url, /^https:\/\/api\.jkt48connect\.app\/media\/youtube\/hAHv54gxD60\/.+\/index\.m3u8$/);
+  assert.deepEqual(v.playback.qualities, [360, 720]);
+
+  const evil = await (await call("/api/app/jkt48_youtube/evilVideo1", { token })).json();
+  assert.equal(evil.playable, false, "playlists from other hosts are dropped");
+  assert.equal(evil.playback, null);
+
+  const c1 = await (await call("/api/app/jkt48_youtube/hAHv54gxD60/comments", { token })).json();
+  assert.equal(c1.items[0].text, "Keren!");
+  assert.equal(c1.cursor, "s1Hz_next-1");
+  assert.equal(c1.hasMore, true);
+  await call(`/api/app/jkt48_youtube/hAHv54gxD60/comments?cursor=${c1.cursor}`, { token });
+  assert.equal(new URL(upstreamCalls.at(-1).url).searchParams.get("cursor"), "s1Hz_next-1", "cursor is forwarded");
+  assert.equal((await call("/api/app/jkt48_youtube/hAHv54gxD60/comments?cursor=a%20b", { token })).status, 400);
+  assert.equal((await call("/api/app/jkt48_youtube/bad.id!", { token })).status, 404);
+});
+
+test("member social feeds: one post shape for X / Instagram, safe media, validated filters", async () => {
+  const token = await newToken();
+  const x = await (await call("/api/app/x/tweets?member=michelle-levia&limit=10", { token })).json();
+  const sent = new URL(upstreamCalls.at(-1).url);
+  assert.equal(sent.pathname, "/api/x/tweets");
+  assert.equal(sent.searchParams.get("member"), "michelle-levia");
+  assert.equal(sent.searchParams.get("before"), null, "empty cursor is not forwarded");
+  const t = x.items[0];
+  assert.equal(t.platform, "x");
+  assert.equal(t.views, 5526);
+  assert.equal(t.author.avatar, "https://pbs.twimg.com/profile_images/1/a_200x200.jpg");
+  assert.deepEqual(t.media, [{ type: "video", url: "https://video.twimg.com/720.mp4", thumb: "https://pbs.twimg.com/thumb.jpg", width: null, height: null }]);
+  assert.equal(x.cursor, "2114961101884674151");
+
+  await call(`/api/app/x/tweets?before=${x.cursor}`, { token });
+  assert.equal(new URL(upstreamCalls.at(-1).url).searchParams.get("before"), "2114961101884674151");
+  assert.equal((await call("/api/app/x/tweets?before=abc", { token })).status, 400);
+  assert.equal((await call("/api/app/x/tweets?member=../etc", { token })).status, 400);
+  assert.equal((await call("/api/app/x/tweets?limit=500", { token })).status, 400);
+
+  const ig = await (await call("/api/app/instagram/posts", { token })).json();
+  const p = ig.items[0];
+  assert.equal(p.platform, "instagram");
+  assert.equal(p.date, "2026-10-26T12:55:00Z");
+  assert.equal(p.dateApprox, true);
+  assert.equal(p.member.id, "febriola-sinambela");
+  assert.deepEqual(p.media.map((m) => m.type), ["image", "video"], "pending items are skipped");
+  assert.equal(ig.hasMore, false);
 });

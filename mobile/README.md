@@ -43,7 +43,9 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 
 | Tab / halaman | Isi |
 |---|---|
-| Beranda | Hero merah dengan logo piksel yang tersusun, pintasan kaca, live sekarang, show berikutnya (hitung mundur), recent, ulang tahun, berita |
+| Beranda | Gaya aplikasi iPhone: judul besar dengan tanggal, empat widget (live, show berikutnya dengan hitung mundur, ulang tahun, video baru), pintasan kaca (Video, Sosmed, Ultah, Berita), live sekarang, video terbaru, posting member, recent dan berita dalam daftar inset |
+| Video | Video terbaru kanal YouTube JKT48 & JKT48 TV (filter per kanal). Diputar langsung di aplikasi (HLS dengan audio, pilihan kualitas Auto/360p–1080p, layar penuh), dengan deskripsi dan komentar publik (muat-lanjut) |
+| Sosmed | Posting publik member di X, TikTok, dan Instagram (arsip JKT48Connect): teks, foto/carousel, video yang bisa diputar, angka interaksi; bisa dibuka per member dari profilnya |
 | Live | Semua member yang sedang live (IDN/Showroom), diperbarui tiap 30 detik |
 | Jadwal | Mendatang (dikelompokkan per tanggal) dan arsip theater (muat-lanjut); detail theater dengan member tampil, setlist, hitung mundur |
 | Recent | Rekap live; detail berisi statistik, replay, top supporter, gift, cuplikan layar (9 petak + "+N"; penampil layar penuh gelap: geser kiri/kanan, filmstrip, ketuk dua kali/cubit untuk zoom, geser ke bawah untuk menutup) |
@@ -84,8 +86,13 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 **Tema**
 - Pilihannya Sistem, Putih, atau Gelap, diatur di menu dan disimpan di perangkat.
 
-**Replay**
-- Terkunci sampai 72 jam setelah live.
+**Tampilan**
+- Palet ala iOS: latar abu sistem dengan kartu putih (tema terang), hitam pekat dengan kartu abu tua (gelap).
+- Judul halaman besar dan tebal, judul bagian dengan "Semua ›", daftar inset bergaris rambut seperti aplikasi iPhone.
+
+**Replay & video**
+- Satu pemutar (`ui/player/MediaPlayer.kt`) untuk replay, YouTube, dan video member.
+- Replay terkunci sampai 72 jam setelah live.
 - Diputar dengan Media3 lewat playlist HLS dari worker, dengan MP4 sebagai cadangan.
 - Kontrol kaca: judul & bagian, kecepatan (0,5×–2×), mundur/maju 10 detik, play, dan slider lensa; ketuk dua kali di sisi kiri/kanan untuk −10/+10 detik.
 - **Layar penuh** di jendela tersendiri: bilah sistem disembunyikan, video lanskap (Showroom) memutar layar ke lanskap. Kembali, tombol keluar, atau geser ke bawah untuk menutup. Pemutar yang sama dipakai (tidak mulai ulang).
@@ -117,7 +124,9 @@ Lalu tambahkan dua secret di GitHub → Settings → Secrets and variables → A
 
 Pengguna yang memasang APK lama (bertanda tangan kunci debug acak) perlu hapus-pasang satu kali ke versi berkunci tetap. Setelah itu update berikutnya bisa langsung dari pop-up. Aplikasi mendeteksi kunci yang berbeda dan menjelaskannya di pop-up.
 
-Tanpa secret ini, `assembleRelease` memakai kunci debug (cukup untuk dicoba).
+Workflow **Mobile Release berhenti dengan error** bila kedua secret belum diatur atau keystore tidak bisa dibuka dengan password-nya. Ini disengaja: rilis berkunci acak memaksa semua pengguna hapus-pasang. Setelah secret diisi, jalankan ulang workflow dari tab Actions.
+
+Build lokal tanpa secret tetap memakai kunci debug (cukup untuk dicoba).
 
 ### Unduh APK dari GitHub Releases
 
@@ -163,11 +172,12 @@ app/src/main/java/app/jkt48connect/
          Format.kt         tanggal WIB, durasi, angka, hitung mundur
          Images.kt         pemuat gambar ringan (cache memori + disk, satu unduhan per URL, decode diperkecil)
   ui/    App.kt            lapisan backdrop, kepala atas, tab bar kaca, lembar menu, transisi halaman
+         player/           pemutar video Media3 bersama (replay, YouTube, video member): kualitas, kecepatan, layar penuh
          Navigation.kt     tab + tumpukan halaman, status muat data (cache dulu, lalu jaringan)
          Intro.kt          animasi intro saat aplikasi dibuka
          UpdateDialog.kt   pop-up kaca "Update tersedia"
          glass/            LiquidButton, LiquidTabs, LiquidSlider, LiquidToggle, gestur seret/kilau (dari catalog Backdrop)
          components/       logo piksel, sinyal, kartu, tarik-untuk-muat-ulang, latar ambient
-         screens/          Home, Lists (live, jadwal, recent, member, ulang tahun, berita), Details, About
+         screens/          Home, Lists (live, jadwal, recent, member, ulang tahun, berita), Details, Media (video, sosmed), About
          theme/            tema putih & gelap, tipografi (Archivo, IBM Plex Mono — sudah di-subset)
 ```

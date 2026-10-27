@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.NorthEast
 import androidx.compose.material.icons.rounded.WifiTetheringError
 import androidx.compose.runtime.Composable
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -141,40 +143,79 @@ fun Micro(text: String, modifier: Modifier = Modifier, color: Color = LocalColor
     }
 }
 
-/** Kepala halaman tab: label mikro + judul besar + elemen kanan opsional. */
+/** Kepala halaman tab ala iOS: label kecil abu (huruf besar) + judul besar tebal + elemen kanan opsional. */
 @Composable
 fun PageHeader(label: String, title: String, horizontal: Dp = 20.dp, trailing: (@Composable () -> Unit)? = null) {
     val c = LocalColors.current
-    Row(Modifier.fillMaxWidth().padding(horizontal, 10.dp, horizontal, 16.dp).staggerIn(0), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().padding(horizontal, 6.dp, horizontal, 16.dp).staggerIn(0), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            Micro(label, color = c.brand, dot = true)
-            Spacer(Modifier.height(8.dp))
-            Txt(title.uppercase(), AppText.display(44.sp, c.ink))
+            Txt(label.uppercase(), AppText.body(12.sp, c.inkSoft, 700).copy(letterSpacing = 0.04.em), maxLines = 1)
+            Spacer(Modifier.height(2.dp))
+            Txt(title, AppText.title(34.sp, c.ink), maxLines = 1)
         }
         trailing?.invoke()
     }
 }
 
-/** Judul bagian: label mikro + judul condensed + tombol "Semua". */
+/** Judul bagian ala iOS: judul tebal + keterangan abu, dan "Semua ›" berwarna aksen di kanan. */
 @Composable
 fun SectionHead(label: String, title: String, onMore: (() -> Unit)? = null) {
     val c = LocalColors.current
-    Row(Modifier.fillMaxWidth().padding(20.dp, 30.dp, 20.dp, 12.dp), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().padding(20.dp, 28.dp, 16.dp, 10.dp), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            Micro(label, color = c.brand, dot = true)
-            Spacer(Modifier.height(6.dp))
-            Txt(title.uppercase(), AppText.display(30.sp, c.ink))
+            Txt(title, AppText.title(22.sp, c.ink), maxLines = 1)
+            Txt(label, AppText.body(13.sp, c.inkSoft, 500), maxLines = 1)
         }
         if (onMore != null) {
-            Row(
-                Modifier.pressable(onMore).background(c.card, CircleShape).padding(12.dp, 7.dp, 9.dp, 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Txt("SEMUA", AppText.micro(c.ink, 10.sp))
-                Spacer(Modifier.width(4.dp))
-                Image(Icons.Rounded.NorthEast, null, Modifier.size(13.dp), colorFilter = ColorFilter.tint(c.brand))
+            Row(Modifier.pressable(onMore).padding(start = 12.dp, top = 6.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Txt("Semua", AppText.body(15.sp, c.brand, 600))
+                Image(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.brand))
             }
         }
+    }
+}
+
+/** Grup ala iOS (inset grouped): satu kartu membulat berisi baris-baris yang dipisah garis rambut. */
+@Composable
+fun InsetGroup(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(modifier.padding(horizontal = 16.dp).fillMaxWidth().appCard(20.dp), content = content)
+}
+
+/** Garis rambut antar baris dalam [InsetGroup], menjorok dari kiri seperti daftar iOS. */
+@Composable
+fun GroupDivider(start: Dp = 16.dp) {
+    val c = LocalColors.current
+    Box(Modifier.padding(start = start).fillMaxWidth().height(0.6.dp).background(c.line))
+}
+
+/** Baris daftar ala iOS: elemen kiri, judul + keterangan, nilai kanan, dan chevron. */
+@Composable
+fun GroupRow(
+    title: String,
+    subtitle: String = "",
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    val c = LocalColors.current
+    Row(
+        modifier.fillMaxWidth().then(if (onClick != null) Modifier.pressable(onClick, 0.985f) else Modifier).padding(horizontal = 16.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        leading?.let {
+            it()
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Txt(title, AppText.body(15.5.sp, c.ink, 700), maxLines = 1)
+            if (subtitle.isNotEmpty()) Txt(subtitle, AppText.body(12.5.sp, c.inkSoft), maxLines = 2)
+        }
+        trailing?.let {
+            Spacer(Modifier.width(8.dp))
+            it()
+        }
+        if (onClick != null) Image(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(c.inkSoft.copy(alpha = 0.6f)))
     }
 }
 

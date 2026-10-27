@@ -184,4 +184,21 @@ object Api {
     suspend fun pushConfig(f: Fetch = Fetch.Force) = get("/push", 6 * 3600_000, f).obj()
     suspend fun update(f: Fetch = Fetch.Normal) = AppUpdate.from(get("/update", 15 * 60_000, f).obj())
     suspend fun birthdays(f: Fetch = Fetch.Normal) = get("/next_birthday", 60 * 60_000, f).list().map(BirthdayEntry::from)
+
+    suspend fun videos(f: Fetch = Fetch.Normal) = get("/jkt48_youtube", 3 * 60_000, f).list().map(Video::from)
+    /** Detail video + playlist HLS bertiket. `Fetch.Force` saat tiket kedaluwarsa (pemutar gagal). */
+    suspend fun video(id: String, f: Fetch = Fetch.Normal) = VideoDetail.from(get("/jkt48_youtube/${enc(id)}", 15 * 60_000, f).obj())
+    suspend fun videoComments(id: String, cursor: String = "", f: Fetch = Fetch.Normal) =
+        VideoComments.from(get("/jkt48_youtube/${enc(id)}/comments" + (if (cursor.isEmpty()) "" else "?cursor=${enc(cursor)}"), 2 * 60_000, f).obj())
+
+    /** Posting member: `platform` = x, tiktok, atau instagram; `before` = cursor halaman berikutnya. */
+    suspend fun social(platform: String, member: String = "", before: String = "", limit: Int = 20, f: Fetch = Fetch.Normal): SocialPage {
+        val path = when (platform) {
+            "x" -> "/x/tweets"
+            "tiktok" -> "/tiktok/posts"
+            else -> "/instagram/posts"
+        }
+        val q = listOfNotNull(member.takeIf { it.isNotEmpty() }?.let { "member=${enc(it)}" }, before.takeIf { it.isNotEmpty() }?.let { "before=$it" }, "limit=$limit")
+        return SocialPage.from(get("$path?${q.joinToString("&")}", 2 * 60_000, f).obj())
+    }
 }

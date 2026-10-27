@@ -25,7 +25,10 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.jkt48connect.R
 
-/** Palet JKT48Connect: tema putih bersih dan tema gelap netral (hitam pekat, bukan cokelat). */
+/**
+ * Palet JKT48Connect ala iOS: latar abu sistem (grouped background) dengan kartu putih di tema terang,
+ * hitam pekat dengan kartu abu tua di tema gelap; merah JKT48 sebagai warna aksen.
+ */
 @Immutable
 data class AppColors(
     val bg: Color,
@@ -53,12 +56,12 @@ data class AppColors(
 
     companion object {
         val Light = AppColors(
-            bg = Color(0xFFFFFFFF),
-            card = Color(0xFFF4F4F6),
-            surface = Color(0xFFE9E9EE),
-            ink = Color(0xFF0E0E11),
-            inkSoft = Color(0xFF6C6C75),
-            line = Color(0x140E0E11),
+            bg = Color(0xFFF2F2F7),
+            card = Color(0xFFFFFFFF),
+            surface = Color(0xFFE5E5EA),
+            ink = Color(0xFF0B0B0F),
+            inkSoft = Color(0xFF6E6E76),
+            line = Color(0x243C3C43),
             brand = Color(0xFFE1243A),
             blush = Color(0xFFFFE5E8),
             butter = Color(0xFFFFF0C7),
@@ -68,12 +71,12 @@ data class AppColors(
             dark = false,
         )
         val Dark = AppColors(
-            bg = Color(0xFF050506),
-            card = Color(0xFF131316),
-            surface = Color(0xFF1F1F24),
-            ink = Color(0xFFF4F4F6),
-            inkSoft = Color(0xFF8E8E97),
-            line = Color(0x1CFFFFFF),
+            bg = Color(0xFF000000),
+            card = Color(0xFF1C1C1E),
+            surface = Color(0xFF2C2C2E),
+            ink = Color(0xFFF5F5F7),
+            inkSoft = Color(0xFF98989F),
+            line = Color(0x26FFFFFF),
             brand = Color(0xFFFF4259),
             blush = Color(0xFF3A141B),
             butter = Color(0xFF2E2410),
@@ -137,6 +140,10 @@ private val Body = FontFamily(archivo(500, 100f), archivo(600, 100f), archivo(70
 private val Mono = FontFamily(Font(R.font.plexmono_medium, FontWeight.Medium), Font(R.font.plexmono_semibold, FontWeight.SemiBold))
 
 object AppText {
+    /** Judul besar ala iOS (large title): tebal, huruf biasa, sedikit rapat. */
+    fun title(size: TextUnit, color: Color = Color.Unspecified) =
+        TextStyle(fontFamily = Body, fontWeight = FontWeight(800), fontSize = size, lineHeight = size * 1.12f, letterSpacing = (-0.02).em, color = color)
+
     fun display(size: TextUnit, color: Color = Color.Unspecified) =
         TextStyle(fontFamily = Display, fontWeight = FontWeight(900), fontSize = size, lineHeight = size * 0.92f, letterSpacing = (-0.01).em, color = color)
 

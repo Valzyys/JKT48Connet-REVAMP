@@ -97,10 +97,13 @@ import kotlinx.coroutines.delay
 
 /** Muat halaman berikutnya saat daftar hampir habis. */
 @Composable
-private fun LoadMoreOnEnd(state: LazyListState, load: PagedLoad<*>) {
-    LaunchedEffect(state, load) {
+private fun LoadMoreOnEnd(state: LazyListState, load: PagedLoad<*>) = LoadMoreOnEnd(state, load) { load.more() }
+
+@Composable
+fun LoadMoreOnEnd(state: LazyListState, key: Any, onEnd: () -> Unit) {
+    LaunchedEffect(state, key) {
         snapshotFlow { state.layoutInfo.let { (it.visibleItemsInfo.lastOrNull()?.index ?: 0) >= it.totalItemsCount - 4 } }
-            .collect { if (it) load.more() }
+            .collect { if (it) onEnd() }
     }
 }
 

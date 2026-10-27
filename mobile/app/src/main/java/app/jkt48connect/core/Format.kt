@@ -44,6 +44,8 @@ fun fmtCompact(n: Int?): String = when {
     else -> n.toString()
 }
 
+fun fmtCompact(n: Long?): String = fmtCompact(n?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt())
+
 fun timeAgo(iso: String): String {
     val t = parseInstant(iso) ?: return ""
     val d = Duration.between(t, Instant.now())

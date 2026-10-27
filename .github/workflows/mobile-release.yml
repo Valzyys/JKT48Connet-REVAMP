@@ -28,17 +28,21 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # Kunci rilis tetap dari secret ANDROID_KEYSTORE_BASE64 + ANDROID_KEYSTORE_PASSWORD (lihat mobile/README.md);
       # ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD opsional (bawaan: jkt48connect / password keystore). Tanpa kunci ini tiap build memakai kunci
-      # debug acak dari runner, sehingga APK baru tidak bisa memperbarui yang lama (harus hapus-pasang).
+      # debug acak dari runner, sehingga APK baru tidak bisa memperbarui yang lama (harus hapus-pasang). Karena itu rilis
+      # dihentikan bila secret belum ada: lebih baik tidak ada rilis daripada rilis yang memaksa pengguna hapus-pasang.
       - name: Kunci tanda tangan rilis
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "SIGNING_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-          else
-            echo "::warning::Secret ANDROID_KEYSTORE_BASE64 belum diatur: APK ditandatangani kunci debug acak dan tidak bisa memperbarui versi sebelumnya."
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error title=Kunci rilis belum diatur::Tambahkan secret ANDROID_KEYSTORE_BASE64 dan ANDROID_KEYSTORE_PASSWORD (Settings → Secrets and variables → Actions), lalu jalankan ulang workflow ini. Tanpa kunci tetap, APK tidak bisa memperbarui versi lama (harus hapus-pasang). Lihat mobile/README.md → Kunci tanda tangan rilis."
+            exit 1
           fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" >/dev/null \
+            || { echo "::error title=Kunci rilis tidak valid::ANDROID_KEYSTORE_BASE64 tidak bisa dibuka dengan ANDROID_KEYSTORE_PASSWORD."; exit 1; }
+          echo "SIGNING_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
       # JDK 17 dan Android SDK sudah ada di runner; platform yang kurang diunduh otomatis oleh Gradle.
       - name: Build APK
         env:

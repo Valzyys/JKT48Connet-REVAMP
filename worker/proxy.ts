@@ -31,6 +31,11 @@ import {
   shapeRecentList,
   shapeTheater,
   shapeTheaterList,
+  shapeInstagramPosts,
+  shapeTiktokPosts,
+  shapeTweets,
+  shapeVideo,
+  shapeVideoComments,
   shapeVideos,
   type RecentDetail,
 } from "../src/lib/shape";
@@ -88,7 +93,7 @@ type Ctx = { waitUntil(p: Promise<unknown>): void };
 
 /* ───────────────────────────── Route ───────────────────────────── */
 
-type Params = Record<string, number>;
+type Params = Record<string, number | string>;
 
 /** Validator parameter query: nilai valid → angka, selain itu null (400). */
 const int = (min: number, max: number, def: number) => (v: string | null) => {
@@ -98,22 +103,34 @@ const int = (min: number, max: number, def: number) => (v: string | null) => {
   return n >= min && n <= max ? n : null;
 };
 const page = int(1, 1000, 1);
+/** Cursor/slug opsional: kosong → "" (tidak diteruskan ke upstream), tidak cocok pola → null (400). */
+const token = (re: RegExp) => (v: string | null) => (v === null || v === "" ? "" : re.test(v) ? v : null);
+/** Filter member sosial media: slug seperti `fiony-alveria`. */
+const memberSlug = token(/^[a-z0-9][a-z0-9-]{0,63}$/);
+/** Cursor sosial media = ID posting terakhir (angka panjang, disimpan sebagai string). */
+const before = token(/^\d{1,25}$/);
 
 type Route = {
   re: RegExp;
   /** Detik di edge cache. */
   ttl: number;
-  query?: Record<string, (v: string | null) => number | null>;
+  query?: Record<string, (v: string | null) => number | string | null>;
   upstream: (m: string[], q: Params) => string;
   shape: (raw: any, m: string[], q: Params) => unknown;
   /** Respons membawa rekaman replay: dikunci/diganti token per sesi sebelum dikirim. */
   replay?: true;
+  /** Batas umur salinan lama (ms) yang boleh dikirim sambil memperbarui; bawaan dari `swrWindow(ttl)`. */
+  swr?: number;
 };
 
 /** ID: huruf/angka/._- , tidak diawali titik (menutup `..`), maksimal 100 karakter. */
 const ID = "([A-Za-z0-9_-][A-Za-z0-9._-]{0,99})";
 const id = (base: string) => new RegExp(`^/api/${base}/${ID}$`);
-const qs = (q: Params) => `?${new URLSearchParams(Object.entries(q).map(([k, v]) => [k, String(v)]))}`;
+const qs = (q: Params) => {
+  const e = Object.entries(q).filter(([, v]) => v !== "");
+  return e.length ? `?${new URLSearchParams(e.map(([k, v]) => [k, String(v)]))}` : "";
+};
+const social = { member: memberSlug, before, limit: int(1, 40, 20) };
 
 /** Hanya endpoint yang dipakai UI; segala sub-path/parameter lain → 404/400. */
 const ROUTES: Route[] = [
@@ -125,7 +142,7 @@ const ROUTES: Route[] = [
     ttl: 300,
     query: { page, perpage: int(1, 40, 12) },
     upstream: (_, q) => `/api/theater${qs(q)}`,
-    shape: (r, _, q) => shapeTheaterList(r, q.page, q.perpage),
+    shape: (r, _, q) => shapeTheaterList(r, Number(q.page), Number(q.perpage)),
   },
   { re: id("theater"), ttl: 300, upstream: ([t]) => `/api/theater/${encodeURIComponent(t)}`, shape: (r, [t]) => shapeTheater(r, t) },
   { re: /^\/api\/next_schedule$/, ttl: 300, upstream: () => "/api/next_schedule", shape: shapeNextSchedule },
@@ -134,7 +151,7 @@ const ROUTES: Route[] = [
     ttl: 300,
     query: { page, perpage: int(1, 40, 10) },
     upstream: (_, q) => `/api/news${qs(q)}`,
-    shape: (r, _, q) => shapeNewsList(r, q.page, q.perpage),
+    shape: (r, _, q) => shapeNewsList(r, Number(q.page), Number(q.perpage)),
   },
   { re: id("news"), ttl: 300, upstream: ([n]) => `/api/news/${encodeURIComponent(n)}`, shape: (r, [n]) => shapeNews(r, n) },
   { re: /^\/api\/next_birthday$/, ttl: 300, upstream: () => "/api/next_birthday", shape: shapeBirthdays },
@@ -143,10 +160,24 @@ const ROUTES: Route[] = [
     ttl: 60,
     query: { page, perpage: int(1, 40, 12) },
     upstream: (_, q) => `/api/recent${qs(q)}`,
-    shape: (r, _, q) => shapeRecentList(r, q.page, q.perpage),
+    shape: (r, _, q) => shapeRecentList(r, Number(q.page), Number(q.perpage)),
   },
   { re: id("recent"), ttl: 60, upstream: ([r]) => `/api/recent/${encodeURIComponent(r)}`, shape: (raw, [r]) => shapeRecent(raw, r), replay: true },
   { re: /^\/api\/jkt48_youtube$/, ttl: 300, upstream: () => "/api/jkt48_youtube", shape: shapeVideos },
+  // Detail membawa playlist HLS bertiket (± 3 jam): salinan lama dibatasi 45 menit supaya tiket yang dikirim masih berlaku.
+  { re: /^\/api\/jkt48_youtube\/([A-Za-z0-9_-]{6,20})$/, ttl: 900, swr: 45 * 60_000, upstream: ([v]) => `/api/jkt48_youtube/${v}`, shape: (r, [v]) => shapeVideo(r, v) },
+  {
+    re: /^\/api\/jkt48_youtube\/([A-Za-z0-9_-]{6,20})\/comments$/,
+    ttl: 120,
+    swr: 10 * 60_000,
+    query: { cursor: token(/^[A-Za-z0-9_-]{1,300}$/) },
+    upstream: ([v], q) => `/api/jkt48_youtube/${v}/comments${qs(q)}`,
+    shape: shapeVideoComments,
+  },
+  // Arsip posting publik member (dibaca dari database upstream; tidak memicu scraping baru).
+  { re: /^\/api\/x\/tweets$/, ttl: 60, swr: 15 * 60_000, query: social, upstream: (_, q) => `/api/x/tweets${qs(q)}`, shape: shapeTweets },
+  { re: /^\/api\/tiktok\/posts$/, ttl: 120, swr: 15 * 60_000, query: social, upstream: (_, q) => `/api/tiktok/posts${qs(q)}`, shape: shapeTiktokPosts },
+  { re: /^\/api\/instagram\/posts$/, ttl: 120, swr: 15 * 60_000, query: social, upstream: (_, q) => `/api/instagram/posts${qs(q)}`, shape: shapeInstagramPosts },
 ];
 
 const STALE_TTL = 60 * 60 * 24; // salinan cadangan bila upstream gagal
@@ -560,7 +591,7 @@ async function loadBody(c: Call, k: Keys, session: Session, pathname: string, re
     // diperbarui di latar belakang. Tanpa salinan, tunggu upstream (request identik digabung).
     const staleRes = await cache?.match(staleKey);
     const age = Date.now() - Number(staleRes?.headers.get("x-cached-at") ?? 0);
-    if (staleRes && age < swrWindow(r.ttl)) {
+    if (staleRes && age < (r.swr ?? swrWindow(r.ttl))) {
       body = await staleRes.text();
       ctx.waitUntil(revalidate(path, r, m, q, env, cache, freshKey, staleKey).catch(() => {}));
     } else {
