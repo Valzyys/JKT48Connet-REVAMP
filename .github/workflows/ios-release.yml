@@ -1,13 +1,21 @@
 name: iOS Release
 
-# Build .ipa iPhone (tanpa tanda tangan) lalu unggah sebagai GitHub Release "ios-build-N".
-# Release ini sengaja TIDAK ditandai "latest": tautan releases/latest/download/jkt48connect.apk (tombol unduh
+# Build .ipa iPhone (tanpa tanda tangan) lalu unggah:
+# - GitHub Release "ios-build-N" (arsip per build);
+# - prerelease tetap "ios-latest": jkt48connect.ipa, icon.png, repo.json (AltStore/SideStore/Feather/ESign) dan
+#   scarlet.json (Scarlet) dengan URL yang tidak pernah berubah, untuk dipasang langsung dari iPhone tanpa PC.
+# Keduanya sengaja TIDAK ditandai "latest": tautan releases/latest/download/jkt48connect.apk (tombol unduh
 # Android & cek update aplikasi Android) harus tetap menunjuk rilis APK.
 on:
   push:
     branches: [main]
     paths: ["ios/**", ".github/workflows/ios-release.yml"]
   workflow_dispatch:
+
+# Satu rilis sekaligus, supaya aset ios-latest tidak saling timpa.
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -26,6 +34,11 @@ jobs:
           xc=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$xc" ]; then sudo xcode-select -s "$xc"; fi
           xcodebuild -version
+      # Versi = mayor.minor dari project.yml + nomor build, supaya pemasang di iPhone mengenali update.
+      - name: Versi
+        run: |
+          base=$(grep -oE 'MARKETING_VERSION: *"?[0-9.]+' project.yml | grep -oE '[0-9]+\.[0-9]+' | head -1)
+          echo "VERSION=$base.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
       - name: Build .ipa
         run: |
           set -o pipefail
@@ -33,6 +46,7 @@ jobs:
           xcodegen generate
           xcodebuild -project JKT48Connect.xcodeproj -scheme JKT48Connect -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > build.log 2>&1 \
             || { grep -B2 -A6 "error:" build.log | head -200; exit 1; }
           mkdir -p out/Payload
@@ -42,13 +56,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(grep -oE 'MARKETING_VERSION: *"?[0-9.]+' project.yml | grep -oE '[0-9.]+$')
           {
             git log -1 --format='%s%n%n%b' "$GITHUB_SHA" | grep -vE '^(Co-Authored-By|Claude-Session|Signed-off-by):' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
             echo
             echo "---"
-            echo "File .ipa tanpa tanda tangan. Pasang dengan Sideloadly / AltStore / SideStore (Apple ID gratis: pasang ulang tiap 7 hari) atau TrollStore. Panduan: ios/README.md. Commit: $GITHUB_SHA"
+            echo "File .ipa tanpa tanda tangan. Pasang langsung dari iPhone dengan Scarlet / ESign / Feather / SideStore, atau dari komputer dengan Sideloadly. Panduan: ios/README.md. Commit: $GITHUB_SHA"
           } > "$RUNNER_TEMP/notes.md"
           gh release create "ios-build-$GITHUB_RUN_NUMBER" out/jkt48connect.ipa \
             --target "$GITHUB_SHA" --latest=false \
-            --title "JKT48Connect iOS $version (build $GITHUB_RUN_NUMBER)" --notes-file "$RUNNER_TEMP/notes.md"
+            --title "JKT48Connect iOS $VERSION (build $GITHUB_RUN_NUMBER)" --notes-file "$RUNNER_TEMP/notes.md"
+      - name: Perbarui ios-latest (URL tetap + repo)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp JKT48Connect/Assets.xcassets/AppIcon.appiconset/icon-1024.png out/icon.png
+          python3 scripts/repo.py "$VERSION" "$(stat -f%z out/jkt48connect.ipa)" out
+          gh release view ios-latest >/dev/null 2>&1 || gh release create ios-latest --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "JKT48Connect iOS (terbaru)" \
+            --notes "URL tetap untuk pemasang di iPhone. Scarlet: tambahkan repo …/ios-latest/scarlet.json. ESign / Feather / SideStore / AltStore: tambahkan sumber …/ios-latest/repo.json. Atau unduh jkt48connect.ipa lalu buka dengan Scarlet / ESign / Feather. Panduan: ios/README.md."
+          gh release upload ios-latest out/jkt48connect.ipa out/icon.png out/repo.json out/scarlet.json --clobber
+          gh release edit ios-latest --title "JKT48Connect iOS $VERSION (terbaru)" --prerelease --latest=false

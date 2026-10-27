@@ -17,8 +17,8 @@ import { STATIC_PAGES } from "@/lib/seo";
 
 /** APK selalu bernama sama di setiap rilis, jadi tautan "latest" GitHub selalu menuju versi terbaru. */
 const LATEST_APK = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/latest/download/jkt48connect.apk";
-/** Rilis iPhone (.ipa) sengaja tidak ditandai "latest" (itu milik APK), jadi tautkan ke daftar rilis ios-build-*. */
-const IOS_RELEASES = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases?q=ios-build&expanded=true";
+/** .ipa iPhone di prerelease tetap "ios-latest" (rilis "latest" milik APK). Dibuka di Safari iPhone lalu "Bagikan → Scarlet/ESign/Feather". */
+const IOS_IPA = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest/jkt48connect.ipa";
 const IOS_GUIDE = "https://github.com/Valzyys/JKT48Connet-REVAMP/blob/main/ios/README.md#memasang-ipa";
 const GITHUB_STAR = "https://github.com/JKT48Connect/JKT48Connect-APP";
 const REVIEW_INTENT = `https://x.com/intent/post?text=${encodeURIComponent("Pakai aplikasi JKT48Connect buat pantau live, jadwal theater & recent member JKT48. Menurutku: ")}&url=${encodeURIComponent("https://jkt48connect.app/apps")}&hashtags=JKT48ConnectApp`;
@@ -44,7 +44,7 @@ const FAQ = [
   { q: "Kenapa tidak ada di Play Store?", a: "JKT48Connect proyek fans yang dirilis langsung lewat GitHub Releases. Setiap APK ditandatangani kunci yang sama, jadi update berikutnya bisa langsung dipasang di atas versi lama." },
   { q: "Aman dipasang?", a: "APK dibangun otomatis dari kode sumber di GitHub. Aplikasi tidak meminta akun, kontak, atau lokasi. Izin yang dipakai: internet, notifikasi, dan memasang update." },
   { q: "Butuh Android versi berapa?", a: "Android 8.0 (Oreo) ke atas." },
-  { q: "Ada untuk iPhone?", a: "Ada, sebagai file .ipa yang dipasang lewat Sideloadly, AltStore, SideStore, atau TrollStore. Dengan Apple ID gratis, aplikasi perlu dipasang ulang tiap 7 hari. Tanpa memasang apa pun, situs jkt48connect.app isinya sama." },
+  { q: "Ada untuk iPhone?", a: "Ada, sebagai file .ipa yang bisa dipasang langsung dari iPhone tanpa PC: unduh lewat tombol iPhone, lalu buka dengan Scarlet, ESign, atau Feather (atau tambahkan repo JKT48Connect di aplikasi itu supaya bisa update). Panduan lengkap ada di tautan \"Cara pasang di iPhone\". Tanpa memasang apa pun, situs jkt48connect.app isinya sama." },
   { q: "Apakah resmi dari JKT48?", a: "Bukan. JKT48Connect dibuat oleh fans dan tidak berafiliasi dengan JKT48 Operation Team." },
 ];
 
@@ -344,7 +344,7 @@ export function AppsPage() {
                 <a href={apk} className="inline-flex items-center gap-2.5 rounded-xl bg-[#fff7ec] px-6 py-4 text-[17px] font-extrabold tracking-[-0.02em] text-[#e1243a] shadow-[0_10px_24px_rgb(120_10_25/0.35)] transition-transform hover:-translate-y-0.5 active:scale-95">
                   Unduh APK <Arrow className="h-5 w-5" />
                 </a>
-                <a href={IOS_RELEASES} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2.5 rounded-xl border-2 border-[#fff7ec]/70 px-5 py-[14px] text-[17px] font-extrabold tracking-[-0.02em] text-[#fff7ec] transition-transform hover:-translate-y-0.5 active:scale-95">
+                <a href={IOS_IPA} className="inline-flex items-center gap-2.5 rounded-xl border-2 border-[#fff7ec]/70 px-5 py-[14px] text-[17px] font-extrabold tracking-[-0.02em] text-[#fff7ec] transition-transform hover:-translate-y-0.5 active:scale-95">
                   iPhone (.ipa) <Arrow className="h-5 w-5" />
                 </a>
                 <a href={IOS_GUIDE} target="_blank" rel="noopener noreferrer" className="micro underline decoration-white/40 underline-offset-4 hover:decoration-white">
