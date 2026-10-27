@@ -20,7 +20,7 @@
       "/api/*", "/robots.txt", "/sitemap.xml", "/",
       "/live", "/live/", "/theater", "/theater/*", "/schedule", "/schedule/", "/member", "/member/*",
       "/birthday", "/birthday/", "/recent", "/recent/*", "/news", "/news/*", "/video", "/video/",
-      "/games", "/games/*", "/activity", "/activity/*", "/discord", "/discord/*", "/developer", "/developer/", "/about", "/about/", "/disclaimer", "/disclaimer/", "/terms", "/terms/", "/privacy", "/privacy/"
+      "/games", "/games/*", "/activity", "/activity/*", "/discord", "/discord/*", "/developer", "/developer/", "/apps", "/apps/", "/about", "/about/", "/disclaimer", "/disclaimer/", "/terms", "/terms/", "/privacy", "/privacy/"
     ]
   },
   "d1_databases": [{ "binding": "PM_DB", "database_name": "jkt48connect-pm", "database_id": "006d982c-707c-45e7-91e4-60801b068299", "migrations_dir": "migrations" }],

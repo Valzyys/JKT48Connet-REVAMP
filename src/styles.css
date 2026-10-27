@@ -231,3 +231,64 @@ body.is-locked {
 .js [data-reveal] {
   opacity: 0;
 }
+
+/* ───────── Liquid glass (src/components/liquid-glass.tsx) ─────────
+   .lg-fx  = latar yang dibiaskan (filter SVG di Chromium, blur di browser lain)
+   .lg-tint = isian + tepi mengilap; .lg-shine = kilau yang mengikuti kursor. */
+/* Di layer components supaya utilitas Tailwind (absolute, dll.) tetap bisa menimpa. */
+@layer components {
+  .lg {
+    position: relative;
+    isolation: isolate;
+    --lg-tint: rgb(255 255 255 / 0.12);
+    --mx: 50%;
+    --my: 0%;
+  }
+  .lg-fx,
+  .lg-tint,
+  .lg-shine {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .lg-fx {
+    z-index: -2;
+    overflow: hidden;
+    backdrop-filter: blur(14px) saturate(170%) brightness(1.05);
+    -webkit-backdrop-filter: blur(14px) saturate(170%) brightness(1.05);
+  }
+  .lg-tint {
+    z-index: -1;
+    background: var(--lg-tint);
+    box-shadow:
+      inset 1.5px 1.5px 0 rgb(255 255 255 / 0.55),
+      inset -1px -1px 0 rgb(255 255 255 / 0.2),
+      inset 0 0 22px rgb(255 255 255 / 0.16),
+      0 12px 36px rgb(20 8 12 / 0.18);
+  }
+  .dark .lg {
+    --lg-tint: rgb(255 255 255 / 0.06);
+  }
+  .dark .lg-tint {
+    box-shadow:
+      inset 1.5px 1.5px 0 rgb(255 255 255 / 0.28),
+      inset -1px -1px 0 rgb(255 255 255 / 0.08),
+      inset 0 0 22px rgb(255 255 255 / 0.06),
+      0 12px 36px rgb(0 0 0 / 0.45);
+  }
+  .lg-shine {
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s;
+    background: radial-gradient(circle at var(--mx) var(--my), rgb(255 255 255 / 0.38), transparent 45%);
+    mix-blend-mode: soft-light;
+  }
+  .lg-interactive {
+    cursor: pointer;
+    will-change: transform;
+  }
+  .lg-interactive:hover .lg-shine {
+    opacity: 1;
+  }
+}

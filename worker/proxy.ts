@@ -401,13 +401,19 @@ export async function fetchLatestRelease(env: ProxyEnv): Promise<AppRelease | nu
  * di-cache 15 menit. Aplikasi membandingkan `version` (x.y.z dari judul/tag release) dengan versinya sendiri.
  */
 async function handleAppUpdate(c: Call): Promise<Response> {
+  if (c.url.search) return deny(c, "probing", 400, "Parameter tidak valid");
+  const body = await appReleaseBody(c);
+  if (body instanceof Response) return body;
+  return new Response(body, { headers: { ...API_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" } });
+}
+
+/** JSON rilis APK terbaru (di-cache di edge), dipakai `/api/app/update` (aplikasi) dan `/api/app_release` (halaman /apps). */
+async function appReleaseBody(c: Call): Promise<string | Response> {
   const { url, env, ctx } = c;
-  if (url.search) return deny(c, "probing", 400, "Parameter tidak valid");
-  const headers = { ...API_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store" };
   const cache = edgeCache();
   const key = new Request(`${url.origin}/__cache/v2/app-update/${env.APP_RELEASE_REPO ?? ""}`);
   const hit = await cache?.match(key);
-  if (hit) return new Response(await hit.text(), { headers });
+  if (hit) return hit.text();
 
   let release: AppRelease | null;
   try {
@@ -418,7 +424,7 @@ async function handleAppUpdate(c: Call): Promise<Response> {
   if (!release) return json({ status: 404, message: "Belum ada rilis" }, 404);
   const body = JSON.stringify(release);
   if (cache) ctx.waitUntil(cache.put(key, new Response(body, { headers: { "content-type": "application/json", "cache-control": `public, max-age=${UPDATE_TTL}` } })));
-  return new Response(body, { headers });
+  return body;
 }
 
 /* ───────────────────────────── Admin: buka blokir ───────────────────────────── */
@@ -569,6 +575,8 @@ async function loadBody(c: Call, k: Keys, session: Session, pathname: string, re
   // Browser tetap diberi poin (probing). Jalur aplikasi tetap dibatasi API_LIMITER per token.
   const reject = (status: number, message: string) =>
     replayBase.startsWith("/api/app/") ? Promise.resolve(json({ status, message }, status)) : deny(c, "probing", status, message);
+  // Info rilis APK untuk halaman /apps (web; dienkripsi seperti data lain).
+  if (pathname === "/api/app_release") return url.search ? reject(400, "Parameter tidak valid") : appReleaseBody(c);
   let match: RegExpExecArray | null = null;
   const r = ROUTES.find((x) => (match = x.re.exec(pathname)));
   if (!r || !match) return reject(404, "Endpoint tidak tersedia");

@@ -63,6 +63,12 @@ export const STATIC_PAGES: Record<string, PageMeta & { nav?: string }> = {
   },
   "/games": {h1:"Games JKT48",title:"Games JKT48 · Solo & Multiplayer",description:"Tebak member, quiz JKT48, memory card, dan tebak lagu. Main solo atau bersama teman di Discord."},
   "/discord": {title:"Dashboard Bot Discord JKT48Connect",h1:"Discord",description:"Tambahkan JKT48Connect ke server Discord dan kelola channel, role mention, serta notifikasi komunitasmu."},
+  "/apps": {
+    nav: "Aplikasi",
+    title: "Aplikasi Android JKT48Connect — Unduh APK Gratis",
+    h1: "Aplikasi JKT48Connect untuk Android",
+    description: "Unduh aplikasi JKT48Connect untuk Android: notifikasi live IDN & Showroom, jadwal theater, recent & replay, video YouTube, dan posting sosmed member JKT48. Gratis, tanpa iklan.",
+  },
   "/developer": {
     title: "JKT48Connect API untuk Developer",
     h1: "JKT48Connect API",

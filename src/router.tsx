@@ -178,7 +178,14 @@ const activityRoute=createRoute({getParentRoute:parent,path:"/activity",componen
 const discordRoute=createRoute({getParentRoute:parent,path:"/discord",component:lazyRouteComponent(()=>import("@/pages/discord"),"DiscordPage")});
 const discordGuildRoute=createRoute({getParentRoute:parent,path:"/discord/$guild",component:lazyRouteComponent(()=>import("@/pages/discord"),"DiscordPage")});
 
+const appsRoute = createRoute({
+  getParentRoute: parent,
+  path: "/apps",
+  component: lazyRouteComponent(() => import("@/pages/apps"), "AppsPage"),
+});
+
 const routeTree = rootRoute.addChildren([
+  appsRoute,
   gamesRoute,activityRoute,
   discordRoute,
   discordGuildRoute,
