@@ -231,3 +231,22 @@ body.is-locked {
 .js [data-reveal] {
   opacity: 0;
 }
+
+/* Equalizer kuning di landing page /apps (src/pages/apps.tsx): batang naik-turun, hanya transform. */
+.eq-bar {
+  transform-origin: center;
+  animation: eq 0.9s ease-in-out infinite alternate;
+}
+@keyframes eq {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eq-bar {
+    animation: none;
+  }
+}

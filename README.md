@@ -156,12 +156,13 @@ Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test
 
 ### Landing page `/apps`
 
-Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs, dengan konsep "malam di theater":
-- **Panggung (hero):** lampu sorot, barisan penlight penonton yang melambai, ponsel dengan screenshot asli, dan tiket show berikutnya (data asli) dengan stempel jumlah member yang sedang live.
-- **Setlist:** fitur sebagai lagu M01–M06; di desktop ponsel menempel (CSS `sticky`) dan layarnya berganti mengikuti lagu yang sedang dibaca.
-- **MC · hari ini:** siapa yang sedang live, show berikutnya (jam WIB, hitung mundur, lineup), dan ulang tahun terdekat.
-- **Encore:** tiket unduh berisi versi, ringkasan rilis, ukuran, dan tanggal dari `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`); potongan tiketnya "tersobek" saat digulir.
-- **Animasi GSAP + ScrollTrigger** hanya memakai transform/opacity. Penlight berhenti saat panggung tidak terlihat, dan posisi trigger dihitung ulang saat tinggi halaman berubah (data/gambar selesai dimuat). Bila animasi sistem dimatikan, halaman hanya memakai transisi pudar.
+Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs, dengan gaya grafis yang sama seperti kartu "live notice" JKT48Connect dari API: kertas krem bergrid "+", garis lengkung pink, wordmark dengan asterisk merah, label mono, panel merah membulat, judul tebal rapat dengan titik kotak kuning, foto polaroid miring, dan maskot ASCII "ON AIR!". Selalu tema terang.
+- **Hero:** panel merah dengan screenshot asli sebagai polaroid, lalu baris info versi, ukuran, dan tombol unduh.
+- **Kartu live:** kartu notifikasi live asli dari live yang sedang berlangsung (`banner` di `/api/now_live`, gambar yang sama dengan notifikasi di aplikasi), bergantian otomatis.
+- **Fitur:** enam kartu bergaya banner dengan screenshot asli.
+- **Hari ini:** jumlah member live, show berikutnya (jam WIB, hitung mundur), dan ulang tahun terdekat.
+- **Unduh:** versi, ringkasan rilis, ukuran, dan tanggal dari `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`).
+- **Animasi GSAP + ScrollTrigger** hanya memakai transform/opacity (plus stroke garis lengkung sekali saat masuk). Posisi trigger dihitung ulang saat tinggi halaman berubah. Bila animasi sistem dimatikan, halaman hanya memakai transisi pudar.
 - Screenshot aplikasi di `public/apps/` dirender dari aplikasi asli.
 
 ## Menjalankan lokal

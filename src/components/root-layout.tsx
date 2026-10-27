@@ -14,7 +14,7 @@ const PARTICLES = 18;
 const ActivityScreen=lazy(()=>import("@/pages/games").then(m=>({default:m.GamesPage})));
 // Landing page aplikasi Android: halaman penuh tanpa sidebar/topbar situs.
 const AppsScreen=lazy(()=>import("@/pages/apps").then(m=>({default:m.AppsPage})));
-export function RootLayout(){const path=useRouterState({select:s=>s.location.pathname});const embedded=new URLSearchParams(window.location.search).has("frame_id");if(path==="/apps")return <Suspense fallback={<div className="min-h-screen bg-[#1a0a0f]"/>}><AppsScreen/></Suspense>;return path==="/activity"||embedded?<Suspense fallback={<div className="p-6 micro">Menyiapkan permainan…</div>}><ActivityScreen/></Suspense>:<WebsiteLayout/>}
+export function RootLayout(){const path=useRouterState({select:s=>s.location.pathname});const embedded=new URLSearchParams(window.location.search).has("frame_id");if(path==="/apps")return <Suspense fallback={<div className="min-h-screen bg-[#f3eee6]"/>}><AppsScreen/></Suspense>;return path==="/activity"||embedded?<Suspense fallback={<div className="p-6 micro">Menyiapkan permainan…</div>}><ActivityScreen/></Suspense>:<WebsiteLayout/>}
 function WebsiteLayout() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const wipe = useRef<HTMLDivElement>(null);
