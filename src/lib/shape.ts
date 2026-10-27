@@ -337,8 +337,11 @@ export type Screenshot = { url: string; at: string };
 /** `hls`: playlist byte-range dari upstream (indeks potongan untuk seek cepat); diganti token oleh worker. */
 export type Recording = { url: string; hls?: string; durationMs: number; startedAt: string; partial: boolean };
 
-/** Replay baru boleh diputar di situs setelah jeda ini sejak live selesai. Ditegakkan di server. */
+/** Replay live IDN baru boleh diputar setelah jeda ini sejak live selesai. Ditegakkan di server. */
 export const REPLAY_LOCK_HOURS = 72;
+
+/** Masa kunci replay per platform: Showroom langsung terbuka; IDN (dan platform lain yang tidak dikenal) 72 jam. */
+export const replayLockHours = (platform: string) => (platform === "showroom" ? 0 : REPLAY_LOCK_HOURS);
 
 export type RecentDetail = RecentLive & {
   gifts: GiftSummary[];
@@ -351,7 +354,7 @@ export type RecentDetail = RecentLive & {
   recordings: Recording[];
   /** Jumlah bagian rekaman yang ada, juga selama masa kunci (untuk panel terkunci). */
   recordingCount: number;
-  /** Waktu replay terbuka: akhir live + REPLAY_LOCK_HOURS. */
+  /** Waktu replay terbuka: akhir live + `replayLockHours(platform)` (Showroom = langsung saat live selesai). */
   replayUnlockAt: string;
   recordingPartial: boolean;
   screenshots: Screenshot[];
@@ -421,7 +424,7 @@ export function shapeRecent(r: Raw, id: string): RecentDetail {
     leaderboard: readyDesign(r.leaderboard_designs, "portrait"),
     recordings: files,
     recordingCount: files.length,
-    replayUnlockAt: Number.isFinite(endMs) ? new Date(endMs + REPLAY_LOCK_HOURS * 3_600_000).toISOString() : "",
+    replayUnlockAt: Number.isFinite(endMs) ? new Date(endMs + replayLockHours(base.platform) * 3_600_000).toISOString() : "",
     recordingPartial: r.recording_session?.status === "partial" || recordings.some((x) => x.partial),
     screenshots:
       shotBase && Array.isArray(shot?.list)

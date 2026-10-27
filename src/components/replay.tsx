@@ -11,7 +11,7 @@ const LOCK_MS = REPLAY_LOCK_HOURS * 3_600_000;
 
 /**
  * Replay live yang diputar langsung di situs (di-stream lewat `/api/replay`, token terikat sesi).
- * Kunci 72 jam ditegakkan server: selama masa kunci server tidak mengirim URL apa pun (`recordings` kosong),
+ * Kunci 72 jam (hanya live IDN; replay Showroom langsung terbuka) ditegakkan server: selama masa kunci server tidak mengirim URL apa pun (`recordings` kosong),
  * jadi panel terkunci dengan hitung mundur tampil. Saat waktunya tiba, data diminta ulang (`onUnlock`)
  * dan panel berubah jadi pemutar bila server sudah membukanya.
  */
@@ -74,7 +74,7 @@ export function Replay({
           </span>
           <div className="min-w-0 flex-1">
             <p data-rp className="micro text-white/50">
-              Replay · terbuka {REPLAY_LOCK_HOURS} jam setelah live
+              Replay IDN · terbuka {REPLAY_LOCK_HOURS} jam setelah live
             </p>
             <p data-rp className="condensed mt-2 text-[clamp(1.8rem,4vw,2.6rem)] uppercase leading-none">
               {due ? "Membuka…" : Number.isFinite(unlock) ? <Countdown target={unlockAt} /> : "Segera"}
