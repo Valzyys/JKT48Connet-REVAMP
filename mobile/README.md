@@ -13,12 +13,12 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 **Tombol kaca (`LiquidButton`, `LiquidIconButton`)**
 - Membesar saat ditekan, dengan kilau putih yang mengikuti jari.
 - Kaca ikut tertarik dan meregang ke arah tarikan, lalu membal kembali saat dilepas.
-- Dipakai di bilah atas, pintasan beranda, chip sosial, dan panel profil member.
+- Dipakai untuk semua tombol: bilah atas, item menu "•••", "Semua ›", "Coba lagi", pintasan beranda, "Tonton", bintang favorit, chip sosial, unduh media, bagian replay, dan tombol di halaman detail.
 
 **Tab kaca (`LiquidTabs`)**
 - Pilnya bisa diseret dengan pegas teredam dan meregang sesuai kecepatan.
 - Ikon di bawah pil tampil merah lewat lensa.
-- Dipakai untuk tab bar bawah. Pilihan Mendatang/Theater, Aktif/Lulus/Favorit, platform sosmed, dan tema memakai `GlassSegmented` (pil gradasi merah seperti iOS).
+- Dipakai untuk tab bar bawah (pil abu bening) dan semua pilihan segmen lewat `GlassSegmented`: Mendatang/Theater, Aktif/Lulus/Favorit, kanal video, platform sosmed, dan tema (pil kaca bertint merah).
 
 **Sakelar kaca (`LiquidToggle`)**
 - Jempol putih berubah jadi lensa saat ditekan, bisa diseret, dan warna track mengikuti posisinya.
@@ -30,9 +30,10 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 
 **Menu "•••"**
 - Panel kaca kecil yang mekar dari pojok kanan atas, seperti `Menu` di aplikasi iPhone: Video, Sosmed, Berita, Ulang tahun, Donasi, Tentang. Ketuk di luar panel untuk menutup.
+- Tiap item adalah tombol liquid glass yang membiaskan panel di bawahnya (kaca di atas kaca lewat `exportedBackdrop`).
 
 **Sama dengan aplikasi iPhone**
-- Tata letak, judul, kartu, dan warna mengikuti aplikasi iPhone (`ios/`): judul besar di tiap tab, judul bagian dengan pil kaca "Semua ›", pilihan segmen dengan pil gradasi merah, dan latar ambient yang sama.
+- Tata letak, judul, kartu, dan warna mengikuti aplikasi iPhone (`ios/`): judul besar di tiap tab, judul bagian dengan pil kaca "Semua ›", dan latar ambient (sedikit lebih lembut dari iOS).
 - Kartu isi memakai kaca seperti `glassCard()` iOS: putih 62% (gelap: 11%) dengan tepi terang setipis rambut, nilainya diukur dari tangkapan layar aplikasi iPhone. Tanpa blur per kartu supaya daftar panjang tetap ringan.
 - Kaca yang mengapung (tab bar, tombol bilah atas) bening dengan blur tipis: isi di belakangnya tetap terlihat dan terbiaskan lensa.
 

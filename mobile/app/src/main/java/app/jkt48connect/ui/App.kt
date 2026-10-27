@@ -1,5 +1,7 @@
 package app.jkt48connect.ui
 
+import androidx.compose.ui.graphics.isSpecified
+
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -386,37 +388,53 @@ private fun MenuPopover(nav: Nav, status: androidx.compose.ui.unit.Dp) {
             enter = scaleIn(spring(0.72f, 420f), initialScale = 0.3f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)) + fadeIn(tween(120)),
             exit = scaleOut(tween(160), targetScale = 0.6f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)) + fadeOut(tween(140)),
         ) {
+            // Kaca di atas kaca: panel mengekspor backdrop-nya sendiri, tiap baris adalah tombol liquid glass
+            // yang membiaskan panel di bawahnya, membesar saat ditekan, dan meregang mengikuti tarikan jari.
+            val panel = rememberLayerBackdrop()
             Column(
                 Modifier
-                    .width(260.dp)
-                    .glass(backdrop, RoundedRectangle(26.dp), if (c.dark) Color(0xFF1C1C1E).copy(alpha = 0.72f) else Color.White.copy(alpha = 0.72f), blur = 6.dp, lensHeight = 18.dp, lensAmount = 28.dp)
+                    .width(264.dp)
+                    .glass(backdrop, RoundedRectangle(28.dp), if (c.dark) Color(0xFF1C1C1E).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.55f), blur = 4.dp, lensHeight = 18.dp, lensAmount = 28.dp, exportedBackdrop = panel)
                     .clickable(interactionSource = null, indication = null) {}
-                    .padding(vertical = 6.dp),
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 fun go(r: Route) {
                     nav.menuOpen = false
                     nav.push(r)
                 }
-                MenuRow("Video YouTube", Icons.Rounded.SmartDisplay) { go(Route.Videos) }
-                MenuRow("Sosmed member", Icons.Rounded.Forum) { go(Route.Social()) }
-                MenuRow("Berita", Icons.Rounded.Newspaper) { go(Route.News) }
-                MenuRow("Ulang tahun", Icons.Rounded.Cake) { go(Route.Birthday) }
-                Box(Modifier.padding(vertical = 5.dp).fillMaxWidth().height(6.dp).background(c.ink.copy(alpha = 0.06f)))
-                MenuRow("Dukung (donasi)", Icons.Rounded.Favorite, c.brand) { go(Route.Donate) }
-                MenuRow("Tentang aplikasi", Icons.Rounded.Info) { go(Route.About) }
+                MenuRow("Video YouTube", Icons.Rounded.SmartDisplay, panel) { go(Route.Videos) }
+                MenuRow("Sosmed member", Icons.Rounded.Forum, panel) { go(Route.Social()) }
+                MenuRow("Berita", Icons.Rounded.Newspaper, panel) { go(Route.News) }
+                MenuRow("Ulang tahun", Icons.Rounded.Cake, panel) { go(Route.Birthday) }
+                MenuRow("Dukung (donasi)", Icons.Rounded.Favorite, panel, tint = c.brand) { go(Route.Donate) }
+                MenuRow("Tentang aplikasi", Icons.Rounded.Info, panel) { go(Route.About) }
             }
         }
     }
 }
 
 @Composable
-private fun MenuRow(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color = LocalColors.current.ink, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun MenuRow(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    backdrop: com.kyant.backdrop.Backdrop,
+    tint: Color = Color.Unspecified,
+    onClick: () -> Unit,
+) {
+    val c = LocalColors.current
+    val fg = if (tint.isSpecified) Color.White else c.ink
+    LiquidButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(48.dp),
+        backdrop = backdrop,
+        shape = RoundedRectangle(18.dp),
+        tint = tint,
+        contentPadding = PaddingValues(horizontal = 14.dp),
+        horizontalArrangement = Arrangement.Start,
     ) {
-        androidx.compose.foundation.Image(icon, null, Modifier.size(20.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(color))
-        Spacer(Modifier.width(14.dp))
-        Txt(label, AppText.body(16.sp, color, 500), maxLines = 1)
+        androidx.compose.foundation.Image(icon, null, Modifier.size(20.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (tint.isSpecified) Color.White else c.brand))
+        Spacer(Modifier.width(12.dp))
+        Txt(label, AppText.body(15.5.sp, fg, 700), maxLines = 1)
     }
 }

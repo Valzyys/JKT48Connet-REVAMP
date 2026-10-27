@@ -1,5 +1,7 @@
 package app.jkt48connect.ui.components
 
+import androidx.compose.foundation.layout.PaddingValues
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -172,12 +174,13 @@ fun SectionHead(label: String, title: String, onMore: (() -> Unit)? = null) {
             Txt(title.uppercase(), AppText.display(26.sp, c.ink), maxLines = 1)
         }
         if (onMore != null) {
-            Row(
-                Modifier.pressable(onMore).glassCard(50.dp).padding(12.dp, 7.dp, 10.dp, 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            app.jkt48connect.ui.glass.LiquidButton(
+                onClick = onMore,
+                modifier = Modifier.height(34.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Txt("Semua", AppText.body(13.sp, c.brand, 800))
-                Spacer(Modifier.width(3.dp))
                 Image(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(c.brand))
             }
         }
@@ -265,27 +268,19 @@ fun Modifier.glassCard(radius: Dp = 24.dp, tint: Color = Color.Unspecified): Mod
 }
 
 /**
- * Pilihan segmen kaca seperti iOS (`GlassSegmented`): kapsul kaca berisi label, pil gradasi merah berpindah
- * dengan pegas ke pilihan aktif, teks aktif putih.
+ * Pilihan segmen liquid glass (Jadwal, Member, Video, Sosmed, tema): kapsul kaca dengan pil kaca bertint merah
+ * yang bisa diseret, membesar saat disentuh, meregang sesuai kecepatan, dan membuat label di bawahnya merah lewat lensa.
  */
 @Composable
 fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, inset: Dp = 16.dp) {
-    val c = LocalColors.current
-    val pos by animateFloatAsState(selected.toFloat(), spring(0.8f, 380f), label = "seg")
-    androidx.compose.foundation.layout.BoxWithConstraints(modifier.padding(horizontal = inset).fillMaxWidth().height(46.dp).glassCard(50.dp).padding(4.dp)) {
-        val w = maxWidth / options.size
-        Box(Modifier.graphicsLayer { translationX = pos * w.toPx() }.width(w).fillMaxHeight().clip(CircleShape).background(c.brandGradient))
-        Row(Modifier.fillMaxSize()) {
-            options.forEachIndexed { i, label ->
-                Box(
-                    Modifier.weight(1f).fillMaxHeight().clip(CircleShape).clickable(interactionSource = null, indication = null) { onSelect(i) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Txt(label, AppText.body(13.5.sp, if (i == selected) Color.White else c.ink, 800), maxLines = 1)
-                }
-            }
-        }
-    }
+    app.jkt48connect.ui.glass.LiquidTabs(
+        items = options.map { app.jkt48connect.ui.glass.TabItem(it) },
+        selectedIndex = selected,
+        onSelected = onSelect,
+        height = 48.dp,
+        segmented = true,
+        modifier = modifier.padding(horizontal = inset).fillMaxWidth(),
+    )
 }
 
 /** Kosong: ikon + teks di kartu kaca. */
@@ -462,7 +457,7 @@ fun ErrorRetry(error: Throwable, onRetry: () -> Unit, modifier: Modifier = Modif
         Spacer(Modifier.height(12.dp))
         Txt(error.message ?: "Terjadi kesalahan", AppText.body(14.sp, c.inkSoft).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
         Spacer(Modifier.height(12.dp))
-        Box(Modifier.pressable(onRetry).glassCard(50.dp).padding(horizontal = 16.dp, vertical = 10.dp)) {
+        app.jkt48connect.ui.glass.LiquidButton(onClick = onRetry, modifier = Modifier.height(42.dp)) {
             Txt("Coba lagi", AppText.body(14.sp, c.ink, 800))
         }
     }
@@ -503,8 +498,9 @@ fun Ambient(modifier: Modifier = Modifier) {
             Brush.radialGradient(0f to color.copy(alpha = a), 0.42f to color.copy(alpha = a * 0.9f), 0.75f to color.copy(alpha = a * 0.35f), 1f to color.copy(alpha = 0f), center = Offset(x, y), radius = r),
             r, Offset(x, y),
         )
-        blob(w * 0.15f, h * 0.134f, w * 1.25f, c.brand, if (d) 0.35f else 0.22f)
-        blob(w * 0.92f, h * 0.36f, w * 1.15f, Color(0xFFFF2D55), if (d) 0.22f else 0.18f)
-        blob(w * 0.35f, h * 0.935f, w * 1.1f, Color(0xFFFF9500), 0.12f)
+        // Lebih lembut dari versi iPhone (permintaan: gradasi Android dikurangi).
+        blob(w * 0.15f, h * 0.134f, w * 1.15f, c.brand, if (d) 0.22f else 0.13f)
+        blob(w * 0.92f, h * 0.36f, w * 1.05f, Color(0xFFFF2D55), if (d) 0.13f else 0.10f)
+        blob(w * 0.35f, h * 0.935f, w * 1.0f, Color(0xFFFF9500), if (d) 0.07f else 0.07f)
     }
 }

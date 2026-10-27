@@ -1,5 +1,7 @@
 package app.jkt48connect.ui.screens
 
+import app.jkt48connect.ui.glass.LiquidIconButton
+
 import app.jkt48connect.ui.components.glassCard
 import app.jkt48connect.ui.components.GlassSegmented
 import app.jkt48connect.ui.components.EmptyState
@@ -397,10 +399,7 @@ fun PostCard(p: SocialPost, photo: String, modifier: Modifier = Modifier, onDown
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { PostMetrics(p) }
             if (p.media.isNotEmpty() && onDownload != null) {
-                Box(
-                    Modifier.size(34.dp).background(c.brand.copy(alpha = 0.1f), CircleShape).pressable(onDownload),
-                    contentAlignment = Alignment.Center,
-                ) { Image(Icons.Rounded.Download, "Unduh media", Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.brand)) }
+                LiquidIconButton(Icons.Rounded.Download, onDownload, size = 36.dp, iconSize = 18.dp, iconColor = c.brand, contentDescription = "Unduh media", fill = app.jkt48connect.ui.glass.glassFill())
             }
         }
     }

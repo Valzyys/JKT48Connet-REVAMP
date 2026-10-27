@@ -1,5 +1,8 @@
 package app.jkt48connect.ui.screens
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.height
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -133,10 +136,9 @@ fun WatchScreen(start: LiveSession) {
                     Txt("“${live.title}”", AppText.body(15.sp, c.ink))
                 }
                 VGap(12.dp)
-                Row(Modifier.pressable({ open(live.link) }), verticalAlignment = Alignment.CenterVertically) {
-                    Txt("Buka di Showroom", AppText.body(13.sp, c.inkSoft, 700))
-                    Spacer(Modifier.width(4.dp))
-                    Image(Icons.Rounded.OpenInNew, null, Modifier.size(14.dp), colorFilter = ColorFilter.tint(c.inkSoft))
+                app.jkt48connect.ui.glass.LiquidButton(onClick = { open(live.link) }, modifier = Modifier.height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Txt("Buka di Showroom", AppText.body(13.sp, c.ink, 700))
+                    Image(Icons.Rounded.OpenInNew, null, Modifier.size(14.dp), colorFilter = ColorFilter.tint(c.brand))
                 }
             }
             if (others.isNotEmpty()) {
