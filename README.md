@@ -156,56 +156,13 @@ Tes: `npm run test:replay` (termasuk `tests/app-api.test.mjs`) dan `npm run test
 
 ### Landing page `/apps`
 
-Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs:
-- **Liquid glass web** (`src/components/liquid-glass.tsx`): `backdrop-filter: url(#filter)` dengan `feDisplacementMap`. Peta perpindahannya dibuat di canvas sesuai ukuran & radius elemen, ditambah aberasi kromatik, tepi mengilap, kilau yang mengikuti kursor, dan efek "jelly" saat ditekan. Pembiasan asli hanya di Chromium (Chrome/Edge/Android); Safari & Firefox memakai kaca buram biasa.
-- **Animasi GSAP + ScrollTrigger:** intro hero, kartu kaca berisi data asli yang bisa diseret dan membal, deretan foto member yang bergerak di belakang kaca, parallax, galeri layar yang dipin dan digeser horizontal, serta reveal per bagian.
-- **Data asli:** `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`) untuk versi, ukuran, tanggal, dan ringkasan rilis APK, plus live, show berikutnya, ulang tahun terdekat, dan foto member. Tombol unduh memakai `releases/latest/download/jkt48connect.apk`.
+Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs, dengan konsep "malam di theater":
+- **Panggung (hero):** lampu sorot, barisan penlight penonton yang melambai, ponsel dengan screenshot asli, dan tiket show berikutnya (data asli) dengan stempel jumlah member yang sedang live.
+- **Setlist:** fitur sebagai lagu M01–M06; di desktop ponsel menempel (CSS `sticky`) dan layarnya berganti mengikuti lagu yang sedang dibaca.
+- **MC · hari ini:** siapa yang sedang live, show berikutnya (jam WIB, hitung mundur, lineup), dan ulang tahun terdekat.
+- **Encore:** tiket unduh berisi versi, ringkasan rilis, ukuran, dan tanggal dari `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`); potongan tiketnya "tersobek" saat digulir.
+- **Animasi GSAP + ScrollTrigger** hanya memakai transform/opacity. Penlight berhenti saat panggung tidak terlihat, dan posisi trigger dihitung ulang saat tinggi halaman berubah (data/gambar selesai dimuat). Bila animasi sistem dimatikan, halaman hanya memakai transisi pudar.
 - Screenshot aplikasi di `public/apps/` dirender dari aplikasi asli.
-
-### Donasi QRIS (MYPG)
-
-Aplikasi punya halaman **Donasi** yang memakai gateway QRIS MYPG yang sama dengan PM (`worker/donate.ts`, memakai helper `gateway` di `worker/pm.ts`):
-- `POST /api/app/donate` `{ amount, name? }` membuat tagihan (Rp1.000–Rp1.000.000, maks. 5 tagihan per 10 menit per sesi).
-- `GET /api/app/donate/<id>` mengecek status ke MYPG selama masih PENDING.
-- `POST /api/app/donate/<id>/cancel` membatalkan tagihan.
-- `GET /api/app/donate/wall` mengembalikan dinding pendukung (donasi lunas: nama, nominal, waktu).
-- Tagihan terikat ke sesi aplikasi pembuatnya, jadi sesi lain tidak bisa melihat atau membatalkannya.
-- Nama pendukung disaring (huruf/angka/spasi/._-, maks. 24 karakter); kosong berarti Anonim.
-- Data disimpan di D1 `PM_DB` (tabel `donations`, migrasi `migrations/0002_donations.sql`, diterapkan otomatis oleh `npm run deploy:auto`).
-- **API key MYPG hanya disimpan sebagai secret Worker `MYPG_API_KEY`**: `npx wrangler secret put MYPG_API_KEY`, atau secret repo `MYPG_API_KEY` untuk `deploy.yml`. Jangan pernah menaruhnya di kode atau di aplikasi. Tanpa secret ini, endpoint donasi menjawab 503.
-- Tes: `npm run test:donate` (D1 lokal, MYPG tiruan).
-
-### Server push (cron Cloudflare → aplikasi)
-
-Worker mengirim notifikasi ke aplikasi Android lewat Firebase Cloud Messaging (FCM). Durable Object `PushState` (`worker/push-do.ts`) mengecek member live tiap **15 detik** dengan alarm berulang. Cron `*/2 * * * *` di `wrangler.jsonc` menangani pengecekan 10 menitan dan menyalakan ulang alarm bila berhenti. Logikanya ada di `worker/push.ts`:
-
-| Jenis | Kapan dicek | Dikirim saat |
-|---|---|---|
-| Live | tiap 15 detik | member mulai live (IDN/Showroom) |
-| Show | tiap 10 menit | show/event dimulai ≤ 65 menit lagi |
-| Ulang tahun | tiap 10 menit, mulai 07.00 WIB | hari ulang tahun member (sekali per tahun) |
-| Berita | tiap 10 menit | berita baru di jkt48.com |
-| Update | tiap 10 menit | release "latest" GitHub dengan versi lebih baru |
-
-- Pesan dikirim ke topik `jkc-live`, `jkc-show`, `jkc-birthday`, `jkc-news`, dan `jkc-update`. Aplikasi berlangganan sesuai sakelar di halaman Tentang, jadi worker tidak menyimpan token perangkat.
-- Yang sudah dikirim dicatat di Durable Object. Putaran pertama hanya mencatat, supaya tidak membanjiri.
-- Konfigurasi Firebase untuk aplikasi diambil dari `GET /api/app/push` (hanya pengenal publik), jadi tidak ada yang ditanam di APK.
-- Bila push belum diatur, atau HP tanpa Google Play services, aplikasi kembali memeriksa sendiri tiap ±15 menit.
-
-Setup sekali:
-1. [Firebase console](https://console.firebase.google.com) → buat proyek → **Add app → Android**, package name `app.jkt48connect`, lalu unduh `google-services.json`. Dari file itu ambil `mobilesdk_app_id` (App ID, `1:…:android:…`) dan `api_key[0].current_key`. File ini tidak perlu dimasukkan ke aplikasi.
-2. Project settings → **Service accounts → Generate new private key**: berkas JSON ini rahasia, jangan di-commit.
-3. Simpan sebagai secret Worker, lalu deploy. Durable Object dan cron dibuat otomatis:
-   ```sh
-   npx wrangler secret put FCM_SERVICE_ACCOUNT < service-account.json
-   npx wrangler secret put FCM_ANDROID_APP_ID      # 1:1234567890:android:abc…
-   npx wrangler secret put FCM_ANDROID_API_KEY     # AIza…
-   npm run deploy
-   ```
-   Atau sekaligus: `FCM_SERVICE_ACCOUNT=./service-account.json FCM_GOOGLE_SERVICES=./google-services.json npm run deploy:auto`. App ID dan API key diambil otomatis dari `google-services.json`. Kalau deploy lewat GitHub Actions (`deploy.yml`), cukup isi dua secret repo: `FCM_SERVICE_ACCOUNT` (isi JSON service account) dan `FCM_GOOGLE_SERVICES` (isi `google-services.json`).
-4. Buka aplikasi sekali supaya berlangganan. Halaman Tentang menulis "Dikirim langsung dari server" bila push aktif. Log pengiriman bisa dilihat dengan `npx wrangler tail`.
-
-Coba cron di lokal: `npx wrangler dev --test-scheduled`, lalu buka `http://localhost:8787/__scheduled?cron=*/2+*+*+*+*`.
 
 ## Menjalankan lokal
 
