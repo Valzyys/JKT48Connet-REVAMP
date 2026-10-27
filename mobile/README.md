@@ -13,12 +13,12 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 **Tombol kaca (`LiquidButton`, `LiquidIconButton`)**
 - Membesar saat ditekan, dengan kilau putih yang mengikuti jari.
 - Kaca ikut tertarik dan meregang ke arah tarikan, lalu membal kembali saat dilepas.
-- Dipakai di kepala atas, pintasan beranda, menu, chip sosial, tombol play, dan panel profil member.
+- Dipakai di bilah atas, pintasan beranda, chip sosial, dan panel profil member.
 
 **Tab kaca (`LiquidTabs`)**
 - Pilnya bisa diseret dengan pegas teredam dan meregang sesuai kecepatan.
 - Ikon di bawah pil tampil merah lewat lensa.
-- Dipakai untuk tab bar bawah, pilihan Mendatang/Theater, Aktif/Lulus, dan tema.
+- Dipakai untuk tab bar bawah. Pilihan Mendatang/Theater, Aktif/Lulus/Favorit, platform sosmed, dan tema memakai `GlassSegmented` (pil gradasi merah seperti iOS).
 
 **Sakelar kaca (`LiquidToggle`)**
 - Jempol putih berubah jadi lensa saat ditekan, bisa diseret, dan warna track mengikuti posisinya.
@@ -28,8 +28,13 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 - Jempolnya berupa lensa yang membesar saat diseret dan membiaskan video di belakangnya.
 - Dipakai untuk seek replay.
 
-**Lembar menu**
-- Kaca di atas kaca lewat `exportedBackdrop`. Tarik ke bawah untuk menutup.
+**Menu "•••"**
+- Panel kaca kecil yang mekar dari pojok kanan atas, seperti `Menu` di aplikasi iPhone: Video, Sosmed, Berita, Ulang tahun, Donasi, Tentang. Ketuk di luar panel untuk menutup.
+
+**Sama dengan aplikasi iPhone**
+- Tata letak, judul, kartu, dan warna mengikuti aplikasi iPhone (`ios/`): judul besar di tiap tab, judul bagian dengan pil kaca "Semua ›", pilihan segmen dengan pil gradasi merah, dan latar ambient yang sama.
+- Kartu isi memakai kaca seperti `glassCard()` iOS: putih 62% (gelap: 11%) dengan tepi terang setipis rambut, nilainya diukur dari tangkapan layar aplikasi iPhone. Tanpa blur per kartu supaya daftar panjang tetap ringan.
+- Kaca yang mengapung (tab bar, tombol bilah atas) bening dengan blur tipis: isi di belakangnya tetap terlihat dan terbiaskan lensa.
 
 **Lapisan backdrop**
 - Latar ambient (cahaya merah muda yang melayang) direkam sebagai backdrop untuk kaca di dalam halaman.
@@ -50,7 +55,7 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 | Jadwal | Mendatang (dikelompokkan per tanggal) dan arsip theater (muat-lanjut); detail theater dengan member tampil, setlist, hitung mundur |
 | Recent | Rekap live; detail berisi statistik, replay, top supporter, gift, cuplikan layar (9 petak + "+N"; penampil layar penuh gelap: geser kiri/kanan, filmstrip, ketuk dua kali/cubit untuk zoom, geser ke bawah untuk menutup) |
 | Member | Grid dengan kolom cari kaca dan pilihan aktif/lulus; profil dengan panel kaca di atas foto, theater mendatang, theater terakhir, dan live terakhir |
-| Ulang tahun, Berita | Dari tombol menu di kepala atas; isi berita menampilkan gambar dari jkt48.com |
+| Ulang tahun, Berita | Dari menu "•••" di bilah atas; isi berita menampilkan gambar dari jkt48.com |
 | Donasi | Hero merah-merah muda dengan hati melayang, chip nominal kaca, kolom nama, tagihan QRIS di jendela kaca (simpan QR ke galeri, halaman bayar, hitung mundur, cek status tiap 4 detik, animasi terima kasih), dan dinding pendukung (dari menu & Tentang) |
 | Favorit | Ketuk ☆ di profil member untuk menjadikannya oshi; tampil di tab Favorit (daftar member) dan baris "Favoritmu" di beranda, dengan penanda LIVE |
 | Tentang | Pembuat (@Valzyys), ekosistem JKT48Connect (situs, bot X, bot Discord, Public API), fitur, versi & update, notifikasi, tema, sumber resmi, kredit, dan penafian (dari menu) |
@@ -76,9 +81,9 @@ Komponen interaktifnya diadaptasi dari catalog Backdrop (Apache 2.0) dan ada di 
 - Respons API disimpan di memori dan disk. Halaman tampil seketika dari data terakhir lalu diperbarui, dan tetap bisa dibuka saat offline.
 - Saat aplikasi dibuka, recent, arsip theater, jadwal, member, berita, dan ulang tahun dimuat lebih dulu di latar.
 
-**Kepala atas**
-- Terdiri dari kapsul merek (subjudul berganti per tab), pil status live (kaca merah saat ada yang live), dan tombol menu.
-- Mengecil saat isi digulir.
+**Bilah atas**
+- Seperti bilah navigasi iOS 26: tombol kaca bulat "•••" merah di kanan, tombol kembali bulat di halaman detail, dan judul di tengah (halaman detail, atau tab setelah judul besarnya tergulir).
+- Tepi atas memudar saat isi digulir, supaya isi tidak bertabrakan dengan bilah.
 
 **Muat ulang**
 - Tarik layar ke bawah. Indikatornya lensa kaca berisi logo piksel.
@@ -172,7 +177,7 @@ app/src/main/java/app/jkt48connect/
          Models.kt         model data (sama dengan src/lib/shape.ts), org.json
          Format.kt         tanggal WIB, durasi, angka, hitung mundur
          Images.kt         pemuat gambar ringan (cache memori + disk, satu unduhan per URL, decode diperkecil)
-  ui/    App.kt            lapisan backdrop, kepala atas, tab bar kaca, lembar menu, transisi halaman
+  ui/    App.kt            lapisan backdrop, bilah atas, tab bar kaca, menu "•••", transisi halaman
          player/           pemutar video Media3 bersama (replay, YouTube, video member): kualitas, kecepatan, layar penuh
          Navigation.kt     tab + tumpukan halaman, status muat data (cache dulu, lalu jaringan)
          Intro.kt          animasi intro saat aplikasi dibuka

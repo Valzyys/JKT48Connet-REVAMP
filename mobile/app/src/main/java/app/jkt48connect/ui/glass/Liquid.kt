@@ -99,6 +99,17 @@ fun glassFill(): Color {
     return if (isRenderEffectSupported()) c.glass else c.card.copy(alpha = 0.94f)
 }
 
+/** Isian kaca bening untuk kaca yang mengapung (tab bar, tombol bilah atas): tipis supaya isi tetap tembus. */
+@Composable
+fun clearGlassFill(): Color {
+    val c = LocalColors.current
+    return when {
+        !isRenderEffectSupported() -> c.card.copy(alpha = 0.94f)
+        c.dark -> Color(0xFF1C1C1E).copy(alpha = 0.3f)
+        else -> Color.White.copy(alpha = 0.28f)
+    }
+}
+
 /** Kaca statis: blur + lensa + isian, dengan sorot tepi dan bayangan bawaan Backdrop. */
 fun Modifier.glass(
     backdrop: Backdrop,
@@ -144,7 +155,7 @@ fun LiquidButton(
     shape: Shape = Capsule(),
     tint: Color = Color.Unspecified,
     fill: Color = if (tint.isSpecified) Color.Transparent else glassFill(),
-    blur: Dp = 2.dp,
+    blur: Dp = 2.5.dp,
     lensHeight: Dp = 12.dp,
     lensAmount: Dp = 24.dp,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
@@ -199,12 +210,14 @@ fun LiquidIconButton(
     iconColor: Color = if (tint.isSpecified) Color.White else LocalColors.current.ink,
     contentDescription: String? = null,
     backdrop: Backdrop = LocalBackdrop.current,
+    fill: Color = if (tint.isSpecified) Color.Transparent else clearGlassFill(),
 ) {
     LiquidButton(
         onClick = onClick,
         modifier = modifier.size(size),
         backdrop = backdrop,
         tint = tint,
+        fill = fill,
         contentPadding = PaddingValues(0.dp),
     ) {
         Image(icon, contentDescription, Modifier.size(iconSize), colorFilter = ColorFilter.tint(iconColor))
@@ -229,7 +242,7 @@ fun LiquidTabs(
 ) {
     val c = LocalColors.current
     val accent = c.brand
-    val container = glassFill()
+    val container = clearGlassFill()
     val count = items.size
     val tabsBackdrop = rememberLayerBackdrop()
     val haptic = LocalHapticFeedback.current
@@ -319,7 +332,8 @@ fun LiquidTabs(
                 .drawBackdrop(
                     backdrop = backdrop,
                     shape = { Capsule() },
-                    effects = { vibrancy(); blur(8.dp.toPx()); lens(24.dp.toPx(), 24.dp.toPx()) },
+                    // Kaca bening ala tab bar iOS 26: blur tipis, isi di belakang tetap terlihat & terbiaskan lensa.
+                    effects = { vibrancy(); blur(3.dp.toPx()); lens(24.dp.toPx(), 24.dp.toPx()) },
                     layerBlock = {
                         val scale = lerp(1f, 1f + 16.dp.toPx() / size.width, drag.pressProgress)
                         scaleX = scale
@@ -345,7 +359,7 @@ fun LiquidTabs(
                     shape = { Capsule() },
                     effects = {
                         val p = drag.pressProgress
-                        vibrancy(); blur(8.dp.toPx()); lens(24.dp.toPx() * p, 24.dp.toPx() * p)
+                        vibrancy(); blur(3.dp.toPx()); lens(24.dp.toPx() * p, 24.dp.toPx() * p)
                     },
                     highlight = { Highlight.Default.copy(alpha = drag.pressProgress) },
                     onDrawSurface = { drawRect(container) },
@@ -382,7 +396,8 @@ fun LiquidTabs(
                     },
                     onDrawSurface = {
                         val p = drag.pressProgress
-                        drawRect(accent.copy(alpha = if (c.dark) 0.20f else 0.13f), alpha = 1f - p)
+                        // Pil terpilih abu netral seperti tab bar iOS 26 (ikon & label yang merah, bukan pilnya).
+                        drawRect((if (c.dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.07f)), alpha = 1f - p)
                         drawRect(Color.Black.copy(alpha = 0.03f * p))
                     },
                 )

@@ -67,7 +67,7 @@ data class AppColors(
             butter = Color(0xFFFFF0C7),
             butterInk = Color(0xFF8A5A00),
             panel = Color(0xFF0E0E11),
-            glass = Color(0xFFFAFAFA).copy(alpha = 0.45f),
+            glass = Color(0xFFFFFFFF).copy(alpha = 0.6f),
             dark = false,
         )
         val Dark = AppColors(
@@ -82,7 +82,7 @@ data class AppColors(
             butter = Color(0xFF2E2410),
             butterInk = Color(0xFFFFC95C),
             panel = Color(0xFF1A1A1F),
-            glass = Color(0xFF121214).copy(alpha = 0.42f),
+            glass = Color(0xFF2C2C2E).copy(alpha = 0.55f),
             dark = true,
         )
     }

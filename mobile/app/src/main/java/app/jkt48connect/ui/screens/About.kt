@@ -1,5 +1,7 @@
 package app.jkt48connect.ui.screens
 
+import app.jkt48connect.ui.components.GlassSegmented
+
 import android.Manifest
 import android.content.Intent
 import android.os.Build
@@ -342,13 +344,7 @@ fun AboutScreen() {
 
         item { Section("Tema · tarik pilnya", 10) }
         item {
-            LiquidTabs(
-                items = listOf(TabItem("Sistem"), TabItem("Putih"), TabItem("Gelap")),
-                selectedIndex = ThemeController.mode.ordinal,
-                onSelected = { ThemeController.set(ThemeMode.entries[it]) },
-                height = 54.dp,
-                modifier = Modifier.fillMaxWidth().staggerIn(5),
-            )
+            GlassSegmented(listOf("Sistem", "Putih", "Gelap"), ThemeController.mode.ordinal, { ThemeController.set(ThemeMode.entries[it]) }, Modifier.staggerIn(5), inset = 0.dp)
         }
 
         item { Section("Sumber resmi", 11) }

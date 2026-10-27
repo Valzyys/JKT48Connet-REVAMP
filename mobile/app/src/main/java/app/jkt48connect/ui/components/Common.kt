@@ -13,6 +13,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -135,62 +138,63 @@ fun SignalBars(modifier: Modifier = Modifier, color: Color = LocalColors.current
 fun Micro(text: String, modifier: Modifier = Modifier, color: Color = LocalColors.current.inkSoft, dot: Boolean = false, size: Float = 10.5f) {
     val c = LocalColors.current
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        if (dot) {
-            Box(Modifier.size(6.dp).background(c.brand, CircleShape))
-            Spacer(Modifier.width(6.dp))
-        }
         Txt(text.uppercase(), AppText.micro(color, size.sp), maxLines = 1)
     }
 }
 
-/** Kepala halaman tab ala iOS: label kecil abu (huruf besar) + judul besar tebal + elemen kanan opsional. */
+/**
+ * Judul besar halaman tab (large title iOS), sama dengan aplikasi iPhone: judul tebal 34sp di kiri atas isi,
+ * label mikro opsional di bawahnya, dan elemen kanan opsional.
+ */
 @Composable
 fun PageHeader(label: String, title: String, horizontal: Dp = 20.dp, trailing: (@Composable () -> Unit)? = null) {
     val c = LocalColors.current
-    Row(Modifier.fillMaxWidth().padding(horizontal, 6.dp, horizontal, 16.dp).staggerIn(0), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().padding(horizontal, 2.dp, horizontal, if (label.isEmpty()) 12.dp else 10.dp), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            Txt(label.uppercase(), AppText.body(12.sp, c.inkSoft, 700).copy(letterSpacing = 0.04.em), maxLines = 1)
-            Spacer(Modifier.height(2.dp))
             Txt(title, AppText.title(34.sp, c.ink), maxLines = 1)
+            if (label.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Micro(label)
+            }
         }
         trailing?.invoke()
     }
 }
 
-/** Judul bagian: label mikro merah + judul condensed (gaya Fan Signal) + tombol "Semua". */
+/** Judul bagian (sama dengan iOS): label mikro abu, judul condensed tebal, dan pil kaca "Semua ›" merah. */
 @Composable
 fun SectionHead(label: String, title: String, onMore: (() -> Unit)? = null) {
     val c = LocalColors.current
-    Row(Modifier.fillMaxWidth().padding(20.dp, 30.dp, 16.dp, 12.dp), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().padding(16.dp, 26.dp, 16.dp, 10.dp), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            Micro(label, color = c.brand, dot = true)
-            Spacer(Modifier.height(6.dp))
-            Txt(title.uppercase(), AppText.display(30.sp, c.ink), maxLines = 1)
+            Micro(label)
+            Spacer(Modifier.height(2.dp))
+            Txt(title.uppercase(), AppText.display(26.sp, c.ink), maxLines = 1)
         }
         if (onMore != null) {
             Row(
-                Modifier.pressable(onMore).background(c.card, CircleShape).padding(12.dp, 7.dp, 9.dp, 7.dp),
+                Modifier.pressable(onMore).glassCard(50.dp).padding(12.dp, 7.dp, 10.dp, 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Txt("SEMUA", AppText.micro(c.ink, 10.sp))
-                Spacer(Modifier.width(4.dp))
-                Image(Icons.Rounded.NorthEast, null, Modifier.size(13.dp), colorFilter = ColorFilter.tint(c.brand))
+                Txt("Semua", AppText.body(13.sp, c.brand, 800))
+                Spacer(Modifier.width(3.dp))
+                Image(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(c.brand))
             }
         }
     }
 }
 
-/** Grup ala iOS (inset grouped): satu kartu membulat berisi baris-baris yang dipisah garis rambut. */
+/** Grup ala iOS (inset grouped) di dalam satu kartu kaca, baris dipisah garis rambut. */
 @Composable
 fun InsetGroup(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    Column(modifier.padding(horizontal = 16.dp).fillMaxWidth().appCard(20.dp), content = content)
+    Column(modifier.padding(horizontal = 16.dp).fillMaxWidth().glassCard(24.dp), content = content)
 }
 
 /** Garis rambut antar baris dalam [InsetGroup], menjorok dari kiri seperti daftar iOS. */
 @Composable
-fun GroupDivider(start: Dp = 16.dp) {
+fun GroupDivider(start: Dp = 14.dp) {
     val c = LocalColors.current
-    Box(Modifier.padding(start = start).fillMaxWidth().height(0.6.dp).background(c.line))
+    Box(Modifier.padding(start = start).fillMaxWidth().height(0.5.dp).background(c.line))
 }
 
 /** Baris daftar ala iOS: elemen kiri, judul + keterangan, nilai kanan, dan chevron. */
@@ -205,7 +209,7 @@ fun GroupRow(
 ) {
     val c = LocalColors.current
     Row(
-        modifier.fillMaxWidth().then(if (onClick != null) Modifier.pressable(onClick, 0.985f) else Modifier).padding(horizontal = 16.dp, vertical = 11.dp),
+        modifier.fillMaxWidth().then(if (onClick != null) Modifier.pressable(onClick, 0.985f) else Modifier).padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading?.let {
@@ -213,14 +217,16 @@ fun GroupRow(
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f)) {
-            Txt(title, AppText.body(15.5.sp, c.ink, 700), maxLines = 1)
-            if (subtitle.isNotEmpty()) Txt(subtitle, AppText.body(12.5.sp, c.inkSoft), maxLines = 2)
+            Txt(title, AppText.body(15.sp, c.ink, 600), maxLines = 2)
+            if (subtitle.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                Txt(subtitle, AppText.mono(11.sp, c.inkSoft), maxLines = 1)
+            }
         }
         trailing?.let {
             Spacer(Modifier.width(8.dp))
             it()
         }
-        if (onClick != null) Image(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(c.inkSoft.copy(alpha = 0.6f)))
     }
 }
 
@@ -230,10 +236,67 @@ fun Modifier.card(color: Color, line: Color, dark: Boolean, radius: Dp = 22.dp):
     return clip(shape).background(color).then(if (dark) Modifier.border(0.8.dp, line, shape) else Modifier)
 }
 
+/** Kartu isi standar = kaca, sama dengan `glassCard()` di aplikasi iPhone. */
 @Composable
-fun Modifier.appCard(radius: Dp = 22.dp): Modifier {
+fun Modifier.appCard(radius: Dp = 22.dp): Modifier = glassCard(radius)
+
+/**
+ * Kaca isi (kartu, pil, grup) seperti aplikasi iPhone: isian putih tembus pandang di atas latar ambient,
+ * tepi terang setipis rambut, dan bayangan lembut. Sengaja tanpa blur per kartu: latar ambient berupa
+ * gradasi halus (blur tidak mengubah tampilannya) dan daftar panjang tetap ringan saat digulir.
+ */
+@Composable
+fun Modifier.glassCard(radius: Dp = 24.dp, tint: Color = Color.Unspecified): Modifier {
     val c = LocalColors.current
-    return card(c.card, c.line, c.dark, radius)
+    val shape = RoundedCornerShape(radius)
+    // Nilai diukur dari tangkapan layar aplikasi iPhone (glassEffect iOS 26) di atas latar ambient yang sama:
+    // terang = putih 62% dengan tepi putih 90%, gelap = putih 11% dengan tepi putih 17%.
+    val fill = when {
+        tint.isSpecified -> tint
+        c.dark -> Color.White.copy(alpha = 0.11f)
+        else -> Color.White.copy(alpha = 0.62f)
+    }
+    val edge = if (c.dark) Color.White.copy(alpha = 0.17f) else Color.White.copy(alpha = 0.9f)
+    return this
+        .shadow(if (c.dark) 0.dp else 10.dp, shape, ambientColor = Color(0x14000000), spotColor = Color(0x14000000))
+        .clip(shape)
+        .background(fill)
+        .border(0.7.dp, edge, shape)
+}
+
+/**
+ * Pilihan segmen kaca seperti iOS (`GlassSegmented`): kapsul kaca berisi label, pil gradasi merah berpindah
+ * dengan pegas ke pilihan aktif, teks aktif putih.
+ */
+@Composable
+fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, inset: Dp = 16.dp) {
+    val c = LocalColors.current
+    val pos by animateFloatAsState(selected.toFloat(), spring(0.8f, 380f), label = "seg")
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.padding(horizontal = inset).fillMaxWidth().height(46.dp).glassCard(50.dp).padding(4.dp)) {
+        val w = maxWidth / options.size
+        Box(Modifier.graphicsLayer { translationX = pos * w.toPx() }.width(w).fillMaxHeight().clip(CircleShape).background(c.brandGradient))
+        Row(Modifier.fillMaxSize()) {
+            options.forEachIndexed { i, label ->
+                Box(
+                    Modifier.weight(1f).fillMaxHeight().clip(CircleShape).clickable(interactionSource = null, indication = null) { onSelect(i) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Txt(label, AppText.body(13.5.sp, if (i == selected) Color.White else c.ink, 800), maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/** Kosong: ikon + teks di kartu kaca. */
+@Composable
+fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, modifier: Modifier = Modifier, inset: Dp = 16.dp) {
+    val c = LocalColors.current
+    Column(modifier.padding(horizontal = inset).fillMaxWidth().glassCard(24.dp).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Image(icon, null, Modifier.size(30.dp), colorFilter = ColorFilter.tint(c.inkSoft))
+        Spacer(Modifier.height(10.dp))
+        Txt(text, AppText.body(14.sp, c.inkSoft).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
+    }
 }
 
 /** Ditekan: mengecil sedikit lalu membal (pegas), tanpa ripple. */
@@ -350,7 +413,7 @@ fun Skeleton(modifier: Modifier = Modifier, radius: Dp = 18.dp) {
 @Composable
 fun Pill(text: String, bg: Color, fg: Color) {
     Box(Modifier.background(bg, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp)) {
-        Txt(text.uppercase(), AppText.micro(fg, 9.5.sp), maxLines = 1)
+        Txt(text.uppercase(), AppText.mono(9.5.sp, fg, androidx.compose.ui.text.font.FontWeight.SemiBold).copy(letterSpacing = 0.1.em), maxLines = 1)
     }
 }
 
@@ -358,9 +421,9 @@ fun Pill(text: String, bg: Color, fg: Color) {
 fun CategoryPill(category: String) {
     val c = LocalColors.current
     when (category) {
-        "exclusive" -> Pill("Exclusive", c.blush, c.brand)
-        "general" -> Pill("Event", c.surface, c.inkSoft)
-        else -> Pill("Show", c.butter, c.butterInk)
+        "general", "event" -> Pill("Event", c.butter, c.butterInk)
+        "exclusive" -> Pill("Exclusive", c.brand.copy(alpha = 0.12f), c.brand)
+        else -> Pill("Show", c.brand.copy(alpha = 0.12f), c.brand)
     }
 }
 
@@ -395,12 +458,12 @@ fun CountUp(value: Int?, style: TextStyle) {
 fun ErrorRetry(error: Throwable, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalColors.current
     Column(modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Image(Icons.Rounded.WifiTetheringError, null, Modifier.size(36.dp), colorFilter = ColorFilter.tint(c.brand))
-        Spacer(Modifier.height(10.dp))
+        Image(Icons.Rounded.WifiTetheringError, null, Modifier.size(30.dp), colorFilter = ColorFilter.tint(c.inkSoft))
+        Spacer(Modifier.height(12.dp))
         Txt(error.message ?: "Terjadi kesalahan", AppText.body(14.sp, c.inkSoft).copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center))
         Spacer(Modifier.height(12.dp))
-        Box(Modifier.pressable(onRetry).background(c.brandGradient, CircleShape).padding(horizontal = 20.dp, vertical = 11.dp)) {
-            Txt("Coba lagi", AppText.body(14.sp, Color.White, 800))
+        Box(Modifier.pressable(onRetry).glassCard(50.dp).padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Txt("Coba lagi", AppText.body(14.sp, c.ink, 800))
         }
     }
 }
@@ -428,17 +491,20 @@ fun VGap(h: Dp) = Spacer(Modifier.height(h))
  */
 @Composable
 fun Ambient(modifier: Modifier = Modifier) {
+    // Sama dengan `Ambient` di aplikasi iPhone: tiga lingkaran warna yang diburamkan (merah kiri atas, pink kanan,
+    // oranye bawah) di atas abu sistem. Lingkaran buram ditiru dengan gradasi radial yang datar di tengah.
     val c = LocalColors.current
-    val t = 0.9f
+    val d = c.dark
     Canvas(modifier.fillMaxSize()) {
         drawRect(c.bg)
         val w = size.width
         val h = size.height
-        fun blob(x: Float, y: Float, r: Float, color: Color) =
-            drawCircle(Brush.radialGradient(listOf(color, color.copy(alpha = 0f)), Offset(x, y), r), r, Offset(x, y))
-        val d = c.dark
-        blob(w * (0.12f + 0.06f * sin(t)), h * (0.02f + 0.03f * kotlin.math.cos(t)), w * 0.85f, (if (d) Color(0xFFE1243A) else Color(0xFFFF4A5F)).copy(alpha = if (d) 0.26f else 0.16f))
-        blob(w * (0.95f + 0.05f * kotlin.math.cos(t * 1.3f)), h * (0.16f + 0.04f * sin(t)), w * 0.65f, (if (d) Color(0xFF8A1B4A) else Color(0xFFFF9AAE)).copy(alpha = if (d) 0.24f else 0.20f))
-        blob(w * (0.3f + 0.1f * sin(t * 0.7f)), h * (0.62f + 0.04f * kotlin.math.cos(t)), w * 0.75f, (if (d) Color(0xFF4A1638) else Color(0xFFFFC2A8)).copy(alpha = if (d) 0.18f else 0.14f))
+        fun blob(x: Float, y: Float, r: Float, color: Color, a: Float) = drawCircle(
+            Brush.radialGradient(0f to color.copy(alpha = a), 0.42f to color.copy(alpha = a * 0.9f), 0.75f to color.copy(alpha = a * 0.35f), 1f to color.copy(alpha = 0f), center = Offset(x, y), radius = r),
+            r, Offset(x, y),
+        )
+        blob(w * 0.15f, h * 0.134f, w * 1.25f, c.brand, if (d) 0.35f else 0.22f)
+        blob(w * 0.92f, h * 0.36f, w * 1.15f, Color(0xFFFF2D55), if (d) 0.22f else 0.18f)
+        blob(w * 0.35f, h * 0.935f, w * 1.1f, Color(0xFFFF9500), 0.12f)
     }
 }

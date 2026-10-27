@@ -62,6 +62,7 @@ import app.jkt48connect.ui.components.GroupRow
 import app.jkt48connect.ui.components.InsetGroup
 import app.jkt48connect.ui.components.LiveCard
 import app.jkt48connect.ui.components.NetImage
+import app.jkt48connect.ui.components.PageHeader
 import app.jkt48connect.ui.components.PixelLogo
 import app.jkt48connect.ui.components.PullRefresh
 import app.jkt48connect.ui.components.SectionHead
@@ -93,18 +94,17 @@ fun HomeScreen() {
     val birthdays = rememberLoad { Api.birthdays(it) }
     val news = rememberLoad { Api.news(1, it) }
     val videos = rememberLoad { Api.videos(it) }
-    val posts = rememberLoad { latestPosts(it) }
-    val photos = rememberLoad { Api.members(it) }.data?.associate { it.id to it.img }.orEmpty()
     val state = rememberLazyListState()
 
     PullRefresh(onRefresh = {
         coroutineScope {
             listOf(
-                async { live.refresh() }, async { next.refresh() }, async { recent.refresh() }, async { videos.refresh() }, async { posts.refresh() },
+                async { live.refresh() }, async { next.refresh() }, async { recent.refresh() }, async { videos.refresh() },
             ).forEach { it.await() }
         }
     }) {
         LazyColumn(state = state, contentPadding = LocalInsets.current) {
+            item { PageHeader("", "JKT48Connect") }
             item {
                 val show = next.data?.let { s -> s.firstOrNull { it.category == "show" } ?: s.firstOrNull() }
                 StatusCard(
@@ -117,7 +117,7 @@ fun HomeScreen() {
             item { QuickActions() }
 
             if (Favorites.all.isNotEmpty()) {
-                item { SectionHead("Favoritmu", "Oshi kamu") { nav.tab = 4 } }
+                item { SectionHead("Oshi kamu", "Favoritmu") { nav.tab = 4 } }
                 item {
                     val liveNames = live.data.orEmpty().map { it.name.lowercase() }
                     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -149,19 +149,6 @@ fun HomeScreen() {
                     else -> LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         itemsIndexed(list.take(8), key = { _, v -> v.id }) { i, v ->
                             VideoCard(v, Modifier.fillParentMaxWidth(0.74f).staggerIn(i), compact = true) { nav.push(Route.VideoDetail(v)) }
-                        }
-                    }
-                }
-            }
-
-            val postList = posts.data
-            if (postList == null && posts.error == null || !postList.isNullOrEmpty()) {
-                item { SectionHead("X · TikTok · Instagram", "Dari member") { nav.push(Route.Social()) } }
-                item {
-                    if (postList == null) Skeleton(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(260.dp), 22.dp)
-                    else LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        itemsIndexed(postList, key = { _, p -> "${p.platform}${p.id}" }) { i, p ->
-                            MiniPost(p, photos[p.memberId].orEmpty(), Modifier.staggerIn(i)) { nav.push(Route.Post(p)) }
                         }
                     }
                 }

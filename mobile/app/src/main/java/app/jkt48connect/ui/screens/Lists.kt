@@ -1,5 +1,16 @@
 package app.jkt48connect.ui.screens
 
+import app.jkt48connect.ui.components.glassCard
+import app.jkt48connect.ui.components.GlassSegmented
+import app.jkt48connect.ui.components.EmptyState
+import app.jkt48connect.core.fmtWib
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Sensors
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Cake
+import androidx.compose.foundation.border
+
 import app.jkt48connect.core.Favorites
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.animation.core.LinearEasing
@@ -121,33 +132,22 @@ fun LiveScreen() {
     val list = live.data
     PullRefresh(onRefresh = { live.refresh() }) {
         LazyColumn(state = rememberLazyListState(), contentPadding = LocalInsets.current) {
+            item { PageHeader("", "Live") }
             item {
-                PageHeader("IDN Live · Showroom", "Live sekarang") {
-                    Column(horizontalAlignment = Alignment.End) {
-                        CountUp(list?.size ?: 0, AppText.display(48.sp, if (list.isNullOrEmpty()) c.inkSoft else c.brand))
-                        Txt("MEMBER", AppText.micro(c.inkSoft))
-                    }
+                Row(
+                    Modifier.padding(16.dp, 4.dp, 16.dp, 14.dp).fillMaxWidth().glassCard(18.dp).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Image(Icons.Rounded.Info, null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.brand))
+                    Spacer(Modifier.width(8.dp))
+                    Txt("Live Showroom bisa langsung ditonton di sini. Live IDN dibuka di aplikasi/situs IDN.", AppText.body(13.sp, c.inkSoft))
                 }
             }
             when {
                 live.error != null && list == null -> item { ErrorRetry(live.error!!, { live.run(true) }) }
                 list == null -> items(2) { Skeleton(Modifier.padding(16.dp, 0.dp, 16.dp, 14.dp).fillMaxWidth().height(300.dp), 28.dp) }
                 list.isEmpty() -> item {
-                    Column(
-                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().appCard(28.dp).padding(horizontal = 24.dp, vertical = 36.dp).staggerIn(0),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Box(Modifier.size(76.dp).background(c.bg.copy(alpha = if (c.dark) 0.6f else 1f), CircleShape), contentAlignment = Alignment.Center) {
-                            SignalBars(color = c.inkSoft, height = 30.dp, active = false)
-                        }
-                        VGap(16.dp)
-                        Txt("BELUM ADA YANG LIVE", AppText.display(28.sp, c.ink))
-                        VGap(8.dp)
-                        Txt(
-                            "Halaman ini memperbarui sendiri setiap 30 detik.\nTarik ke bawah untuk cek sekarang.",
-                            AppText.body(14.sp, c.inkSoft).copy(textAlign = TextAlign.Center),
-                        )
-                    }
+                    EmptyState(Icons.Rounded.Sensors, "Belum ada member yang live.\nTarik ke bawah untuk memeriksa lagi.")
                 }
                 else -> itemsIndexed(list) { i, l -> LiveCard(l, Modifier.padding(16.dp, 0.dp, 16.dp, 14.dp).staggerIn(i), 300.dp) }
             }
@@ -166,16 +166,9 @@ fun ScheduleScreen() {
     if (seg == 1) LoadMoreOnEnd(state, theater)
     PullRefresh(onRefresh = { if (seg == 0) next.refresh() else theater.refresh() }) {
         LazyColumn(state = state, contentPadding = LocalInsets.current) {
-            item { PageHeader("Theater & event", "Jadwal") }
+            item { PageHeader("", "Jadwal") }
             item {
-                LiquidTabs(
-                    items = listOf(TabItem("Mendatang"), TabItem("Theater")),
-                    selectedIndex = seg,
-                    onSelected = { seg = it },
-                    height = 50.dp,
-                    modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth(),
-                )
-                VGap(16.dp)
+                GlassSegmented(listOf("Mendatang", "Theater"), seg, { seg = it }, Modifier.padding(top = 4.dp, bottom = 12.dp))
             }
             if (seg == 0) {
                 val shows = next.data
@@ -260,35 +253,33 @@ fun MembersScreen() {
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column {
-                    PageHeader("JKT48", "Member", horizontal = 4.dp) { CountUp(list.size, AppText.display(48.sp, c.brand)) }
+                    PageHeader("", "Member", horizontal = 4.dp)
                     // Kolom cari: kaca statis.
                     Row(
-                        Modifier.fillMaxWidth().height(50.dp).glass(LocalBackdrop.current, Capsule(), glassFill()).padding(horizontal = 16.dp),
+                        Modifier.fillMaxWidth().height(44.dp).glassCard(14.dp).padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Image(Icons.Rounded.Search, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(c.inkSoft))
-                        Spacer(Modifier.width(10.dp))
+                        Image(Icons.Rounded.Search, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.inkSoft))
+                        Spacer(Modifier.width(8.dp))
                         Box(Modifier.weight(1f)) {
                             if (q.isEmpty()) Txt("Cari oshi kamu…", AppText.body(15.sp, c.inkSoft))
                             BasicTextField(q, { q = it }, singleLine = true, textStyle = AppText.body(15.sp, c.ink), cursorBrush = SolidColor(c.brand), modifier = Modifier.fillMaxWidth())
                         }
                     }
                     VGap(14.dp)
-                    LiquidTabs(
-                        items = listOf(TabItem("Aktif"), TabItem("Lulus"), TabItem("Favorit")),
-                        selectedIndex = seg,
-                        onSelected = { seg = it },
-                        height = 50.dp,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    VGap(4.dp)
+                    GlassSegmented(listOf("Aktif", "Lulus", "Favorit"), seg, { seg = it }, inset = 0.dp)
+                    VGap(2.dp)
                 }
             }
             when {
                 members.error != null && members.data == null -> item(span = { GridItemSpan(maxLineSpan) }) { ErrorRetry(members.error!!, { members.run(true) }) }
                 members.data == null -> items(8) { Skeleton(Modifier.aspectRatio(0.7f), 24.dp) }
-                seg == 2 && list.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
-                    Txt("Belum ada favorit. Buka profil member lalu ketuk ☆ untuk menjadikannya oshi.", AppText.body(14.sp, c.inkSoft), Modifier.padding(8.dp, 12.dp))
+                list.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    EmptyState(
+                        if (seg == 2) Icons.Rounded.StarBorder else Icons.Rounded.Groups,
+                        if (seg == 2) "Belum ada favorit.\nBuka profil member lalu ketuk bintang." else "Tidak ada member yang cocok.",
+                        inset = 0.dp,
+                    )
                 }
                 else -> itemsIndexed(list, key = { _, m -> m.id }) { i, m -> MemberCard(m, i, Modifier.staggerIn(i % 12, 35)) { nav.push(Route.Member(m.id, m.name, m.img)) } }
             }
@@ -299,20 +290,17 @@ fun MembersScreen() {
 @Composable
 private fun MemberCard(m: Member, index: Int, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalColors.current
-    Box(modifier.aspectRatio(0.7f).pressable(onClick).clip(RoundedCornerShape(24.dp))) {
+    Box(modifier.aspectRatio(0.78f).pressable(onClick).clip(RoundedCornerShape(24.dp))) {
         NetImage(m.img, Modifier.fillMaxSize(), fallback = m.name)
         Box(Modifier.fillMaxSize().background(PhotoScrim))
-        Box(Modifier.padding(10.dp).background(c.brandGradient, CircleShape).padding(horizontal = 7.dp, vertical = 2.dp)) {
-            Txt((index + 1).toString().padStart(2, '0'), AppText.mono(10.sp, Color.White, androidx.compose.ui.text.font.FontWeight.SemiBold))
-        }
         if (Favorites.isFavorite(m.id)) {
-            Box(Modifier.align(Alignment.TopEnd).padding(10.dp).size(26.dp).background(c.brandGradient, CircleShape), contentAlignment = Alignment.Center) {
-                Image(Icons.Rounded.Star, "Favorit", Modifier.size(15.dp), colorFilter = ColorFilter.tint(Color.White))
+            Box(Modifier.align(Alignment.TopEnd).padding(10.dp).size(28.dp).background(c.brand.copy(alpha = 0.85f), CircleShape).border(0.7.dp, Color.White.copy(alpha = 0.4f), CircleShape), contentAlignment = Alignment.Center) {
+                Image(Icons.Rounded.Star, "Favorit", Modifier.size(14.dp), colorFilter = ColorFilter.tint(Color.White))
             }
         }
         Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
             Txt(m.shortName.uppercase(), AppText.display(22.sp, Color.White), maxLines = 1)
-            Txt(m.name, AppText.body(11.5.sp, Color.White.copy(alpha = 0.75f)), maxLines = 1)
+            Txt(m.name, AppText.body(12.sp, Color.White.copy(alpha = 0.78f)), maxLines = 1)
         }
     }
 }
@@ -338,24 +326,31 @@ fun BirthdayScreen() {
                         .padding(bottom = 10.dp)
                         .fillMaxWidth()
                         .pressable({ nav.push(Route.Member(b.id, b.name, b.img)) })
-                        .then(if (today) Modifier.clip(RoundedCornerShape(24.dp)).background(c.brandGradient) else Modifier.appCard(24.dp))
+                        .glassCard(24.dp)
                         .padding(12.dp)
                         .staggerIn(i),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    NetImage(b.img, Modifier.size(56.dp, 66.dp).clip(RoundedCornerShape(16.dp)), fallback = b.name)
+                    Box(Modifier.size(64.dp).then(if (today) Modifier.background(c.brandGradient, CircleShape) else Modifier).padding(3.dp)) {
+                        NetImage(b.img, Modifier.fillMaxSize().clip(CircleShape), fallback = b.name)
+                    }
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Txt(b.name, AppText.body(16.sp, if (today) Color.White else c.ink, 800))
+                        Txt(b.name, AppText.body(16.sp, c.ink, 800), maxLines = 1)
                         VGap(3.dp)
                         Txt(
-                            fmtDate(b.birthdate, "d MMMM") + (age?.let { " · genap $it tahun" } ?: ""),
-                            AppText.mono(11.5.sp, if (today) Color.White.copy(alpha = 0.75f) else c.inkSoft),
+                            fmtWib(nowWib().plusDays(d.toLong()), "EEEE, d MMMM") + (age?.let { " · $it tahun" } ?: ""),
+                            AppText.mono(11.sp, c.inkSoft),
                         )
                     }
-                    if (today) Txt("🎉", AppText.display(30.sp)) else Row(verticalAlignment = Alignment.Bottom) {
-                        Txt("$d", AppText.display(30.sp, c.brand))
-                        Txt("HARI", AppText.micro(c.inkSoft, 9.sp), Modifier.padding(start = 4.dp, bottom = 4.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        if (today) {
+                            Image(Icons.Rounded.Cake, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(c.brand))
+                            Txt("HARI INI", AppText.micro(c.brand, 9.5.sp))
+                        } else {
+                            Txt("$d", AppText.display(28.sp, c.ink))
+                            Txt("HARI LAGI", AppText.micro(c.inkSoft, 9.5.sp))
+                        }
                     }
                 }
             }

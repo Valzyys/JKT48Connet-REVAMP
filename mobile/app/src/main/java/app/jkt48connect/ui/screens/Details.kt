@@ -1,5 +1,7 @@
 package app.jkt48connect.ui.screens
 
+import app.jkt48connect.ui.components.glassCard
+
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -590,11 +592,17 @@ fun MemberDetailScreen(id: String, name: String, img: String) {
                 }
                 if (m.totalShowroom != null || m.totalIdn != null) item {
                     Row(Modifier.padding(16.dp, 10.dp, 16.dp, 0.dp).staggerIn(2), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        listOf("Live Showroom" to m.totalShowroom, "Live IDN" to m.totalIdn).forEach { (label, v) ->
-                            Column(Modifier.weight(1f).clip(RoundedCornerShape(22.dp)).background(c.panel).then(if (c.dark) Modifier.appCard(22.dp) else Modifier).padding(16.dp)) {
-                                Txt(label.uppercase(), AppText.micro(Color.White.copy(alpha = 0.55f), 9.5.sp))
-                                VGap(6.dp)
-                                CountUp(v, AppText.display(34.sp, Color.White))
+                        // Sama dengan iOS: Showroom di kotak gradasi merah, IDN di kotak kaca.
+                        listOf("Live Showroom" to m.totalShowroom, "Live IDN" to m.totalIdn).forEachIndexed { i, (label, v) ->
+                            val accent = i == 0
+                            Column(
+                                Modifier.weight(1f)
+                                    .then(if (accent) Modifier.clip(RoundedCornerShape(22.dp)).background(c.brandGradient) else Modifier.glassCard(22.dp))
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                            ) {
+                                Txt(label.uppercase(), AppText.micro(if (accent) Color.White.copy(alpha = 0.75f) else c.inkSoft, 9.5.sp))
+                                VGap(4.dp)
+                                CountUp(v, AppText.display(24.sp, if (accent) Color.White else c.ink))
                             }
                         }
                     }
@@ -684,7 +692,7 @@ fun TheaterDetailScreen(id: String) {
             t == null -> item { Loading() }
             else -> {
                 val img = t.banner.ifEmpty { t.poster }
-                if (img.isNotEmpty()) item { NetImage(img, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(26.dp)).staggerIn(0), alignment = Alignment.Center) }
+                if (img.isNotEmpty()) item { NetImage(img, Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(26.dp)).staggerIn(0), alignment = Alignment.Center) }
                 item {
                     Column {
                         VGap(18.dp)
@@ -695,31 +703,34 @@ fun TheaterDetailScreen(id: String) {
                                 Micro(t.team)
                             }
                         }
-                        VGap(10.dp)
-                        Txt(t.title.uppercase(), AppText.display(36.sp, c.ink), Modifier.staggerIn(2))
-                        VGap(8.dp)
-                        Txt("${fmtDate(t.date)} · ${fmtTime(t.date)}", AppText.mono(13.sp, c.inkSoft), Modifier.staggerIn(3))
+                        VGap(6.dp)
+                        Txt(t.title.uppercase(), AppText.display(32.sp, c.ink), Modifier.staggerIn(2))
+                        VGap(6.dp)
+                        Txt("${fmtDate(t.date, "EEEE, d MMMM yyyy")} · ${fmtTime(t.date)} WIB", AppText.mono(12.sp, c.inkSoft), Modifier.staggerIn(3))
                         if ((parseInstant(t.date)?.toEpochMilli() ?: 0) > System.currentTimeMillis()) {
-                            VGap(14.dp)
-                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.brandGradient).padding(16.dp).staggerIn(4), verticalAlignment = Alignment.CenterVertically) {
-                                Image(Icons.Rounded.Timer, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(Color.White))
-                                Spacer(Modifier.width(10.dp))
-                                Txt("Mulai dalam ", AppText.body(14.sp, Color.White.copy(alpha = 0.7f)))
-                                Countdown(t.date, AppText.mono(15.sp, Color.White, FontWeight.SemiBold))
+                            VGap(16.dp)
+                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(c.brandGradient).padding(18.dp).staggerIn(4), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Micro("Mulai dalam", color = Color.White.copy(alpha = 0.75f))
+                                    VGap(4.dp)
+                                    Countdown(t.date, AppText.display(30.sp, Color.White))
+                                }
+                                Image(Icons.Rounded.Timer, null, Modifier.size(30.dp), colorFilter = ColorFilter.tint(Color.White.copy(alpha = 0.5f)))
                             }
                         }
                     }
                 }
+                // Lineup seperti iOS: foto bulat + nama depan dalam satu kartu kaca.
                 if (t.members.isNotEmpty()) item {
-                    VGap(26.dp)
-                    Micro("Member tampil · ${t.members.size}", color = c.brand, dot = true)
-                    VGap(12.dp)
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    VGap(22.dp)
+                    Micro("Lineup · ${t.members.size} member", color = c.brand)
+                    VGap(10.dp)
+                    Column(Modifier.fillMaxWidth().glassCard(24.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         t.members.chunked(4).forEachIndexed { row, chunk ->
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 chunk.forEachIndexed { col, m ->
                                     Column(Modifier.weight(1f).pressable({ nav.push(Route.Member(m.id, m.name, m.img)) }).staggerIn(row * 4 + col, 25), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        NetImage(m.img, Modifier.fillMaxWidth().aspectRatio(0.78f).clip(RoundedCornerShape(16.dp)), fallback = m.name)
+                                        NetImage(m.img, Modifier.size(64.dp).clip(CircleShape), fallback = m.name)
                                         VGap(6.dp)
                                         Txt(m.name.substringBefore(' '), AppText.body(12.sp, c.ink, 700), maxLines = 1)
                                     }
@@ -730,13 +741,16 @@ fun TheaterDetailScreen(id: String) {
                     }
                 }
                 if (t.songs.isNotEmpty()) item {
-                    VGap(26.dp)
-                    Micro("Setlist", color = c.brand, dot = true)
-                    VGap(8.dp)
-                    t.songs.forEachIndexed { i, song ->
-                        Row(Modifier.padding(vertical = 7.dp)) {
-                            Txt((i + 1).toString().padStart(2, '0'), AppText.mono(12.sp, c.brand, FontWeight.SemiBold), Modifier.width(34.dp))
-                            Txt(song, AppText.body(15.sp, c.ink, 600))
+                    VGap(22.dp)
+                    Micro("Setlist · ${t.songs.size} lagu", color = c.brand)
+                    VGap(10.dp)
+                    Column(Modifier.fillMaxWidth().glassCard(24.dp)) {
+                        t.songs.forEachIndexed { i, song ->
+                            if (i > 0) Box(Modifier.padding(start = 48.dp).fillMaxWidth().height(0.5.dp).background(c.line))
+                            Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Txt((i + 1).toString().padStart(2, '0'), AppText.mono(12.sp, c.brand, FontWeight.SemiBold), Modifier.width(34.dp))
+                                Txt(song, AppText.body(15.sp, c.ink, 600))
+                            }
                         }
                     }
                 }
