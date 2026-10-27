@@ -1,0 +1,108 @@
+name: iOS
+
+# Build aplikasi iPhone (SwiftUI, SDK iOS 26 → Liquid Glass) di runner macOS:
+# - .ipa tanpa tanda tangan, dipasang lewat Sideloadly / AltStore / SideStore / TrollStore (lihat ios/README.md);
+# - tangkapan layar dari simulator untuk pratinjau UI.
+# Di cabang selain main, .ipa dan tangkapan layar diunggah ke prerelease "ios-preview" (bukan "latest",
+# jadi tombol unduh APK Android & cek update aplikasi Android tidak terpengaruh).
+on:
+  push:
+    branches-ignore: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Pilih Xcode 26
+        run: |
+          xc=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$xc" ]; then sudo xcode-select -s "$xc"; fi
+          xcodebuild -version
+      - name: Generate proyek (XcodeGen)
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build .ipa (tanpa tanda tangan)
+        run: |
+          set -o pipefail
+          xcodebuild -project JKT48Connect.xcodeproj -scheme JKT48Connect -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tee build/device.log | grep -E "error:|warning: .*deprecated|BUILD" || true
+          test -d build/device/Build/Products/Release-iphoneos/JKT48Connect.app || { grep -B2 -A6 "error:" build/device.log | head -200; exit 1; }
+          mkdir -p out/Payload
+          cp -R build/device/Build/Products/Release-iphoneos/JKT48Connect.app out/Payload/
+          (cd out && zip -qry jkt48connect.ipa Payload)
+          ls -lh out/jkt48connect.ipa
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: jkt48connect-ipa
+          path: ios/out/jkt48connect.ipa
+      - name: Build simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project JKT48Connect.xcodeproj -scheme JKT48Connect -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/sim \
+            CODE_SIGNING_ALLOWED=NO build > build/sim.log 2>&1 || { grep -B2 -A6 "error:" build/sim.log | head -200; exit 1; }
+      - name: Tangkapan layar simulator
+        run: |
+          dev=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          ios = sorted([k for k in d if "iOS" in k], key=lambda k: [int(x) for x in k.split("iOS-")[1].split("-")])
+          for rt in reversed(ios):
+              for pref in ("iPhone 17 Pro", "iPhone 16 Pro", "iPhone"):
+                  for x in d[rt]:
+                      if x["name"].startswith(pref):
+                          print(x["udid"]); sys.exit()
+          ')
+          echo "Simulator: $dev"
+          xcrun simctl boot "$dev"
+          xcrun simctl bootstatus "$dev" -b
+          xcrun simctl status_bar "$dev" override --time "19:30" --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+          xcrun simctl install "$dev" build/sim/Build/Products/Debug-iphonesimulator/JKT48Connect.app
+          mkdir -p shots
+          shot() { # nama, tab, route, tampilan
+            xcrun simctl ui "$dev" appearance "$4"
+            xcrun simctl terminate "$dev" app.jkt48connect.ios 2>/dev/null || true
+            SIMCTL_CHILD_JKC_TAB="$2" SIMCTL_CHILD_JKC_ROUTE="$3" xcrun simctl launch "$dev" app.jkt48connect.ios
+            sleep 14
+            xcrun simctl io "$dev" screenshot "shots/$1.png"
+          }
+          shot 01-beranda home "" light
+          shot 02-live live "" light
+          shot 03-jadwal schedule "" light
+          shot 04-recent recent "" light
+          shot 05-member members "" light
+          shot 06-video home videos light
+          shot 07-sosmed home social light
+          shot 08-beranda-gelap home "" dark
+          shot 09-member-gelap members "" dark
+          ls -lh shots
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ios-screenshots
+          path: ios/shots
+      - name: Unggah pratinjau (prerelease ios-preview)
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view ios-preview >/dev/null 2>&1 || gh release create ios-preview --prerelease --latest=false \
+            --title "iOS preview (build cabang)" --notes "Build pratinjau aplikasi iPhone dari cabang pengembangan. Rilis resmi: tag ios-build-*."
+          gh release upload ios-preview out/jkt48connect.ipa shots/*.png --clobber

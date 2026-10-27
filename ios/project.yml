@@ -1,0 +1,38 @@
+# Proyek Xcode dibuat dari file ini oleh XcodeGen (di CI: `brew install xcodegen && xcodegen generate`).
+name: JKT48Connect
+options:
+  bundleIdPrefix: app.jkt48connect
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+targets:
+  JKT48Connect:
+    type: application
+    platform: iOS
+    sources:
+      - path: JKT48Connect
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.jkt48connect.ios
+        PRODUCT_NAME: JKT48Connect
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: JKT48Connect
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+    info:
+      path: JKT48Connect/Info.plist
+      properties:
+        # Picture-in-picture & suara video tetap jalan saat layar dikunci / aplikasi ke latar.
+        UIBackgroundModes: [audio]

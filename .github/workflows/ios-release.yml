@@ -1,0 +1,54 @@
+name: iOS Release
+
+# Build .ipa iPhone (tanpa tanda tangan) lalu unggah sebagai GitHub Release "ios-build-N".
+# Release ini sengaja TIDAK ditandai "latest": tautan releases/latest/download/jkt48connect.apk (tombol unduh
+# Android & cek update aplikasi Android) harus tetap menunjuk rilis APK.
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios-release.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-26
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Pilih Xcode 26
+        run: |
+          xc=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$xc" ]; then sudo xcode-select -s "$xc"; fi
+          xcodebuild -version
+      - name: Build .ipa
+        run: |
+          set -o pipefail
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild -project JKT48Connect.xcodeproj -scheme JKT48Connect -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > build.log 2>&1 \
+            || { grep -B2 -A6 "error:" build.log | head -200; exit 1; }
+          mkdir -p out/Payload
+          cp -R build/Build/Products/Release-iphoneos/JKT48Connect.app out/Payload/
+          (cd out && zip -qry jkt48connect.ipa Payload)
+      - name: Buat release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(grep -oE 'MARKETING_VERSION: *"?[0-9.]+' project.yml | grep -oE '[0-9.]+$')
+          {
+            git log -1 --format='%s%n%n%b' "$GITHUB_SHA" | grep -vE '^(Co-Authored-By|Claude-Session|Signed-off-by):' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+            echo
+            echo "---"
+            echo "File .ipa tanpa tanda tangan. Pasang dengan Sideloadly / AltStore / SideStore (Apple ID gratis: pasang ulang tiap 7 hari) atau TrollStore. Panduan: ios/README.md. Commit: $GITHUB_SHA"
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "ios-build-$GITHUB_RUN_NUMBER" out/jkt48connect.ipa \
+            --target "$GITHUB_SHA" --latest=false \
+            --title "JKT48Connect iOS $version (build $GITHUB_RUN_NUMBER)" --notes-file "$RUNNER_TEMP/notes.md"
