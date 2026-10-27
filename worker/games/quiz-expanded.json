@@ -1,0 +1,629 @@
+[
+  {
+    "q": "Apa judul Indonesia lagu “Darashinai Aishikata” versi JKT48?",
+    "a": "Cara Ceroboh untuk Mencinta",
+    "other": [
+      "Selamanya Pressure",
+      "Ponytail dan Shu-Shu",
+      "Musim yang Selanjutnya"
+    ],
+    "why": "Judul resmi memasangkan Darashinai Aishikata dengan Cara Ceroboh untuk Mencinta.",
+    "source": "https://www.youtube.com/watch?v=5V19CBzU9nk"
+  },
+  {
+    "q": "“Cara Ceroboh untuk Mencinta” dikenal dengan judul Jepang apa?",
+    "a": "Darashinai Aishikata",
+    "other": [
+      "Eien Pressure",
+      "Ponytail To Shu-Shu",
+      "Tsugi no Season"
+    ],
+    "why": "Cara Ceroboh untuk Mencinta adalah judul Indonesia untuk Darashinai Aishikata.",
+    "source": "https://www.youtube.com/watch?v=5V19CBzU9nk"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Eien Pressure” versi JKT48?",
+    "a": "Selamanya Pressure",
+    "other": [
+      "Suka! Suka! Skip!",
+      "Bersama Kamu, Pelangi dan Mentari",
+      "Cinta yang Tulus, Crescendo"
+    ],
+    "why": "Judul resmi memasangkan Eien Pressure dengan Selamanya Pressure.",
+    "source": "https://www.youtube.com/watch?v=wJY2fyFXxeA"
+  },
+  {
+    "q": "“Selamanya Pressure” dikenal dengan judul Jepang apa?",
+    "a": "Eien Pressure",
+    "other": [
+      "Suki! Suki! Skip!",
+      "Kimi To Niji To Taiyou To",
+      "Junai no Crescendo"
+    ],
+    "why": "Selamanya Pressure adalah judul Indonesia untuk Eien Pressure.",
+    "source": "https://www.youtube.com/watch?v=wJY2fyFXxeA"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Suki! Suki! Skip!” versi JKT48?",
+    "a": "Suka! Suka! Skip!",
+    "other": [
+      "Karena Kusuka Dirimu",
+      "Kereta Kedewasaan",
+      "Dirimu Melody"
+    ],
+    "why": "Judul resmi memasangkan Suki! Suki! Skip! dengan Suka! Suka! Skip!.",
+    "source": "https://www.youtube.com/watch?v=hLUnG97Cd_g"
+  },
+  {
+    "q": "“Suka! Suka! Skip!” dikenal dengan judul Jepang apa?",
+    "a": "Suki! Suki! Skip!",
+    "other": [
+      "Kimi No Koto Ga Suki Dakara",
+      "Otona Ressha",
+      "Kimi wa Melody"
+    ],
+    "why": "Suka! Suka! Skip! adalah judul Indonesia untuk Suki! Suki! Skip!.",
+    "source": "https://www.youtube.com/watch?v=hLUnG97Cd_g"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Kimi No Koto Ga Suki Dakara” versi JKT48?",
+    "a": "Karena Kusuka Dirimu",
+    "other": [
+      "Ponytail dan Shu-Shu",
+      "Musim yang Selanjutnya",
+      "Luar Biasa"
+    ],
+    "why": "Judul resmi memasangkan Kimi No Koto Ga Suki Dakara dengan Karena Kusuka Dirimu.",
+    "source": "https://www.youtube.com/watch?v=M85_iPP5_qw"
+  },
+  {
+    "q": "“Karena Kusuka Dirimu” dikenal dengan judul Jepang apa?",
+    "a": "Kimi No Koto Ga Suki Dakara",
+    "other": [
+      "Ponytail To Shu-Shu",
+      "Tsugi no Season",
+      "Saikou Kayo"
+    ],
+    "why": "Karena Kusuka Dirimu adalah judul Indonesia untuk Kimi No Koto Ga Suki Dakara.",
+    "source": "https://www.youtube.com/watch?v=M85_iPP5_qw"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Ponytail To Shu-Shu” versi JKT48?",
+    "a": "Ponytail dan Shu-Shu",
+    "other": [
+      "Bersama Kamu, Pelangi dan Mentari",
+      "Cinta yang Tulus, Crescendo",
+      "Tidak Boleh Pelukan"
+    ],
+    "why": "Judul resmi memasangkan Ponytail To Shu-Shu dengan Ponytail dan Shu-Shu.",
+    "source": "https://www.youtube.com/watch?v=EhLngOjQFmo"
+  },
+  {
+    "q": "“Ponytail dan Shu-Shu” dikenal dengan judul Jepang apa?",
+    "a": "Ponytail To Shu-Shu",
+    "other": [
+      "Kimi To Niji To Taiyou To",
+      "Junai no Crescendo",
+      "Dakishimecha Ikenai"
+    ],
+    "why": "Ponytail dan Shu-Shu adalah judul Indonesia untuk Ponytail To Shu-Shu.",
+    "source": "https://www.youtube.com/watch?v=EhLngOjQFmo"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Kimi To Niji To Taiyou To” versi JKT48?",
+    "a": "Bersama Kamu, Pelangi dan Mentari",
+    "other": [
+      "Kereta Kedewasaan",
+      "Dirimu Melody",
+      "Hanya Lihat Ke Depan"
+    ],
+    "why": "Judul resmi memasangkan Kimi To Niji To Taiyou To dengan Bersama Kamu, Pelangi dan Mentari.",
+    "source": "https://www.youtube.com/watch?v=4T-BZKKihc8"
+  },
+  {
+    "q": "“Bersama Kamu, Pelangi dan Mentari” dikenal dengan judul Jepang apa?",
+    "a": "Kimi To Niji To Taiyou To",
+    "other": [
+      "Otona Ressha",
+      "Kimi wa Melody",
+      "Mae Shika Mukanee"
+    ],
+    "why": "Bersama Kamu, Pelangi dan Mentari adalah judul Indonesia untuk Kimi To Niji To Taiyou To.",
+    "source": "https://www.youtube.com/watch?v=4T-BZKKihc8"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Otona Ressha” versi JKT48?",
+    "a": "Kereta Kedewasaan",
+    "other": [
+      "Musim yang Selanjutnya",
+      "Luar Biasa",
+      "Refrain Penuh Harapan"
+    ],
+    "why": "Judul resmi memasangkan Otona Ressha dengan Kereta Kedewasaan.",
+    "source": "https://www.youtube.com/watch?v=9p3sL8iKeJk"
+  },
+  {
+    "q": "“Kereta Kedewasaan” dikenal dengan judul Jepang apa?",
+    "a": "Otona Ressha",
+    "other": [
+      "Tsugi no Season",
+      "Saikou Kayo",
+      "Kibouteki Refrain"
+    ],
+    "why": "Kereta Kedewasaan adalah judul Indonesia untuk Otona Ressha.",
+    "source": "https://www.youtube.com/watch?v=9p3sL8iKeJk"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Tsugi no Season” versi JKT48?",
+    "a": "Musim yang Selanjutnya",
+    "other": [
+      "Cinta yang Tulus, Crescendo",
+      "Tidak Boleh Pelukan",
+      "Musim Panas Sounds Good"
+    ],
+    "why": "Judul resmi memasangkan Tsugi no Season dengan Musim yang Selanjutnya.",
+    "source": "https://www.youtube.com/watch?v=QjQnWaJQSi4"
+  },
+  {
+    "q": "“Musim yang Selanjutnya” dikenal dengan judul Jepang apa?",
+    "a": "Tsugi no Season",
+    "other": [
+      "Junai no Crescendo",
+      "Dakishimecha Ikenai",
+      "Manatsu no Sounds Good"
+    ],
+    "why": "Musim yang Selanjutnya adalah judul Indonesia untuk Tsugi no Season.",
+    "source": "https://www.youtube.com/watch?v=QjQnWaJQSi4"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Junai no Crescendo” versi JKT48?",
+    "a": "Cinta yang Tulus, Crescendo",
+    "other": [
+      "Dirimu Melody",
+      "Hanya Lihat Ke Depan",
+      "Apakah Kau Melihat Mentari Senja"
+    ],
+    "why": "Judul resmi memasangkan Junai no Crescendo dengan Cinta yang Tulus, Crescendo.",
+    "source": "https://www.youtube.com/watch?v=hztSeeQ_kUM"
+  },
+  {
+    "q": "“Cinta yang Tulus, Crescendo” dikenal dengan judul Jepang apa?",
+    "a": "Junai no Crescendo",
+    "other": [
+      "Kimi wa Melody",
+      "Mae Shika Mukanee",
+      "Yuuhi wo Miteiruka"
+    ],
+    "why": "Cinta yang Tulus, Crescendo adalah judul Indonesia untuk Junai no Crescendo.",
+    "source": "https://www.youtube.com/watch?v=hztSeeQ_kUM"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Kimi wa Melody” versi JKT48?",
+    "a": "Dirimu Melody",
+    "other": [
+      "Luar Biasa",
+      "Refrain Penuh Harapan",
+      "Pesawat Kertas 365 Hari"
+    ],
+    "why": "Judul resmi memasangkan Kimi wa Melody dengan Dirimu Melody.",
+    "source": "https://www.youtube.com/watch?v=j5im1CSITnY"
+  },
+  {
+    "q": "“Dirimu Melody” dikenal dengan judul Jepang apa?",
+    "a": "Kimi wa Melody",
+    "other": [
+      "Saikou Kayo",
+      "Kibouteki Refrain",
+      "365 Nichi No Kamihikouki"
+    ],
+    "why": "Dirimu Melody adalah judul Indonesia untuk Kimi wa Melody.",
+    "source": "https://www.youtube.com/watch?v=j5im1CSITnY"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Saikou Kayo” versi JKT48?",
+    "a": "Luar Biasa",
+    "other": [
+      "Tidak Boleh Pelukan",
+      "Musim Panas Sounds Good",
+      "Cara Ceroboh untuk Mencinta"
+    ],
+    "why": "Judul resmi memasangkan Saikou Kayo dengan Luar Biasa.",
+    "source": "https://www.youtube.com/watch?v=VtQfusReKKI"
+  },
+  {
+    "q": "“Luar Biasa” dikenal dengan judul Jepang apa?",
+    "a": "Saikou Kayo",
+    "other": [
+      "Dakishimecha Ikenai",
+      "Manatsu no Sounds Good",
+      "Darashinai Aishikata"
+    ],
+    "why": "Luar Biasa adalah judul Indonesia untuk Saikou Kayo.",
+    "source": "https://www.youtube.com/watch?v=VtQfusReKKI"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Dakishimecha Ikenai” versi JKT48?",
+    "a": "Tidak Boleh Pelukan",
+    "other": [
+      "Hanya Lihat Ke Depan",
+      "Apakah Kau Melihat Mentari Senja",
+      "Selamanya Pressure"
+    ],
+    "why": "Judul resmi memasangkan Dakishimecha Ikenai dengan Tidak Boleh Pelukan.",
+    "source": "https://www.youtube.com/watch?v=WSUCoacwqHM"
+  },
+  {
+    "q": "“Tidak Boleh Pelukan” dikenal dengan judul Jepang apa?",
+    "a": "Dakishimecha Ikenai",
+    "other": [
+      "Mae Shika Mukanee",
+      "Yuuhi wo Miteiruka",
+      "Eien Pressure"
+    ],
+    "why": "Tidak Boleh Pelukan adalah judul Indonesia untuk Dakishimecha Ikenai.",
+    "source": "https://www.youtube.com/watch?v=WSUCoacwqHM"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Mae Shika Mukanee” versi JKT48?",
+    "a": "Hanya Lihat Ke Depan",
+    "other": [
+      "Refrain Penuh Harapan",
+      "Pesawat Kertas 365 Hari",
+      "Suka! Suka! Skip!"
+    ],
+    "why": "Judul resmi memasangkan Mae Shika Mukanee dengan Hanya Lihat Ke Depan.",
+    "source": "https://www.youtube.com/watch?v=1eEngMCVyUE"
+  },
+  {
+    "q": "“Hanya Lihat Ke Depan” dikenal dengan judul Jepang apa?",
+    "a": "Mae Shika Mukanee",
+    "other": [
+      "Kibouteki Refrain",
+      "365 Nichi No Kamihikouki",
+      "Suki! Suki! Skip!"
+    ],
+    "why": "Hanya Lihat Ke Depan adalah judul Indonesia untuk Mae Shika Mukanee.",
+    "source": "https://www.youtube.com/watch?v=1eEngMCVyUE"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Kibouteki Refrain” versi JKT48?",
+    "a": "Refrain Penuh Harapan",
+    "other": [
+      "Musim Panas Sounds Good",
+      "Cara Ceroboh untuk Mencinta",
+      "Karena Kusuka Dirimu"
+    ],
+    "why": "Judul resmi memasangkan Kibouteki Refrain dengan Refrain Penuh Harapan.",
+    "source": "https://www.youtube.com/watch?v=DL7z19KoFAM"
+  },
+  {
+    "q": "“Refrain Penuh Harapan” dikenal dengan judul Jepang apa?",
+    "a": "Kibouteki Refrain",
+    "other": [
+      "Manatsu no Sounds Good",
+      "Darashinai Aishikata",
+      "Kimi No Koto Ga Suki Dakara"
+    ],
+    "why": "Refrain Penuh Harapan adalah judul Indonesia untuk Kibouteki Refrain.",
+    "source": "https://www.youtube.com/watch?v=DL7z19KoFAM"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Manatsu no Sounds Good” versi JKT48?",
+    "a": "Musim Panas Sounds Good",
+    "other": [
+      "Apakah Kau Melihat Mentari Senja",
+      "Selamanya Pressure",
+      "Ponytail dan Shu-Shu"
+    ],
+    "why": "Judul resmi memasangkan Manatsu no Sounds Good dengan Musim Panas Sounds Good.",
+    "source": "https://www.youtube.com/watch?v=4ARoGLlZQmw"
+  },
+  {
+    "q": "“Musim Panas Sounds Good” dikenal dengan judul Jepang apa?",
+    "a": "Manatsu no Sounds Good",
+    "other": [
+      "Yuuhi wo Miteiruka",
+      "Eien Pressure",
+      "Ponytail To Shu-Shu"
+    ],
+    "why": "Musim Panas Sounds Good adalah judul Indonesia untuk Manatsu no Sounds Good.",
+    "source": "https://www.youtube.com/watch?v=4ARoGLlZQmw"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “Yuuhi wo Miteiruka” versi JKT48?",
+    "a": "Apakah Kau Melihat Mentari Senja",
+    "other": [
+      "Pesawat Kertas 365 Hari",
+      "Suka! Suka! Skip!",
+      "Bersama Kamu, Pelangi dan Mentari"
+    ],
+    "why": "Judul resmi memasangkan Yuuhi wo Miteiruka dengan Apakah Kau Melihat Mentari Senja.",
+    "source": "https://www.youtube.com/watch?v=61vxWNDjjgA"
+  },
+  {
+    "q": "“Apakah Kau Melihat Mentari Senja” dikenal dengan judul Jepang apa?",
+    "a": "Yuuhi wo Miteiruka",
+    "other": [
+      "365 Nichi No Kamihikouki",
+      "Suki! Suki! Skip!",
+      "Kimi To Niji To Taiyou To"
+    ],
+    "why": "Apakah Kau Melihat Mentari Senja adalah judul Indonesia untuk Yuuhi wo Miteiruka.",
+    "source": "https://www.youtube.com/watch?v=61vxWNDjjgA"
+  },
+  {
+    "q": "Apa judul Indonesia lagu “365 Nichi No Kamihikouki” versi JKT48?",
+    "a": "Pesawat Kertas 365 Hari",
+    "other": [
+      "Cara Ceroboh untuk Mencinta",
+      "Karena Kusuka Dirimu",
+      "Kereta Kedewasaan"
+    ],
+    "why": "Judul resmi memasangkan 365 Nichi No Kamihikouki dengan Pesawat Kertas 365 Hari.",
+    "source": "https://www.youtube.com/watch?v=GYZpknfi5YQ"
+  },
+  {
+    "q": "“Pesawat Kertas 365 Hari” dikenal dengan judul Jepang apa?",
+    "a": "365 Nichi No Kamihikouki",
+    "other": [
+      "Darashinai Aishikata",
+      "Kimi No Koto Ga Suki Dakara",
+      "Otona Ressha"
+    ],
+    "why": "Pesawat Kertas 365 Hari adalah judul Indonesia untuk 365 Nichi No Kamihikouki.",
+    "source": "https://www.youtube.com/watch?v=GYZpknfi5YQ"
+  },
+  {
+    "q": "Apa judul single original keempat JKT48?",
+    "a": "Ayo Senyumlah",
+    "other": [
+      "Magic Hour",
+      "Rapsodi",
+      "Flying High"
+    ],
+    "why": "Ayo Senyumlah diperkenalkan sebagai single ke-28 dan single original keempat.",
+    "source": "https://www.youtube.com/watch?v=LppUfDP46I4"
+  },
+  {
+    "q": "Lagu mana yang dibawakan JKT48 Team Love dalam MV resminya?",
+    "a": "12 Seconds",
+    "other": [
+      "WAKAKA PEOPLE",
+      "Dekat Namun Jauh",
+      "Bagai Cinta Pertama"
+    ],
+    "why": "Judul MV resmi 12 Seconds mencantumkan JKT48 Team Love.",
+    "source": "https://www.youtube.com/watch?v=9iWB3ZuXOz8"
+  },
+  {
+    "q": "Team apa yang membawakan WAKAKA PEOPLE?",
+    "a": "Team Dream",
+    "other": [
+      "Team Love",
+      "Team Passion",
+      "Team KIII"
+    ],
+    "why": "MV resmi WAKAKA PEOPLE dibawakan JKT48 Team Dream.",
+    "source": "https://www.youtube.com/watch?v=n3EpgnAqlvE"
+  },
+  {
+    "q": "Team apa yang membawakan Dekat Namun Jauh?",
+    "a": "Team Passion",
+    "other": [
+      "Team Love",
+      "Team Dream",
+      "Team T"
+    ],
+    "why": "MV resmi Dekat Namun Jauh dibawakan JKT48 Team Passion.",
+    "source": "https://www.youtube.com/watch?v=QtdsUJxiwNM"
+  },
+  {
+    "q": "Siapa yang membawakan Bagai Cinta Pertama dalam MV resminya?",
+    "a": "JKT48 Trainee",
+    "other": [
+      "JKT48 Team Love",
+      "JKT48 Team Dream",
+      "JKT48 Team Passion"
+    ],
+    "why": "MV resmi Bagai Cinta Pertama mencantumkan JKT48 Trainee.",
+    "source": "https://www.youtube.com/watch?v=pgctulw9RQc"
+  },
+  {
+    "q": "Mana lagu yang MV-nya dibawakan JKT48 Trainee?",
+    "a": "Belalang yang Membangkang",
+    "other": [
+      "Rapsodi",
+      "Magic Hour",
+      "Flying High"
+    ],
+    "why": "MV Belalang yang Membangkang adalah rilisan JKT48 Trainee.",
+    "source": "https://www.youtube.com/watch?v=Ztg79dr34n4"
+  },
+  {
+    "q": "Mana judul single JKT48 yang diawali tanda pagar?",
+    "a": "#KuSangatSuka",
+    "other": [
+      "Raja Hati",
+      "GO AND FIGHT!",
+      "Ayo Senyumlah"
+    ],
+    "why": "Judul resminya memakai tanda pagar: #KuSangatSuka.",
+    "source": "https://www.youtube.com/watch?v=kvhNCk257WY"
+  },
+  {
+    "q": "Apa judul single JKT48 ke-26?",
+    "a": "#KuSangatSuka",
+    "other": [
+      "Sayonara Crawl",
+      "Magic Hour",
+      "Flying High"
+    ],
+    "why": "Pengumuman resmi memperkenalkan #KuSangatSuka sebagai single ke-26.",
+    "source": "https://jkt48.com/news/pengumuman-mengenai-single-ke26-jkt48"
+  },
+  {
+    "q": "Mana judul yang ditampilkan dalam format MV 2024 Version?",
+    "a": "Laptime Masa Remaja",
+    "other": [
+      "Pareo adalah Emerald",
+      "High Tension",
+      "Gingham Check"
+    ],
+    "why": "Judul MV resminya adalah Laptime Masa Remaja — JKT48 2024 Version.",
+    "source": "https://www.youtube.com/watch?v=taE4wnmDHhU"
+  },
+  {
+    "q": "Mana lagu JKT48 yang memiliki MV Story Version dan Dance Version?",
+    "a": "Everyday, Kachuusha",
+    "other": [
+      "Rapsodi",
+      "Magic Hour",
+      "Ayo Senyumlah"
+    ],
+    "why": "Kanal resmi mengunggah dua versi MV Everyday, Kachuusha.",
+    "source": "https://www.youtube.com/watch?v=6J6OuO7UT5k"
+  },
+  {
+    "q": "Mana single yang juga mempunyai versi dangdut resmi JKT48?",
+    "a": "Halloween Night",
+    "other": [
+      "Heavy Rotation",
+      "RIVER",
+      "Flying Get"
+    ],
+    "why": "Kanal JKT48 merilis MV Halloween Night (Dangdut Version).",
+    "source": "https://www.youtube.com/watch?v=p9qxl3Ru1qY"
+  },
+  {
+    "q": "Mana lagu yang dibawakan JKT48 Acoustic?",
+    "a": "Lantang",
+    "other": [
+      "UZA",
+      "Beginner",
+      "WAKAKA PEOPLE"
+    ],
+    "why": "Lantang dirilis dengan nama JKT48 Acoustic.",
+    "source": "https://www.youtube.com/watch?v=-CZdsqQbGXI"
+  },
+  {
+    "q": "Siapa member yang namanya tercantum dalam MV Berdebar?",
+    "a": "Sisca",
+    "other": [
+      "Shani",
+      "Melody",
+      "Gracia"
+    ],
+    "why": "MV resminya bertajuk Berdebar — Sisca JKT48.",
+    "source": "https://www.youtube.com/watch?v=Lwkze-zNsIc"
+  },
+  {
+    "q": "Mana judul lagu solo Sisca yang memiliki MV resmi?",
+    "a": "Seharusnya Kita Tak Bersama",
+    "other": [
+      "Sahabat atau Cinta",
+      "Masa Depan yang Menyilaukan Mata",
+      "Bunga yang ‘Kan Mekar Suatu Saat"
+    ],
+    "why": "MV tersebut dirilis di kanal JKT48 dengan nama Sisca.",
+    "source": "https://www.youtube.com/watch?v=b7ONSdxXcV0"
+  },
+  {
+    "q": "Mana lagu yang dirilis JKT48 bersama Musikal Keluarga Cemara?",
+    "a": "Waktunya Membuktikan",
+    "other": [
+      "Sampai Jumpa Lagi",
+      "Fajar Sang Idola",
+      "Onyx"
+    ],
+    "why": "Judul MV mencantumkan kolaborasi JKT48 X Musikal Keluarga Cemara.",
+    "source": "https://www.youtube.com/watch?v=kDZNdxJ3Las"
+  },
+  {
+    "q": "Mana judul MV JKT48 Virtual?",
+    "a": "Suatu Saat Bertemu",
+    "other": [
+      "Rapsodi",
+      "Ayo Senyumlah",
+      "RIVER"
+    ],
+    "why": "Suatu Saat Bertemu dibawakan JKT48 Virtual.",
+    "source": "https://www.youtube.com/watch?v=eW1P0lOiBM0"
+  },
+  {
+    "q": "Lagu mana yang menjadi official theme song Pemilihan Member Single ke-26?",
+    "a": "Saatnya Kesempatan",
+    "other": [
+      "First Rabbit",
+      "Heavy Rotation",
+      "Raja Hati"
+    ],
+    "why": "Video resmi Saatnya Kesempatan mencantumkan tema Pemilihan Member Single ke-26.",
+    "source": "https://www.youtube.com/watch?v=PYeXC8aMBaw"
+  },
+  {
+    "q": "Apa judul lagu dari tiga pilihan original JKT48 berikut yang paling awal?",
+    "a": "Rapsodi",
+    "other": [
+      "Flying High",
+      "Magic Hour",
+      "Ayo Senyumlah"
+    ],
+    "why": "Rapsodi adalah single original pertama, diikuti Flying High, Magic Hour dan Ayo Senyumlah.",
+    "source": "https://www.youtube.com/watch?v=Xu1wA7CfhQg"
+  },
+  {
+    "q": "Mana judul lagu JKT48 dengan kata bahasa Inggris untuk kelinci?",
+    "a": "First Rabbit",
+    "other": [
+      "Only Today",
+      "Sweet & Bitter",
+      "City Lights"
+    ],
+    "why": "Rabbit berarti kelinci; judul lagu tersebut adalah First Rabbit.",
+    "source": "https://www.youtube.com/watch?v=LgEfTUoiZpE"
+  },
+  {
+    "q": "Mana judul lagu JKT48 yang namanya juga nama batu permata?",
+    "a": "Onyx",
+    "other": [
+      "Dream",
+      "Dahulu",
+      "Wish You"
+    ],
+    "why": "Onyx merupakan nama batu permata sekaligus judul rilisan resmi JKT48.",
+    "source": "https://www.youtube.com/watch?v=RR5ZBJOZRko"
+  },
+  {
+    "q": "Mana judul lagu yang ditulis dengan tiga huruf kapital?",
+    "a": "UZA",
+    "other": [
+      "Rapsodi",
+      "Onyx",
+      "Dream"
+    ],
+    "why": "MV resmi memakai judul UZA.",
+    "source": "https://www.youtube.com/watch?v=HxucHjcVQAQ"
+  },
+  {
+    "q": "Apa judul lagu dengan angka dalam rilisan Team Love?",
+    "a": "12 Seconds",
+    "other": [
+      "7 Seconds",
+      "48 Seconds",
+      "24 Seconds"
+    ],
+    "why": "Judul MV resmi Team Love adalah 12 Seconds.",
+    "source": "https://www.youtube.com/watch?v=9iWB3ZuXOz8"
+  },
+  {
+    "q": "Lagu mana yang MV resminya memakai judul bahasa Inggris If I Were Not an Idol?",
+    "a": "Andai ‘Ku Bukan Idola",
+    "other": [
+      "Fajar Sang Idola",
+      "Bagai Cinta Pertama",
+      "Ayo Senyumlah"
+    ],
+    "why": "Kanal resmi memakai If I Were Not an Idol pada MV dan Andai ‘Ku Bukan Idola pada lyric video.",
+    "source": "https://www.youtube.com/watch?v=CZl-mHmdyaA"
+  }
+]

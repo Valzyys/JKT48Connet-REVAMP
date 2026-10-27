@@ -173,10 +173,13 @@ const pmRoutes = [
   }),
 );
 
+const gamesRoute=createRoute({getParentRoute:parent,path:"/games",component:lazyRouteComponent(()=>import("@/pages/games"),"GamesPage")});
+const activityRoute=createRoute({getParentRoute:parent,path:"/activity",component:lazyRouteComponent(()=>import("@/pages/games"),"GamesPage")});
 const discordRoute=createRoute({getParentRoute:parent,path:"/discord",component:lazyRouteComponent(()=>import("@/pages/discord"),"DiscordPage")});
 const discordGuildRoute=createRoute({getParentRoute:parent,path:"/discord/$guild",component:lazyRouteComponent(()=>import("@/pages/discord"),"DiscordPage")});
 
 const routeTree = rootRoute.addChildren([
+  gamesRoute,activityRoute,
   discordRoute,
   discordGuildRoute,
   ...pmRoutes,

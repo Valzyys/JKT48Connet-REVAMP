@@ -79,7 +79,7 @@ function proxiedFetch(agent: HttpsProxyAgent<string>): typeof fetch {
 function apiPlugin(env: ProxyEnv & PmEnv & DiscordEnv): Plugin {
   let platform: ReturnType<typeof getPlatformProxy<PmEnv>> | undefined;
   const handler: Connect.NextHandleFunction = (req, res, next) => {
-    if (!req.url?.startsWith("/api/")) return next();
+    if (!req.url?.startsWith("/api/") || req.url.startsWith("/api/games/")) return next();
     (async () => {
       const headers = new Headers();
       for (const [k, v] of Object.entries(req.headers))
@@ -133,7 +133,12 @@ export default defineConfig(({ mode }) => {
   // Di balik proxy keluar (kantor/CI), request ke upstream lewat HTTPS_PROXY.
   const outbound = process.env.HTTPS_PROXY || process.env.https_proxy;
 
-  const apiEnv: ProxyEnv & PmEnv = {
+  const apiEnv: ProxyEnv & PmEnv & DiscordEnv = {
+    DISCORD_CLIENT_ID: env.DISCORD_CLIENT_ID,
+    DISCORD_CLIENT_SECRET: env.DISCORD_CLIENT_SECRET,
+    DISCORD_REDIRECT_URI: env.DISCORD_REDIRECT_URI,
+    DISCORD_BOT_API_URL: env.DISCORD_BOT_API_URL,
+    DISCORD_BOT_API_TOKEN: env.DISCORD_BOT_API_TOKEN,
     PM_API_KEY: env.PM_API_KEY,
     MYPG_API_KEY: env.MYPG_API_KEY,
     JKT48CONNECT_API_KEY: env.JKT48CONNECT_API_KEY,
@@ -150,6 +155,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss(), apiPlugin(apiEnv)],
+    // Games need a real Durable Object/WebSocket runtime (run wrangler dev on 8799).
+    server: {proxy: {'/api/games': {target:'http://127.0.0.1:8799',ws:true,changeOrigin:true,configure(proxy){
+      proxy.on('proxyReq',request=>request.setHeader('Origin','http://127.0.0.1:8799'));
+      proxy.on('proxyReqWs',request=>request.setHeader('Origin','http://127.0.0.1:8799'));
+    }}}},
     resolve: {
       alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },

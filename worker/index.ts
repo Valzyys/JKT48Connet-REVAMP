@@ -1,3 +1,6 @@
+import {activityDocument} from "./games/document";
+import {handleGames,type GamesEnv} from "./games/api";
+export {GameRoom} from "./games/room";
 import { handleDiscord, type DiscordEnv } from "./discord";
 import { handleApi, type ProxyEnv } from "./proxy";
 
@@ -8,14 +11,17 @@ import type { PushState } from "./push-do";
 import { handlePm, type PmEnv } from "./pm";
 import { handlePage, handleRobots, handleSitemap, isPage, siteOrigin, type SeoEnv } from "./seo";
 
-interface Env extends ProxyEnv, PmEnv, SeoEnv, DiscordEnv {
+interface Env extends ProxyEnv, PmEnv, SeoEnv, DiscordEnv, GamesEnv {
   ASSETS: Fetcher;
   PUSH?: DurableObjectNamespace<PushState>;
 }
 
 export default {
   async fetch(request, env, ctx) {
-    const { pathname } = new URL(request.url);
+    const activityUrl=new URL(request.url);
+    const { pathname } = activityUrl;
+    if((request.method==="GET"||request.method==="HEAD")&&(pathname==="/activity"||pathname==="/activity/"||pathname==="/"&&activityUrl.searchParams.has("frame_id")))return activityDocument(request,env.ASSETS,env.DISCORD_CLIENT_ID||"1305141693477027891");
+    if (pathname.startsWith("/api/games/")) return handleGames(request,env);
     if (pathname.startsWith("/api/discord/")) return handleDiscord(request, env);
     if (pathname === "/api/pm" || pathname.startsWith("/api/pm/"))
       return handlePm(request, env);
