@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "esbuild";
@@ -196,6 +196,18 @@ test("app session issues a bearer token; data requires it", async () => {
   );
   assert.equal(sr.link, "https://www.showroom-live.com/r/JKT48_Erine");
   assert.deepEqual(idn.streams, [], "IDN lives are never played in-app");
+
+  // /watch memutar stream ini di browser: CSP situs harus mengizinkan host-nya untuk fetch (hls.js) dan <video>.
+  const csp = (await readFile("public/_headers", "utf8")).match(/Content-Security-Policy: (.+)/)[1];
+  const allows = (directive, url) => {
+    const host = new URL(url).host;
+    const sources = csp.split(";").map((d) => d.trim().split(/\s+/)).find(([name]) => name === directive).slice(1);
+    return sources.some((src) => src.startsWith("https://*.") ? host.endsWith(src.slice("https://*".length)) : src === `https://${host}`);
+  };
+  for (const s of sr.streams) {
+    assert.ok(allows("connect-src", s.url), `connect-src allows ${s.url}`);
+    assert.ok(allows("media-src", s.url), `media-src allows ${s.url}`);
+  }
   assert.match(idn.link, /^https:\/\/www\.idn\.app\//);
   assert.equal((await call("/api/app/does_not_exist", { token })).status, 404);
   assert.equal((await call("/api/app/now_live?x=1", { token })).status, 400, "unknown query params are rejected");
