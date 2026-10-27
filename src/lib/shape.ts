@@ -498,7 +498,7 @@ export function shapeVideoComments(raw: Raw): VideoComments {
         replies: num(c.reply_count),
       }))
       .filter((c) => c.id && c.text),
-    cursor: /^[A-Za-z0-9_-]{1,300}$/.test(str(raw?.next_cursor)) ? str(raw.next_cursor) : "",
+    cursor: /^[A-Za-z0-9_.=~-]{1,500}$/.test(str(raw?.next_cursor)) ? str(raw.next_cursor) : "",
     hasMore: raw?.has_more === true,
   };
 }
