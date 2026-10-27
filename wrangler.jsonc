@@ -25,7 +25,10 @@
   },
   "d1_databases": [{ "binding": "PM_DB", "database_name": "jkt48connect-pm", "database_id": "006d982c-707c-45e7-91e4-60801b068299", "migrations_dir": "migrations" }],
   "vars": {
-    "API_UPSTREAM": "https://api.jkt48connect.app"
+    "API_UPSTREAM": "https://api.jkt48connect.app",
+    // Ganti nilainya (lalu deploy) untuk mengosongkan semua poin & blokir penjaga sekaligus (worker/guard.ts).
+    // 2: reset blokir salah pada pengguna APK 2.4.0 yang memanggil endpoint baru sebelum worker ter-deploy.
+    "GUARD_EPOCH": "2"
   },
   // Rate limit /api/* (worker/security.ts). namespace_id bebas, unik per akun.
   "ratelimits": [

@@ -271,3 +271,16 @@ test("member social feeds: one post shape for X / Instagram, safe media, validat
   assert.deepEqual(p.media.map((m) => m.type), ["image", "video"], "pending items are skipped");
   assert.equal(ig.hasMore, false);
 });
+
+test("an app newer than the worker is not blocked: unknown app endpoints/params do not add guard points", async () => {
+  // Penjaga aktif (memori) — tes lain mematikannya lewat GUARD_DISABLED.
+  const guarded = { ...env, GUARD_DISABLED: undefined };
+  const req = (path, token) => handleApi(new Request(`https://app.test${path}`, { headers: { Authorization: `Bearer ${token}`, "cf-connecting-ip": "198.51.100.77" } }), guarded, ctx);
+  const token = await newToken();
+  for (let i = 0; i < 12; i++) {
+    assert.equal((await req("/api/app/future_endpoint", token)).status, 404);
+    assert.equal((await req("/api/app/now_live?future=1", token)).status, 400);
+  }
+  const ok = await req("/api/app/now_live", token);
+  assert.equal(ok.status, 200, "24 unknown requests later the app still works");
+});

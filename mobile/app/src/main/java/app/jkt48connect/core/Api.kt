@@ -100,7 +100,14 @@ object Api {
     private fun decode(status: Int, text: String): Any {
         val body = parse(text)
         if (status >= 400) {
-            val msg = (body as? JSONObject)?.optString("message")?.takeIf { it.isNotEmpty() } ?: "Gagal memuat data ($status)"
+            val obj = body as? JSONObject
+            // Diblokir penjaga anti-iseng situs: jelaskan sampai kapan, bukan sekadar "Akses diblokir".
+            if (obj?.optString("code") == "blocked") {
+                val until = obj.optLong("until").takeIf { it > 0 }?.let { fmtWib(java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.of("Asia/Jakarta")), "HH.mm") }
+                val incident = obj.optString("incident").takeIf { it.isNotEmpty() }?.let { " · ID $it" } ?: ""
+                throw ApiException(status, "Akses dari jaringanmu diblokir sementara oleh situs" + (until?.let { " sampai $it WIB" } ?: "") + ". Coba lagi nanti$incident.")
+            }
+            val msg = obj?.optString("message")?.takeIf { it.isNotEmpty() } ?: "Gagal memuat data ($status)"
             throw ApiException(status, msg)
         }
         return body ?: throw ApiException(status, "Respons tidak valid")

@@ -170,7 +170,7 @@ const ROUTES: Route[] = [
     re: /^\/api\/jkt48_youtube\/([A-Za-z0-9_-]{6,20})\/comments$/,
     ttl: 120,
     swr: 10 * 60_000,
-    query: { cursor: token(/^[A-Za-z0-9_-]{1,300}$/) },
+    query: { cursor: token(/^[A-Za-z0-9_.=~-]{1,500}$/) },
     upstream: ([v], q) => `/api/jkt48_youtube/${v}/comments${qs(q)}`,
     shape: shapeVideoComments,
   },
@@ -564,19 +564,24 @@ async function handleData(c: Call, k: Keys, session: Session): Promise<Response>
  */
 async function loadBody(c: Call, k: Keys, session: Session, pathname: string, replayBase: string): Promise<string | Response> {
   const { url, env, ctx } = c;
+  // Aplikasi (token `a1.` yang sah) bisa lebih baru dari worker: endpoint/parameter yang belum dikenal dijawab
+  // 404/400 biasa tanpa poin curiga, supaya pengguna APK baru tidak terblokir selama worker belum di-deploy.
+  // Browser tetap diberi poin (probing). Jalur aplikasi tetap dibatasi API_LIMITER per token.
+  const reject = (status: number, message: string) =>
+    replayBase.startsWith("/api/app/") ? Promise.resolve(json({ status, message }, status)) : deny(c, "probing", status, message);
   let match: RegExpExecArray | null = null;
   const r = ROUTES.find((x) => (match = x.re.exec(pathname)));
-  if (!r || !match) return deny(c, "probing", 404, "Endpoint tidak tersedia");
+  if (!r || !match) return reject(404, "Endpoint tidak tersedia");
   const m = (match as RegExpExecArray).slice(1);
 
   // Parameter di luar allowlist ditolak, jadi URL acak tidak bisa memaksa cache miss ke upstream.
   const q: Params = {};
   for (const key of url.searchParams.keys()) {
-    if (!r.query?.[key] || url.searchParams.getAll(key).length > 1) return deny(c, "probing", 400, "Parameter tidak valid");
+    if (!r.query?.[key] || url.searchParams.getAll(key).length > 1) return reject(400, "Parameter tidak valid");
   }
   for (const [key, check] of Object.entries(r.query ?? {})) {
     const v = check(url.searchParams.get(key));
-    if (v === null) return deny(c, "probing", 400, "Parameter tidak valid");
+    if (v === null) return reject(400, "Parameter tidak valid");
     q[key] = v;
   }
 
