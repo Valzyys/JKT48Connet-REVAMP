@@ -19,6 +19,34 @@ const { handleApi } = await import(join(scratch, "proxy.mjs"));
 test.after(() => rm(scratch, { recursive: true, force: true }));
 
 const upstreamCalls = [];
+const SR = "https://shard902-cdn.showroom-txlive.com/live/abc_510000";
+// Satu live Showroom (stream diputar langsung) dan satu live IDN (selalu dibuka di idn.app).
+const LIVE = [
+  {
+    name: "Erine",
+    type: "showroom",
+    url_key: "JKT48_Erine",
+    room_id: 510000,
+    started_at: "2026-10-27T14:10:42.000Z",
+    notification_data_id: "sr-510000-1",
+    streaming_url_list: [
+      { label: "low quality", quality: 100, url: `${SR}_low.m3u8` },
+      { label: "original quality", quality: 1000, url: `${SR}_main.m3u8` },
+      { label: "dup", quality: 1000, url: `${SR}_main.m3u8` },
+      { label: "evil", quality: 2000, url: "javascript:alert(1)" },
+      { label: "plain http", quality: 500, url: "http://cdn.test/a.m3u8" },
+    ],
+  },
+  {
+    name: "Aralie",
+    type: "idn",
+    url_key: "jkt48_aralie",
+    slug: "live-aralie",
+    started_at: "2026-10-27T14:00:00.000Z",
+    notification_data_id: "idn-1",
+    streaming_url_list: [{ label: "hd", quality: 720, url: "https://pull.idn.test/aralie.m3u8" }],
+  },
+];
 const MP4 = "https://media.test/live/v.mp4";
 const env = {
   JKT48CONNECT_API_KEY: "test-key",
@@ -27,7 +55,7 @@ const env = {
   UPSTREAM_FETCH: async (input, init = {}) => {
     const url = new URL(String(input));
     upstreamCalls.push({ url: url.href, range: new Headers(init.headers).get("Range") });
-    if (url.pathname === "/api/now_live") return Response.json([]);
+    if (url.pathname === "/api/now_live") return Response.json(LIVE);
     if (url.pathname === "/api/jkt48_youtube/hAHv54gxD60")
       return Response.json({
         id: "hAHv54gxD60",
@@ -160,7 +188,15 @@ test("app session issues a bearer token; data requires it", async () => {
   const live = await call("/api/app/now_live", { token });
   assert.equal(live.status, 200);
   assert.match(live.headers.get("content-type"), /application\/json/);
-  assert.deepEqual(await live.json(), []);
+  const [sr, idn] = await live.json();
+  assert.deepEqual(
+    sr.streams.map((s) => s.url),
+    [`${SR}_main.m3u8`, `${SR}_low.m3u8`],
+    "Showroom: https only, deduplicated, highest quality first",
+  );
+  assert.equal(sr.link, "https://www.showroom-live.com/r/JKT48_Erine");
+  assert.deepEqual(idn.streams, [], "IDN lives are never played in-app");
+  assert.match(idn.link, /^https:\/\/www\.idn\.app\//);
   assert.equal((await call("/api/app/does_not_exist", { token })).status, 404);
   assert.equal((await call("/api/app/now_live?x=1", { token })).status, 400, "unknown query params are rejected");
 });

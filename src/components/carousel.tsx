@@ -2,10 +2,12 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { LiveLink } from "@/components/cards";
 import { PixelCross } from "@/components/logo";
 import { SignalBars } from "@/components/motion";
 import { Skeleton, cx } from "@/components/ui";
 import { fmtDate, fmtTime } from "@/lib/format";
+import type { LiveSession } from "@/lib/jkt48";
 import { gsap } from "@/lib/gsap";
 import { q } from "@/lib/queries";
 
@@ -17,7 +19,8 @@ type Slide = {
   meta: string;
   live?: boolean;
   to?: { id: string };
-  href?: string;
+  /** Slide live: Showroom ke /watch, IDN ke idn.app (lihat LiveLink). */
+  session?: LiveSession;
 };
 
 const DURATION = 6;
@@ -41,7 +44,7 @@ export function HeroCarousel() {
         title: l.fullname || l.name,
         meta: `${l.platform === "idn" ? "IDN" : "Showroom"} · sejak ${fmtTime(l.startedAt)} WIB`,
         live: true,
-        href: l.link,
+        session: l,
       }));
     // Show tanpa banner (desain masih "pending") tetap tampil sebagai panel merah.
     const fromShows: Slide[] = (next.data ?? [])
@@ -155,11 +158,11 @@ export function HeroCarousel() {
               <Link to="/theater/$id" params={s.to} className={cls} draggable={false}>
                 {inner}
               </Link>
-            ) : (
-              <a href={s.href} target="_blank" rel="noopener noreferrer" className={cls} draggable={false}>
+            ) : s.session ? (
+              <LiveLink l={s.session} className={cls} draggable={false}>
                 {inner}
-              </a>
-            )}
+              </LiveLink>
+            ) : null}
           </div>
         );
       })}

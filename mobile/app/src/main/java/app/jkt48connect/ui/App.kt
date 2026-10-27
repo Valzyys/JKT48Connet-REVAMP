@@ -212,7 +212,9 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
                         Pages(nav, Modifier.nestedScroll(scrollWatcher))
                     }
                 }
-                CompositionLocalProvider(LocalBackdrop provides overlay) {
+                // Selama ada video tampil, kaca kepala/menu hanya membiaskan latar ambient (statis), bukan isi halaman:
+                // kalau tidak, setiap frame video memaksa blur & refraksi kaca dihitung ulang dan video tersendat.
+                CompositionLocalProvider(LocalBackdrop provides if (app.jkt48connect.ui.player.PlayerPresence.count > 0) ambient else overlay) {
                     val top = nav.stack.lastOrNull()
                     AnimatedContent(
                         targetState = top == null,
@@ -266,6 +268,7 @@ private fun title(r: Route): String = when (r) {
     is Route.VideoDetail -> r.video.channel.ifEmpty { "Video" }
     is Route.Social -> if (r.memberName.isNotEmpty()) "Postingan ${r.memberName}" else "Sosmed member"
     is Route.Post -> r.post.platformLabel
+    is Route.Watch -> r.live.name.ifEmpty { "Live" }
 }
 
 /** Tab utama (dipertahankan state-nya) + halaman detail yang meluncur dari kanan. */
@@ -312,6 +315,7 @@ private fun Pages(nav: Nav, modifier: Modifier) {
                 is Route.VideoDetail -> app.jkt48connect.ui.screens.VideoDetailScreen(route.video)
                 is Route.Social -> app.jkt48connect.ui.screens.SocialScreen(route.platform, route.member, route.memberName)
                 is Route.Post -> app.jkt48connect.ui.screens.PostDetailScreen(route.post)
+                is Route.Watch -> app.jkt48connect.ui.screens.WatchScreen(route.live)
             }
         }
     }

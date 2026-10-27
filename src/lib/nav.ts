@@ -44,6 +44,8 @@ export const NAV_GROUPS: NavGroup[] = ["Utama", "Arsip", "Info"];
 export const MOBILE_MAIN = ["/", "/live", "/schedule", "/member"];
 
 export function isActive(path: string, to: string) {
+  // Halaman menonton live (/watch/…) termasuk menu Live.
+  if (to === "/live" && path.startsWith("/watch/")) return true;
   return to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`);
 }
 

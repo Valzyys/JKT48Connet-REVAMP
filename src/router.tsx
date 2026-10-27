@@ -33,6 +33,13 @@ const liveRoute = createRoute({
   component: lazyRouteComponent(() => import("@/pages/live"), "LivePage"),
 });
 
+// Menonton live Showroom langsung di situs.
+const watchRoute = createRoute({
+  getParentRoute: parent,
+  path: "/watch/$id",
+  component: lazyRouteComponent(() => import("@/pages/watch"), "WatchPage"),
+});
+
 const theaterRoute = createRoute({
   getParentRoute: parent,
   path: "/theater",
@@ -192,6 +199,7 @@ const routeTree = rootRoute.addChildren([
   ...pmRoutes,
   homeRoute,
   liveRoute,
+  watchRoute,
   theaterRoute,
   theaterDetailRoute,
   scheduleRoute,

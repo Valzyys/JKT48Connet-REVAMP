@@ -46,7 +46,23 @@ type Feedback = { icon: ReactNode; label?: string; key: number };
  * volume (diingat), kecepatan, picture-in-picture, layar penuh, kontrol yang menghilang sendiri,
  * pintasan keyboard (spasi/K, J/L, ←/→, ↑/↓, M, F, 0–9), dan ketuk dua kali kiri/kanan di layar sentuh.
  */
-export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: string; hls?: string; poster?: string; initialRatio?: number }) {
+export function VideoPlayer({
+  src,
+  hls,
+  poster,
+  initialRatio = 16 / 9,
+  live,
+}: {
+  src: string;
+  hls?: string;
+  poster?: string;
+  initialRatio?: number;
+  /**
+   * Siaran langsung (HLS live): tanpa bar seek, lompat, dan kecepatan; ada lencana LIVE (klik = kembali ke
+   * posisi terkini) dan durasi sejak `since`. Bila gagal diputar, tombol mengarah ke `fallback`.
+   */
+  live?: { since?: string; fallback?: { href: string; label: string } };
+}) {
   const wrap = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const bar = useRef<HTMLDivElement>(null);
@@ -57,6 +73,7 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
   const lastTap = useRef<{ t: number; side: "l" | "r" | "c" }>({ t: 0, side: "c" });
   const tapTimer = useRef(0);
   const pointerType = useRef("mouse");
+  const hlsRef = useRef<import("hls.js").default | undefined>(undefined);
 
   const [ratio, setRatio] = useState(initialRatio);
   const [playing, setPlaying] = useState(false);
@@ -78,6 +95,7 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   const v = () => video.current;
+  const isLive = !!live;
 
   // Sumber: playlist HLS (indeks potongan → mulai & seek langsung) bila ada, diputar lewat hls.js (dimuat
   // terpisah; termasuk Safari/iOS lewat MediaSource). Tanpa MediaSource → HLS bawaan browser.
@@ -105,14 +123,30 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
           if (cancelled) return;
           if (!Hls.isSupported()) return native();
           let retried = false;
-          player = new Hls({
-            // Sebelum diputar cukup siapkan beberapa detik awal; setelah main, tampung lebih jauh ke depan.
-            maxBufferLength: 12,
-            maxMaxBufferLength: 90,
-            backBufferLength: 30,
-            startFragPrefetch: true,
-            fragLoadPolicy: { default: { maxTimeToFirstByteMs: 15000, maxLoadTimeMs: 60000, timeoutRetry: { maxNumRetry: 3, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: 4, retryDelayMs: 800, maxRetryDelayMs: 6000 } } },
-          });
+          const fragLoadPolicy = { default: { maxTimeToFirstByteMs: 15000, maxLoadTimeMs: 60000, timeoutRetry: { maxNumRetry: 3, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: 4, retryDelayMs: 800, maxRetryDelayMs: 6000 } } };
+          player = new Hls(
+            isLive
+              ? {
+                  // Live Showroom: playlist hanya 3 potongan × ±1 detik, jadi cadangan di depan sangat tipis.
+                  // Tidak dipercepat untuk mengejar ujung siaran (itu menghabiskan cadangan → tersendat lagi);
+                  // cadangan yang terkumpul setelah tersendat dibiarkan. Baru melompat bila tertinggal > ±40 detik.
+                  liveSyncDurationCount: 3,
+                  liveMaxLatencyDurationCount: 20,
+                  maxLiveSyncPlaybackRate: 1,
+                  maxBufferLength: 30,
+                  backBufferLength: 10,
+                  fragLoadPolicy,
+                }
+              : {
+                  // Sebelum diputar cukup siapkan beberapa detik awal; setelah main, tampung lebih jauh ke depan.
+                  maxBufferLength: 12,
+                  maxMaxBufferLength: 90,
+                  backBufferLength: 30,
+                  startFragPrefetch: true,
+                  fragLoadPolicy,
+                },
+          );
+          hlsRef.current = player;
           player.on(Hls.Events.ERROR, (_e, data) => {
             if (!data.fatal) return;
             if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !retried) {
@@ -123,7 +157,7 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
               player?.recoverMediaError();
             } else fallback();
           });
-          el.addEventListener("play", () => player && (player.config.maxBufferLength = 45), { once: true });
+          if (!isLive) el.addEventListener("play", () => player && (player.config.maxBufferLength = 45), { once: true });
           player.loadSource(hls);
           player.attachMedia(el);
         })
@@ -131,8 +165,9 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
     return () => {
       cancelled = true;
       player?.destroy();
+      hlsRef.current = undefined;
     };
-  }, [src, hls]);
+  }, [src, hls, isLive]);
 
   const flash = useCallback((icon: ReactNode, label?: string) => setFeedback({ icon, label, key: Date.now() }), []);
 
@@ -164,13 +199,23 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
   const seekBy = useCallback(
     (d: number) => {
       const el = v();
-      if (!el) return;
+      if (!el || isLive) return;
       el.currentTime = Math.min(Math.max(0, el.currentTime + d), el.duration || Infinity);
       flash(d < 0 ? <RotateCcw className="h-7 w-7" /> : <RotateCw className="h-7 w-7" />, `${d > 0 ? "+" : ""}${d} detik`);
       wake();
     },
-    [flash, wake],
+    [flash, wake, isLive],
   );
+
+  /** Live: lompat ke posisi terkini siaran (mis. setelah dijeda). */
+  const goLive = useCallback(() => {
+    const el = v();
+    if (!el) return;
+    const edge = hlsRef.current?.liveSyncPosition ?? (el.seekable.length ? el.seekable.end(el.seekable.length - 1) - 3 : NaN);
+    if (Number.isFinite(edge)) el.currentTime = edge;
+    if (el.paused) void el.play().catch(() => {});
+    wake();
+  }, [wake]);
 
   const setVol = useCallback(
     (next: number, show = true) => {
@@ -340,7 +385,7 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
     if (map[k]) {
       e.preventDefault();
       map[k]();
-    } else if (/^[0-9]$/.test(k) && duration) {
+    } else if (/^[0-9]$/.test(k) && duration && !isLive) {
       e.preventDefault();
       el.currentTime = (Number(k) / 10) * duration;
       wake();
@@ -354,7 +399,7 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
     const x = (e.clientX - r.left) / r.width;
     const side = x < 0.35 ? "l" : x > 0.65 ? "r" : "c";
     const now = Date.now();
-    if (now - lastTap.current.t < 300 && side === lastTap.current.side && side !== "c") {
+    if (!isLive && now - lastTap.current.t < 300 && side === lastTap.current.side && side !== "c") {
       clearTimeout(tapTimer.current);
       seekBy(side === "l" ? -SKIP : SKIP);
       lastTap.current = { t: 0, side };
@@ -382,7 +427,7 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
         if (playing) setShown(false);
       }}
       className={cx("group/player relative grid select-none place-items-center overflow-hidden bg-black outline-none focus-visible:ring-2 focus-visible:ring-brand", fullscreen ? "h-full w-full" : "rounded-2xl")}
-      aria-label="Pemutar replay"
+      aria-label={isLive ? "Pemutar siaran langsung" : "Pemutar replay"}
     >
       <video
         ref={video}
@@ -434,7 +479,16 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
       />
 
       {/* Tombol putar besar sebelum mulai / setelah selesai */}
-      {(!started || ended) && !error && (
+      {ended && isLive && !error && (
+        <div className="absolute inset-0 grid place-items-center bg-black/75 p-6 text-center text-white">
+          <div>
+            <p className="font-bold">Siaran sudah selesai.</p>
+            <p className="mt-1 text-[14px] text-white/70">Rekamannya akan muncul di Recent.</p>
+          </div>
+        </div>
+      )}
+
+      {(!started || (ended && !isLive)) && !error && (
         <button
           type="button"
           onClick={toggle}
@@ -459,10 +513,18 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
       {error && (
         <div className="absolute inset-0 grid place-items-center bg-black/80 p-6 text-center text-white">
           <div>
-            <p className="font-bold">Video tidak bisa diputar di browser ini.</p>
-            <a href={src} target="_blank" rel="noopener noreferrer" className="btn mt-3 bg-white text-ink hover:bg-butter">
-              Buka file video
-            </a>
+            <p className="font-bold">{isLive ? "Siaran tidak bisa diputar di sini." : "Video tidak bisa diputar di browser ini."}</p>
+            {isLive ? (
+              live?.fallback && (
+                <a href={live.fallback.href} target="_blank" rel="noopener noreferrer" className="btn mt-3 bg-white text-ink hover:bg-butter">
+                  {live.fallback.label}
+                </a>
+              )
+            ) : (
+              <a href={src} target="_blank" rel="noopener noreferrer" className="btn mt-3 bg-white text-ink hover:bg-butter">
+                Buka file video
+              </a>
+            )}
           </div>
         </div>
       )}
@@ -473,6 +535,7 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
         className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3 pb-2 pt-10 text-white sm:px-4"
         onPointerDown={(e) => e.stopPropagation()}
       >
+        {!isLive && (
         <div
           ref={bar}
           role="slider"
@@ -505,17 +568,22 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
             </span>
           )}
         </div>
+        )}
 
         <div className="mt-0.5 flex items-center gap-0.5">
           <button type="button" onClick={toggle} aria-label={playing ? "Jeda (K)" : "Putar (K)"} className={btn}>
             {playing ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
           </button>
-          <button type="button" onClick={() => seekBy(-SKIP)} aria-label="Mundur 10 detik (J)" className={btn}>
-            <RotateCcw className="h-[18px] w-[18px]" />
-          </button>
-          <button type="button" onClick={() => seekBy(SKIP)} aria-label="Maju 10 detik (L)" className={btn}>
-            <RotateCw className="h-[18px] w-[18px]" />
-          </button>
+          {!isLive && (
+            <>
+              <button type="button" onClick={() => seekBy(-SKIP)} aria-label="Mundur 10 detik (J)" className={btn}>
+                <RotateCcw className="h-[18px] w-[18px]" />
+              </button>
+              <button type="button" onClick={() => seekBy(SKIP)} aria-label="Maju 10 detik (L)" className={btn}>
+                <RotateCw className="h-[18px] w-[18px]" />
+              </button>
+            </>
+          )}
           <div className="group/vol flex items-center">
             <button type="button" onClick={toggleMute} aria-label={muted ? "Bunyikan (M)" : "Bisukan (M)"} className={btn}>
               <VolIcon className="h-[18px] w-[18px]" />
@@ -531,13 +599,22 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
               className="hidden h-1 w-0 cursor-pointer opacity-0 accent-[var(--brand)] transition-[width,opacity] duration-300 group-hover/vol:w-20 group-hover/vol:opacity-100 focus:w-20 focus:opacity-100 sm:block"
             />
           </div>
-          <span className="num ml-2 whitespace-nowrap font-mono text-[12px] text-white/85">
-            {fmt(time)} <span className="text-white/45">/ {fmt(duration)}</span>
-          </span>
+          {isLive ? (
+            <>
+              <button type="button" onClick={goLive} aria-label="Kembali ke siaran terkini" className="ml-2 inline-flex items-center gap-1.5 rounded-full bg-brand px-2.5 py-1 font-mono text-[11px] font-bold tracking-wider text-white">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
+              </button>
+              {live?.since && <LiveClock since={live.since} />}
+            </>
+          ) : (
+            <span className="num ml-2 whitespace-nowrap font-mono text-[12px] text-white/85">
+              {fmt(time)} <span className="text-white/45">/ {fmt(duration)}</span>
+            </span>
+          )}
 
           <span className="flex-1" />
 
-          <div className="relative">
+          <div className={cx("relative", isLive && "hidden")}>
             <button type="button" onClick={() => setSpeedOpen((o) => !o)} aria-label="Kecepatan" aria-expanded={speedOpen} className={cx(btn, "w-auto px-2.5 font-mono text-[12px] font-semibold")}>
               {speed}×
             </button>
@@ -569,4 +646,16 @@ export function VideoPlayer({ src, hls, poster, initialRatio = 16 / 9 }: { src: 
       </div>
     </div>
   );
+}
+
+/** Lama siaran berjalan (mis. "1:02:15"), diperbarui tiap detik. */
+function LiveClock({ since }: { since: string }) {
+  const start = new Date(since).getTime();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  if (!Number.isFinite(start)) return null;
+  return <span className="num ml-2 whitespace-nowrap font-mono text-[12px] text-white/75">{fmt((now - start) / 1000)}</span>;
 }
