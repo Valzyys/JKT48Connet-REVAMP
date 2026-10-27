@@ -28,7 +28,8 @@ fun fmtDate(iso: String, pattern: String = "EEEE, d MMM yyyy"): String =
 
 fun fmtWib(t: ZonedDateTime, pattern: String): String = t.format(DateTimeFormatter.ofPattern(pattern, ID))
 
-fun fmtTime(iso: String): String = parseWib(iso)?.let { "${it.format(DateTimeFormatter.ofPattern("HH.mm", ID))} WIB" } ?: ""
+/** "19.00" (WIB), sama dengan `Fmt.time` di aplikasi iPhone. */
+fun fmtTime(iso: String): String = parseWib(iso)?.format(DateTimeFormatter.ofPattern("HH.mm", ID)) ?: ""
 
 fun fmtDuration(ms: Long): String {
     val m = ms / 60_000
@@ -37,11 +38,12 @@ fun fmtDuration(ms: Long): String {
 
 fun fmtNum(n: Int?): String = n?.let { NumberFormat.getIntegerInstance(ID).format(it) } ?: "–"
 
+/** Sama dengan `Fmt.compact` iOS: 5.836 · 14,7 rb · 1,2 jt. */
 fun fmtCompact(n: Int?): String = when {
     n == null -> "–"
     n >= 1_000_000 -> "%.1f jt".format(ID, n / 1_000_000.0).replace(",0 ", " ")
-    n >= 1_000 -> "%.2f rb".format(ID, n / 1_000.0).replace(",00 ", " ")
-    else -> n.toString()
+    n >= 10_000 -> "%.1f rb".format(ID, n / 1_000.0).replace(",0 ", " ")
+    else -> fmtNum(n)
 }
 
 fun fmtCompact(n: Long?): String = fmtCompact(n?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt())

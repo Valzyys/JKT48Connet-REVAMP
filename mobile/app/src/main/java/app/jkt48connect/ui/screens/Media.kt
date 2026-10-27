@@ -1,5 +1,12 @@
 package app.jkt48connect.ui.screens
 
+import app.jkt48connect.ui.components.glassCard
+import app.jkt48connect.ui.components.GlassSegmented
+import app.jkt48connect.ui.components.EmptyState
+import androidx.compose.material.icons.rounded.SmartDisplay
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.foundation.border
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -121,21 +128,14 @@ fun VideosScreen() {
     PullRefresh(onRefresh = { data.refresh() }) {
         LazyColumn(contentPadding = pagePadding()) {
             item {
-                LiquidTabs(
-                    items = listOf(TabItem("Semua"), TabItem("JKT48"), TabItem("JKT48 TV")),
-                    selectedIndex = seg,
-                    onSelected = { seg = it },
-                    height = 50.dp,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                VGap(16.dp)
+                GlassSegmented(listOf("Semua", "JKT48", "JKT48 TV"), seg, { seg = it }, Modifier.padding(top = 4.dp, bottom = 16.dp), inset = 0.dp)
             }
             when {
                 data.error != null && list == null -> item { ErrorRetry(data.error!!, { data.run(true) }) }
                 list == null -> items(3) { Skeleton(Modifier.padding(bottom = 18.dp).fillMaxWidth().aspectRatio(16f / 11f), 24.dp) }
-                list.isEmpty() -> item { Txt("Belum ada video.", AppText.body(14.sp, c.inkSoft), Modifier.padding(8.dp)) }
+                list.isEmpty() -> item { EmptyState(Icons.Rounded.SmartDisplay, "Belum ada video.", inset = 0.dp) }
                 else -> itemsIndexed(list, key = { _, v -> v.id }) { i, v ->
-                    VideoCard(v, Modifier.padding(bottom = 18.dp).staggerIn(i % 8)) { nav.push(Route.VideoDetail(v)) }
+                    VideoCard(v, Modifier.padding(bottom = 16.dp).staggerIn(i % 8)) { nav.push(Route.VideoDetail(v)) }
                 }
             }
         }
@@ -146,20 +146,19 @@ fun VideosScreen() {
 @Composable
 fun VideoCard(v: Video, modifier: Modifier = Modifier, compact: Boolean = false, onClick: () -> Unit) {
     val c = LocalColors.current
-    Column(modifier.pressable(onClick)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(if (compact) 18.dp else 22.dp))) {
+    // Sama dengan VideoCard iOS: kartu kaca berisi sampul (tombol putar kaca merah), judul, kanal · penonton · waktu.
+    Column(modifier.pressable(onClick).glassCard(26.dp).padding(if (compact) 8.dp else 10.dp)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(20.dp))) {
             NetImage(v.thumbnail, Modifier.fillMaxSize(), alignment = Alignment.Center)
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.45f))))
-            PlayBadge(Modifier.align(Alignment.Center), if (compact) 40.dp else 54.dp)
-            Box(Modifier.align(Alignment.TopStart).padding(10.dp)) { Pill(v.channel.ifEmpty { "JKT48" }, Color.Black.copy(alpha = 0.55f), Color.White) }
+            PlayBadge(Modifier.align(Alignment.Center), if (compact) 42.dp else 54.dp)
         }
         VGap(10.dp)
-        Txt(v.title, AppText.body(if (compact) 14.sp else 16.sp, c.ink, 800), Modifier.padding(horizontal = 4.dp), maxLines = 2)
-        VGap(3.dp)
+        Txt(v.title, AppText.body(if (compact) 14.sp else 16.sp, c.ink, 700), Modifier.padding(horizontal = 4.dp), maxLines = 2)
+        VGap(4.dp)
         Txt(
-            listOfNotNull(v.views?.let { "${fmtCompact(it)} x ditonton" }, timeAgo(v.date).ifEmpty { null }).joinToString(" · "),
-            AppText.body(12.5.sp, c.inkSoft),
-            Modifier.padding(horizontal = 4.dp),
+            listOfNotNull(v.channel.ifEmpty { null }, v.views?.let { "${fmtCompact(it)} x ditonton" }, timeAgo(v.date).ifEmpty { null }).joinToString(" · "),
+            AppText.body(12.sp, c.inkSoft),
+            Modifier.padding(horizontal = 4.dp, vertical = 0.dp).padding(bottom = 4.dp),
             maxLines = 1,
         )
     }
@@ -167,8 +166,12 @@ fun VideoCard(v: Video, modifier: Modifier = Modifier, compact: Boolean = false,
 
 @Composable
 private fun PlayBadge(modifier: Modifier, size: Dp) {
-    Box(modifier.size(size).background(Color.Black.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) {
-        Image(Icons.Rounded.PlayArrow, "Putar", Modifier.size(size * 0.58f), colorFilter = ColorFilter.tint(Color.White))
+    // Lingkaran kaca bertint merah seperti `glass(in: Circle(), tint: brand)` di iOS.
+    Box(
+        modifier.size(size).background(Color(0xFFE1243A).copy(alpha = 0.72f), CircleShape).border(0.7.dp, Color.White.copy(alpha = 0.45f), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(Icons.Rounded.PlayArrow, "Putar", Modifier.size(size * 0.5f), colorFilter = ColorFilter.tint(Color.White))
     }
 }
 
@@ -336,26 +339,13 @@ fun SocialScreen(platform: String, member: String, memberName: String) {
     PullRefresh(onRefresh = { feed.refresh() }) {
         LazyColumn(state = state, contentPadding = pagePadding()) {
             item {
-                LiquidTabs(
-                    items = PLATFORMS.map { TabItem(it.second) },
-                    selectedIndex = seg,
-                    onSelected = { seg = it },
-                    height = 50.dp,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                VGap(10.dp)
-                Txt(
-                    if (member.isEmpty()) "Arsip posting publik member. Diperbarui berkala, bukan seketika."
-                    else "Posting publik ${memberName.ifEmpty { member }} di ${PLATFORMS[seg].second}.",
-                    AppText.body(12.5.sp, c.inkSoft),
-                    Modifier.padding(horizontal = 6.dp),
-                )
-                VGap(14.dp)
+                GlassSegmented(PLATFORMS.map { it.second }, seg, { seg = it }, Modifier.padding(top = 4.dp, bottom = 10.dp), inset = 0.dp)
+                VGap(2.dp)
             }
             when {
                 feed.error != null && feed.items.isEmpty() -> item { ErrorRetry(feed.error!!, { feed.more() }) }
                 !feed.loaded && feed.items.isEmpty() -> items(3) { Skeleton(Modifier.padding(bottom = 14.dp).fillMaxWidth().height(260.dp), 24.dp) }
-                feed.items.isEmpty() -> item { Txt("Belum ada posting yang terarsip.", AppText.body(14.sp, c.inkSoft), Modifier.padding(8.dp)) }
+                feed.items.isEmpty() -> item { EmptyState(Icons.Rounded.Forum, "Belum ada posting.", inset = 0.dp) }
                 else -> itemsIndexed(feed.items, key = { i, p -> "${p.platform}${p.id}$i" }) { i, p ->
                     PostCard(p, photos[p.memberId].orEmpty(), Modifier.padding(bottom = 14.dp).staggerIn(i % 8), onDownload = { download(downloadItems(p)) }) { nav.push(Route.Post(p)) }
                 }
@@ -393,7 +383,7 @@ private fun Metric(icon: ImageVector, value: Long?) {
 @Composable
 fun PostCard(p: SocialPost, photo: String, modifier: Modifier = Modifier, onDownload: (() -> Unit)? = null, onClick: () -> Unit) {
     val c = LocalColors.current
-    Column(modifier.fillMaxWidth().pressable(onClick, 0.985f).appCard(24.dp).padding(14.dp)) {
+    Column(modifier.fillMaxWidth().pressable(onClick, 0.985f).glassCard(24.dp).padding(14.dp)) {
         PostHeader(p, photo)
         if (p.text.isNotEmpty()) {
             VGap(10.dp)
@@ -611,39 +601,4 @@ fun rememberDownloader(): (List<Downloads.Item>) -> Unit {
 private object ContextCompatCheck {
     fun denied(context: android.content.Context, perm: String) =
         context.checkSelfPermission(perm) != android.content.pm.PackageManager.PERMISSION_GRANTED
-}
-
-/** Pratinjau posting terbaru (beranda): baris kartu kecil yang bisa digeser. */
-@Composable
-fun MiniPost(p: SocialPost, photo: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val c = LocalColors.current
-    val thumb = p.media.firstOrNull()?.let { it.thumb.ifEmpty { it.url } }.orEmpty()
-    Column(modifier.width(220.dp).height(260.dp).pressable(onClick).appCard(22.dp)) {
-        Box(Modifier.fillMaxWidth().height(if (thumb.isEmpty()) 0.dp else 130.dp)) {
-            if (thumb.isNotEmpty()) {
-                NetImage(thumb, Modifier.fillMaxSize(), alignment = Alignment.Center)
-                Box(Modifier.fillMaxSize().background(PhotoScrim))
-                if (p.media.first().isVideo) PlayBadge(Modifier.align(Alignment.Center), 38.dp)
-            }
-        }
-        Column(Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                NetImage(p.memberImg.ifEmpty { photo }, Modifier.size(26.dp).clip(CircleShape), fallback = p.memberName)
-                Spacer(Modifier.width(8.dp))
-                Txt(p.memberName.substringBefore(' '), AppText.body(13.sp, c.ink, 800), Modifier.weight(1f), maxLines = 1)
-                PlatformBadge(p.platform, 16.dp)
-            }
-            VGap(8.dp)
-            Txt(p.text.ifEmpty { "(tanpa teks)" }, AppText.body(13.sp, c.ink, 500, 1.4f), maxLines = if (thumb.isEmpty()) 7 else 3)
-            Spacer(Modifier.weight(1f))
-            Txt(timeAgo(p.date), AppText.body(11.5.sp, c.inkSoft, 600), maxLines = 1)
-        }
-    }
-}
-
-/** Gabungan posting terbaru dari ketiga platform (untuk beranda), terbaru dahulu. */
-suspend fun latestPosts(f: Fetch): List<SocialPost> = coroutineScope {
-    val parts: List<List<SocialPost>?> = PLATFORMS.map { (id, _) -> async { runCatching { Api.social(id, limit = 6, f = f).items }.getOrNull() } }.awaitAll()
-    if (parts.all { it == null }) throw ApiException(0, "Belum ada data")
-    parts.filterNotNull().flatten().sortedByDescending { it.date }.take(10)
 }

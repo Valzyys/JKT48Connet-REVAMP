@@ -15,6 +15,10 @@ import app.jkt48connect.core.Push
 import app.jkt48connect.ui.screens.AboutScreen
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
@@ -169,7 +173,8 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
         }
         val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        val insets = PaddingValues(top = status + 80.dp, bottom = navBar + 104.dp)
+        // Bilah navigasi ala iOS setinggi 52dp: isi mulai tepat di bawahnya (judul besar ada di dalam isi).
+        val insets = PaddingValues(top = status + 52.dp, bottom = navBar + 100.dp)
         BackHandler(enabled = nav.menuOpen || nav.stack.isNotEmpty() || nav.tab != 0) {
             if (!nav.pop()) nav.tab = 0
         }
@@ -192,16 +197,11 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
         }
         val compactPx = with(LocalDensity.current) { 24.dp.toPx() }
 
-        var liveCount by remember { mutableStateOf<Int?>(null) }
         LaunchedEffect(Unit) {
             // Hangatkan cache tab lain (recent & arsip theater lambat di upstream) selagi beranda tampil.
             listOf<suspend () -> Unit>(
                 { Api.recent(1) }, { Api.theater(1) }, { Api.nextSchedule() }, { Api.members() }, { Api.news(1) }, { Api.birthdays() },
             ).forEach { launch { runCatching { it() } } }
-            while (true) {
-                runCatching { liveCount = Api.live().size }
-                delay(60_000)
-            }
         }
 
         CompositionLocalProvider(LocalNav provides nav, LocalInsets provides insets) {
@@ -216,6 +216,8 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
                 // kalau tidak, setiap frame video memaksa blur & refraksi kaca dihitung ulang dan video tersendat.
                 CompositionLocalProvider(LocalBackdrop provides if (app.jkt48connect.ui.player.PlayerPresence.count > 0) ambient else overlay) {
                     val top = nav.stack.lastOrNull()
+                    val scrolled = if (top == null) (offsets[nav.tab] ?: 0f) > compactPx else true
+                    if (top !is Route.Shots && top !is Route.Member) TopScrim(status + 60.dp, if (top == null) scrolled else true)
                     AnimatedContent(
                         targetState = top == null,
                         transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) },
@@ -223,30 +225,31 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
                     ) { onTabs ->
                         Box(Modifier.fillMaxSize()) {
                             if (onTabs) {
-                                AppHeader(
-                                    compact = (offsets[nav.tab] ?: 0f) > compactPx,
-                                    subtitle = headerSubtitle(nav.tab, liveCount),
-                                    liveCount = liveCount,
-                                    modifier = Modifier.align(Alignment.TopCenter).padding(top = status + 6.dp),
+                                NavBar(
+                                    title = TAB_TITLES[nav.tab],
+                                    showTitle = (offsets[nav.tab] ?: 0f) > compactPx * 2,
+                                    back = false,
+                                    modifier = Modifier.align(Alignment.TopCenter).padding(top = status),
                                 )
                                 LiquidTabs(
                                     items = TABS,
                                     selectedIndex = nav.tab,
                                     onSelected = { nav.tab = it },
+                                    height = 62.dp,
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(start = 14.dp, end = 14.dp, bottom = navBar + 16.dp)
+                                        .padding(start = 16.dp, end = 16.dp, bottom = navBar + 12.dp)
                                         .widthIn(max = 520.dp)
                                         .fillMaxWidth(),
                                 )
                             } else {
                                 (nav.stack.lastOrNull())?.let { r ->
-                                    if (r !is Route.Shots) DetailHeader(title(r), Modifier.align(Alignment.TopCenter).padding(top = status + 6.dp))
+                                    if (r !is Route.Shots) NavBar(title(r), showTitle = true, back = true, modifier = Modifier.align(Alignment.TopCenter).padding(top = status))
                                 }
                             }
                         }
                     }
-                    MenuSheet(nav)
+                    MenuPopover(nav, status)
                     UpdateDialog()
                 }
                 if (showIntro) Intro { showIntro = false }
@@ -264,9 +267,9 @@ private fun title(r: Route): String = when (r) {
     is Route.Shots -> ""
     Route.About -> "Tentang"
     Route.Donate -> "Donasi"
-    Route.Videos -> "Video YouTube"
+    Route.Videos -> "Video"
     is Route.VideoDetail -> r.video.channel.ifEmpty { "Video" }
-    is Route.Social -> if (r.memberName.isNotEmpty()) "Postingan ${r.memberName}" else "Sosmed member"
+    is Route.Social -> if (r.memberName.isNotEmpty()) "Sosmed ${r.memberName}" else "Sosmed"
     is Route.Post -> r.post.platformLabel
     is Route.Watch -> r.live.name.ifEmpty { "Live" }
 }
@@ -321,235 +324,99 @@ private fun Pages(nav: Nav, modifier: Modifier) {
     }
 }
 
-fun headerSubtitle(tab: Int, liveCount: Int?): String = when (tab) {
-    0 -> "Beranda · ${fmtWib(nowWib(), "EEE, d MMM")}"
-    1 -> if ((liveCount ?: 0) > 0) "$liveCount member sedang live" else "Belum ada yang live"
-    2 -> "Jadwal theater & event"
-    3 -> "Rekap live terbaru"
-    else -> "Direktori member"
-}
+
+private val TAB_TITLES = listOf("JKT48Connect", "Live", "Jadwal", "Recent", "Member")
 
 /**
- * Kepala atas ala iOS 26: tiga lensa kaca terpisah yang bisa ditekan & ditarik —
- * kapsul merek, pil status live, dan tombol menu. Mengecil saat isi digulir.
+ * Bilah navigasi seperti aplikasi iPhone (iOS 26): tombol kaca bulat di kiri (kembali, hanya di halaman detail),
+ * judul di tengah (halaman detail, atau tab setelah judul besarnya tergulir), dan tombol kaca "•••" merah di kanan
+ * yang membuka menu.
  */
 @Composable
-private fun AppHeader(compact: Boolean, subtitle: String, liveCount: Int?, modifier: Modifier) {
+private fun NavBar(title: String, showTitle: Boolean, back: Boolean, modifier: Modifier) {
     val c = LocalColors.current
     val nav = LocalNav.current
-    val h by animateDpAsState(if (compact) 46.dp else 56.dp, spring(0.8f, 400f), label = "h")
-    val live = (liveCount ?: 0) > 0
-    Row(modifier.padding(horizontal = 14.dp).widthIn(max = 520.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        LiquidButton(
-            onClick = { nav.tab = 0 },
-            modifier = Modifier.weight(1f).height(h),
-            contentPadding = PaddingValues(start = 10.dp, end = 14.dp),
-            horizontalArrangement = Arrangement.Start,
-        ) {
-            Box(Modifier.size(h - 22.dp).background(c.brandGradient, RoundedRectangle(10.dp)), contentAlignment = Alignment.Center) {
-                PixelLogo(h * 0.36f, color = Color.White)
-            }
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Row {
-                    Txt("JKT48", AppText.display(if (compact) 19.sp else 21.sp, c.ink))
-                    Txt("CONNECT", AppText.display(if (compact) 19.sp else 21.sp, c.brand))
-                }
-                AnimatedVisibility(!compact) {
-                    AnimatedContent(subtitle, transitionSpec = {
-                        (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut())
-                    }, label = "sub") { s ->
-                        Txt(s.uppercase(), AppText.micro(c.inkSoft, 9.sp), Modifier.padding(top = 3.dp), maxLines = 1)
-                    }
-                }
-            }
+    Box(modifier.padding(horizontal = 16.dp).widthIn(max = 560.dp).fillMaxWidth().height(52.dp)) {
+        if (back) {
+            LiquidIconButton(
+                Icons.AutoMirrored.Rounded.ArrowBackIos, { nav.pop() }, Modifier.align(Alignment.CenterStart).padding(top = 4.dp),
+                size = 44.dp, iconSize = 18.dp, iconColor = c.ink, contentDescription = "Kembali",
+            )
         }
-        LiquidButton(
-            onClick = { nav.tab = 1 },
-            modifier = Modifier.height(h),
-            tint = if (live) Color(0xFFE1243A) else Color.Unspecified,
-            contentPadding = PaddingValues(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        AnimatedVisibility(
+            showTitle && title.isNotEmpty(),
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = 60.dp, vertical = 0.dp).padding(top = 4.dp),
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(140)),
         ) {
-            SignalBars(color = if (live) Color.White else c.inkSoft, height = 13.dp, active = live)
-            Column {
-                CountUp(liveCount, AppText.display(if (compact) 18.sp else 20.sp, if (live) Color.White else c.ink))
-                if (!compact) Txt("LIVE", AppText.micro(if (live) Color.White.copy(alpha = 0.75f) else c.inkSoft, 8.5.sp))
-            }
+            Txt(title, AppText.body(17.sp, c.ink, 700), maxLines = 1)
         }
-        LiquidIconButton(Icons.Rounded.GridView, { nav.menuOpen = true }, size = h, iconSize = if (compact) 19.dp else 21.dp, contentDescription = "Menu")
+        LiquidIconButton(
+            Icons.Rounded.MoreHoriz, { nav.menuOpen = true }, Modifier.align(Alignment.CenterEnd).padding(top = 4.dp),
+            size = 44.dp, iconSize = 24.dp, iconColor = c.brand, contentDescription = "Menu",
+        )
     }
 }
 
-/** Kepala halaman detail: tombol kembali bulat + kapsul judul. */
+/** Tepi atas yang memudar (scroll edge effect iOS 26) supaya isi yang tergulir tidak bertabrakan dengan bilah. */
 @Composable
-private fun DetailHeader(title: String, modifier: Modifier) {
+private fun TopScrim(height: androidx.compose.ui.unit.Dp, visible: Boolean) {
     val c = LocalColors.current
-    val nav = LocalNav.current
-    Row(modifier.padding(horizontal = 14.dp).widthIn(max = 520.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        LiquidIconButton(Icons.AutoMirrored.Rounded.ArrowBack, { nav.pop() }, size = 52.dp, contentDescription = "Kembali")
-        Box(
-            Modifier.weight(1f).height(52.dp).glass(LocalBackdrop.current, Capsule(), glassFill()).padding(horizontal = 18.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Txt(title, AppText.body(15.5.sp, c.ink, 800), maxLines = 1)
-        }
-    }
+    val a by animateFloatAsState(if (visible) 1f else 0f, tween(200), label = "scrim")
+    Box(
+        Modifier.fillMaxWidth().height(height).graphicsLayer { alpha = a }
+            .background(Brush.verticalGradient(0f to c.bg.copy(alpha = 0.92f), 0.6f to c.bg.copy(alpha = 0.7f), 1f to c.bg.copy(alpha = 0f))),
+    )
 }
 
 /**
- * Lembar menu kaca (kaca di atas kaca lewat `exportedBackdrop`): pintasan Ulang tahun & Berita
- * sebagai tombol kaca, dan pilihan tema dengan pil kaca yang bisa diseret. Tarik ke bawah untuk menutup.
+ * Menu "•••" seperti `Menu` SwiftUI: panel kaca kecil yang mekar dari pojok kanan atas, berisi halaman yang tidak
+ * ada di tab. Ketuk di luar panel untuk menutup.
  */
 @Composable
-private fun MenuSheet(nav: Nav) {
+private fun MenuPopover(nav: Nav, status: androidx.compose.ui.unit.Dp) {
     val c = LocalColors.current
     val backdrop = LocalBackdrop.current
-    val scope = rememberCoroutineScope()
-    val dragY = remember { Animatable(0f) }
-    LaunchedEffect(nav.menuOpen) { if (nav.menuOpen) dragY.snapTo(0f) }
-    AnimatedVisibility(nav.menuOpen, enter = fadeIn(tween(200)), exit = fadeOut(tween(200))) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (c.dark) 0.45f else 0.25f)).clickable(interactionSource = null, indication = null) { nav.menuOpen = false })
+    AnimatedVisibility(nav.menuOpen, enter = fadeIn(tween(160)), exit = fadeOut(tween(160))) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (c.dark) 0.25f else 0.08f)).clickable(interactionSource = null, indication = null) { nav.menuOpen = false })
     }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+    Box(Modifier.fillMaxSize().padding(top = status + 54.dp, end = 12.dp), contentAlignment = Alignment.TopEnd) {
         AnimatedVisibility(
             nav.menuOpen,
-            enter = slideInVertically(spring(0.75f, 380f)) { it } + scaleIn(spring(0.7f, 380f), initialScale = 0.92f),
-            exit = slideOutVertically(tween(220)) { it } + scaleOut(tween(220), targetScale = 0.95f),
+            enter = scaleIn(spring(0.72f, 420f), initialScale = 0.3f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)) + fadeIn(tween(120)),
+            exit = scaleOut(tween(160), targetScale = 0.6f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)) + fadeOut(tween(140)),
         ) {
-            val sheetBackdrop = rememberLayerBackdrop()
-            val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             Column(
                 Modifier
-                    .padding(start = 10.dp, end = 10.dp, bottom = navBar + 10.dp)
-                    .widthIn(max = 560.dp)
-                    .fillMaxWidth()
-                    .graphicsLayer { translationY = dragY.value }
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures(
-                            onDragEnd = {
-                                scope.launch {
-                                    if (dragY.value > 140f) nav.menuOpen = false else dragY.animateTo(0f, spring(0.6f, 400f))
-                                }
-                            },
-                        ) { _, amount -> scope.launch { dragY.snapTo((dragY.value + amount).coerceAtLeast(0f)) } }
-                    }
-                    .glass(backdrop, RoundedRectangle(40.dp), glassFill(), blur = 8.dp, lensHeight = 24.dp, lensAmount = 48.dp, depth = true, exportedBackdrop = sheetBackdrop)
+                    .width(260.dp)
+                    .glass(backdrop, RoundedRectangle(26.dp), if (c.dark) Color(0xFF1C1C1E).copy(alpha = 0.72f) else Color.White.copy(alpha = 0.72f), blur = 6.dp, lensHeight = 18.dp, lensAmount = 28.dp)
                     .clickable(interactionSource = null, indication = null) {}
-                    .padding(20.dp),
+                    .padding(vertical = 6.dp),
             ) {
-                Box(Modifier.align(Alignment.CenterHorizontally).size(40.dp, 5.dp).background(c.inkSoft.copy(alpha = 0.4f), RoundedCornerShape(3.dp)))
-                VGap(14.dp)
-                Micro("Menu", color = c.brand, dot = true)
-                VGap(6.dp)
-                Txt("JELAJAHI", AppText.display(30.sp, c.ink))
-                VGap(14.dp)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MenuTile(Icons.Rounded.Cake, "Ulang tahun", "Member yang segera berulang tahun", Modifier.weight(1f), sheetBackdrop) {
-                        nav.menuOpen = false
-                        nav.push(Route.Birthday)
-                    }
-                    MenuTile(Icons.Rounded.Newspaper, "Berita", "Kabar terbaru dari jkt48.com", Modifier.weight(1f), sheetBackdrop) {
-                        nav.menuOpen = false
-                        nav.push(Route.News)
-                    }
+                fun go(r: Route) {
+                    nav.menuOpen = false
+                    nav.push(r)
                 }
-                VGap(10.dp)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MenuTile(Icons.Rounded.SmartDisplay, "Video", "YouTube JKT48 & JKT48 TV, putar langsung", Modifier.weight(1f), sheetBackdrop) {
-                        nav.menuOpen = false
-                        nav.push(Route.Videos)
-                    }
-                    MenuTile(Icons.Rounded.Forum, "Sosmed", "Posting member di X, TikTok, Instagram", Modifier.weight(1f), sheetBackdrop) {
-                        nav.menuOpen = false
-                        nav.push(Route.Social())
-                    }
-                }
-                VGap(10.dp)
-                LiquidButton(
-                    onClick = {
-                        nav.menuOpen = false
-                        nav.push(Route.About)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    backdrop = sheetBackdrop,
-                    shape = RoundedRectangle(24.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.Start,
-                ) {
-                    Box(Modifier.size(38.dp).background(c.brandGradient, RoundedRectangle(13.dp)), contentAlignment = Alignment.Center) {
-                        androidx.compose.foundation.Image(Icons.Rounded.Info, null, Modifier.size(20.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White))
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Txt("Tentang aplikasi", AppText.body(15.sp, c.ink, 800))
-                        Txt("Pembuat, bot X & Discord, notifikasi, tema", AppText.body(12.sp, c.inkSoft), maxLines = 1)
-                    }
-                    androidx.compose.foundation.Image(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.inkSoft))
-                }
-                VGap(10.dp)
-                // Donasi: kaca bertint merah supaya menonjol di lembar menu.
-                LiquidButton(
-                    onClick = {
-                        nav.menuOpen = false
-                        nav.push(Route.Donate)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(60.dp),
-                    backdrop = sheetBackdrop,
-                    shape = RoundedRectangle(24.dp),
-                    tint = c.brand,
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.Start,
-                ) {
-                    androidx.compose.foundation.Image(Icons.Rounded.Favorite, null, Modifier.size(22.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Txt("Dukung JKT48Connect", AppText.body(15.sp, Color.White, 800))
-                        Txt("Donasi via QRIS · semua e-wallet", AppText.body(12.sp, Color.White.copy(alpha = 0.8f)), maxLines = 1)
-                    }
-                    androidx.compose.foundation.Image(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White))
-                }
-                VGap(22.dp)
-                Micro("Tema · tarik pilnya", color = c.brand, dot = true)
-                VGap(10.dp)
-                LiquidTabs(
-                    items = listOf(TabItem("Sistem"), TabItem("Putih"), TabItem("Gelap")),
-                    selectedIndex = ThemeController.mode.ordinal,
-                    onSelected = { ThemeController.set(ThemeMode.entries[it]) },
-                    height = 52.dp,
-                    backdrop = sheetBackdrop,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                MenuRow("Video YouTube", Icons.Rounded.SmartDisplay) { go(Route.Videos) }
+                MenuRow("Sosmed member", Icons.Rounded.Forum) { go(Route.Social()) }
+                MenuRow("Berita", Icons.Rounded.Newspaper) { go(Route.News) }
+                MenuRow("Ulang tahun", Icons.Rounded.Cake) { go(Route.Birthday) }
+                Box(Modifier.padding(vertical = 5.dp).fillMaxWidth().height(6.dp).background(c.ink.copy(alpha = 0.06f)))
+                MenuRow("Dukung (donasi)", Icons.Rounded.Favorite, c.brand) { go(Route.Donate) }
+                MenuRow("Tentang aplikasi", Icons.Rounded.Info) { go(Route.About) }
             }
         }
     }
 }
 
 @Composable
-private fun MenuTile(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    hint: String,
-    modifier: Modifier,
-    backdrop: com.kyant.backdrop.Backdrop,
-    onClick: () -> Unit,
-) {
-    val c = LocalColors.current
-    LiquidButton(
-        onClick = onClick,
-        modifier = modifier,
-        backdrop = backdrop,
-        shape = RoundedRectangle(24.dp),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.Start,
+private fun MenuRow(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color = LocalColors.current.ink, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
-            Box(Modifier.size(42.dp).background(c.brandGradient, RoundedRectangle(14.dp)), contentAlignment = Alignment.Center) {
-                androidx.compose.foundation.Image(icon, null, Modifier.size(21.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White))
-            }
-            VGap(14.dp)
-            Txt(label, AppText.body(15.sp, c.ink, 800))
-            Txt(hint, AppText.body(12.sp, c.inkSoft), maxLines = 2)
-        }
+        androidx.compose.foundation.Image(icon, null, Modifier.size(20.dp), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(color))
+        Spacer(Modifier.width(14.dp))
+        Txt(label, AppText.body(16.sp, color, 500), maxLines = 1)
     }
 }
