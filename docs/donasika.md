@@ -2,7 +2,7 @@
 
 Public page: `/donasika`. The new campaign ledger uses `donasika_campaigns` and
 `donasika_payments` in the existing `PM_DB` D1 binding. App donations and PM
-purchases are not included. Payment uses the existing private `MYPG_API_KEY`.
+purchases are not included. New payments use the saved merchant QRIS on `pg.jkt48connect.app`, authenticated with the private `DONASIKA_PG_KEY` Worker secret. `MYPG_API_KEY` remains only for reconciling old invoices and the separate app/PM payment flows.
 
 ## Activation and closing
 
@@ -35,8 +35,14 @@ cancellation are still reconciled honestly, not silently discarded.
   before any gateway deductions, not as an audited net payout.
 - One active invoice per browser/campaign, idempotency keys, origin checks,
   same-site HttpOnly cookies and IP/session rate limits protect creation.
-- Ambiguous create failures use `REVIEW` and do not auto-create replacement
-  invoices. These require owner investigation using the stored reference ID.
+- Own-gateway creation uses the donation ID as an idempotent reference. Ambiguous
+  failures enter `REVIEW`; browser/cron safely recover the same gateway invoice
+  without creating a second transaction. After closing, recovery only looks up
+  existing references and never opens new invoices.
+- `0005_donasika_gateway.sql` labels legacy failed creates without returned
+  transaction IDs as `REVIEW_LEGACY`. Audit data remains intact, while the donor
+  may create a new invoice through the replacement gateway. Previously returned
+  legacy QRIS invoices retain their original provider for status checks.
 
 ## Public identity and recipient policy
 

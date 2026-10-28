@@ -12,7 +12,7 @@ const DD = 'https://digital.dompetdhuafa.org/donasi/karhutla';
 async function api<T>(path = '', options: RequestInit = {}): Promise<T> {
   const response = await fetch('/api/donasika' + path, { ...options, credentials: 'same-origin', cache: 'no-store', headers: { 'content-type': 'application/json', ...options.headers } });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.message || 'Belum dapat tersambung. Coba kembali.');
+  if (!response.ok) throw Object.assign(new Error(data.message || 'Belum dapat tersambung. Coba kembali.'), { code: data.code });
   return data as T;
 }
 
@@ -47,7 +47,7 @@ export function DonasikaPage() {
   }, []);
 
   useEffect(() => {
-    if (!invoice || !['PENDING', 'CREATING'].includes(invoice.status)) return;
+    if (!invoice || !['PENDING', 'CREATING', 'REVIEW'].includes(invoice.status)) return;
     let stopped = false, timer: number;
     const check = async () => {
       try {
@@ -55,7 +55,7 @@ export function DonasikaPage() {
         if (stopped) return;
         setInvoice(next); setError('');
         if (next.status === 'SUCCESS') void refresh();
-        if (['PENDING', 'CREATING'].includes(next.status)) timer = window.setTimeout(check, 15000);
+        if (['PENDING', 'CREATING', 'REVIEW'].includes(next.status)) timer = window.setTimeout(check, 15000);
       } catch (e) { if (!stopped) { setError((e as Error).message); timer = window.setTimeout(check, 25000); } }
     };
     timer = window.setTimeout(check, 15000);
@@ -80,7 +80,7 @@ export function DonasikaPage() {
       const next = await api<Invoice>('/payments', { method: 'POST', body: JSON.stringify({ amount: Number(amount), name, anonymous, message, request_key: requestKey.current }) });
       setInvoice(next);
       try { localStorage.setItem('donasika-invoice', next.id); } catch {}
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setError((e as Error).message); if ((e as Error & { code?: string }).code === 'payment_rejected') { requestKey.current = ''; try { localStorage.removeItem('donasika-request'); } catch {} } }
     finally { setBusy(false); }
   }
   function reset() { setInvoice(null); setError(''); requestKey.current = ''; try { localStorage.removeItem('donasika-request'); localStorage.removeItem('donasika-invoice'); } catch {} }
