@@ -1,7 +1,7 @@
 export type DiscordUser={id:string;name:string;username:string;avatar:string|null};
 export type DiscordSession={authenticated:boolean;configured:boolean;user?:DiscordUser;csrf?:string;expires_at?:number};
 export type DiscordGuild={id:string;name:string;icon:string|null;owner:boolean;installed:boolean};
-export const NOTICE_KINDS=['live','news','theater','birthday'] as const;
+export const NOTICE_KINDS=['live','recent','news','theater','birthday','x','tiktok','instagram'] as const;
 export type NoticeKind=typeof NOTICE_KINDS[number];
 export type Destination={channel_id:string;role_ids:string[]};
 export type GuildSettings={routes:Record<NoticeKind,{enabled:boolean;channels:Destination[]}>;platforms:string[];banner_style:string;show_media:boolean};

@@ -7,6 +7,7 @@ import {
   CalendarDays,
   History,
   House,
+  HeartHandshake,
   Info,
   Newspaper,
   PlayCircle,
@@ -34,6 +35,7 @@ export const NAV: NavItem[] = [
   { to: "/apps", label: "Aplikasi", icon: Smartphone, group: "Info" },
   { to: "/games", label: "Games", icon: Gamepad2, group: "Info" },
   { to: "/discord", label: "Discord", icon: Bot, group: "Info" },
+  { to: "/donasika", label: "Donasi Karhutla", icon: HeartHandshake, group: "Info" },
   { to: "/developer", label: "API", icon: Braces, group: "Info" },
   { to: "/about", label: "Tentang", icon: Info, group: "Info" },
 ];

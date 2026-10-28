@@ -12,6 +12,7 @@ export type PageMeta = { title: string; description: string; h1: string };
 
 /** Halaman statis; urutan ini juga dipakai untuk navigasi di HTML awal (membantu Google memilih sitelink). */
 export const STATIC_PAGES: Record<string, PageMeta & { nav?: string }> = {
+  "/donasika": { title: "Donasika — Galang Bantuan Karhutla", h1: "Donasi Karhutla", description: "Penggalangan mandiri komunitas JKT48Connect selama 7 hari. Bayar lewat QRIS, pilih anonim, titip pesan, dan pantau total donasi terkonfirmasi." },
   "/": { title: `${SITE_NAME} — ${SITE_TAGLINE}`, h1: SITE_NAME, description: SITE_DESCRIPTION },
   "/live": {
     nav: "Live",
