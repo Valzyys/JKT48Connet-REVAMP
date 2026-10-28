@@ -166,15 +166,16 @@ Folder [`ios/`](ios/README.md) berisi aplikasi iPhone native (SwiftUI) dengan is
 
 ### Landing page `/apps`
 
-Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs, dengan gaya grafis yang sama seperti kartu "live notice" JKT48Connect dari API: kertas krem bergrid "+", garis lengkung pink, wordmark dengan asterisk merah, label mono, panel merah membulat, judul tebal rapat dengan titik kotak kuning, foto polaroid miring, dan maskot ASCII "ON AIR!". Selalu tema terang.
-- **Hero:** panel merah dengan screenshot asli sebagai polaroid, lalu baris info versi, ukuran, dan tombol unduh.
-- **Kartu live:** kartu notifikasi live asli dari live yang sedang berlangsung (`banner` di `/api/now_live`, gambar yang sama dengan notifikasi di aplikasi), bergantian otomatis.
-- **Fitur:** enam kartu bergaya banner dengan screenshot asli.
-- **Hari ini:** jumlah member live, show berikutnya (jam WIB, hitung mundur), dan ulang tahun terdekat.
-- **Unduh:** versi, ringkasan rilis, ukuran, dan tanggal dari `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`, ditambah `ios`: versi, ukuran, dan tanggal rilis iPhone dari prerelease `ios-latest`). Tombol APK dan .ipa.
+Halaman unduh aplikasi (`src/pages/apps.tsx`), tampil penuh tanpa kerangka situs: halaman produk yang terang dan bersih (putih, garis rambut abu, tipografi tebal rapat, merah JKT48Connect hanya sebagai aksen) dengan mockup HP dari CSS berisi tangkapan layar asli aplikasi Android dan iPhone.
+- **Hero:** judul, tombol "Unduh untuk Android" (APK) dan "Pasang di iPhone" (ke panduan), dua HP (Android & iPhone) dengan kartu notifikasi dari live yang sedang berlangsung dan hitung mundur show berikutnya.
+- **Hari ini:** jumlah member live, show berikutnya (jam WIB, hitung mundur), dan ulang tahun terdekat dari API.
+- **Fitur:** empat baris bergantian (layar + penjelasan): live & notifikasi, jadwal theater, recent & replay, member & oshi; lalu enam fitur tambahan.
+- **Galeri:** layar-layar aplikasi yang bisa digeser, pilihan Android / iPhone.
+- **Unduh:** kartu Android dan iPhone dengan versi, ukuran, dan tanggal rilis dari `GET /api/app_release` (jalur web yang disegel, isi sama dengan `/api/app/update`, ditambah `ios` dari prerelease `ios-latest`).
 - **Panduan (`#panduan`):** pilihan Android / iPhone (perangkat iPhone & tautan `#panduan-iphone` langsung membuka iPhone). Android: langkah pasang, izin, notifikasi, update, dan solusi masalah. iPhone: tautan tetap .ipa, repo Scarlet, dan sumber ESign/Feather/SideStore yang bisa disalin; cara pasang Scarlet, ESign, Feather (tombol sekali ketuk `feather://`), SideStore, TrollStore, dan dari komputer; catatan sertifikat; solusi masalah.
-- **Animasi GSAP + ScrollTrigger** hanya memakai transform/opacity (plus stroke garis lengkung sekali saat masuk). Posisi trigger dihitung ulang saat tinggi halaman berubah. Bila animasi sistem dimatikan, halaman hanya memakai transisi pudar.
-- Screenshot aplikasi di `public/apps/` dirender dari aplikasi asli.
+- **FAQ** dan tautan ulasan (#JKT48ConnectApp).
+- **Animasi GSAP + ScrollTrigger** hanya transform/opacity; dimatikan bila pengguna memilih gerak dikurangi.
+- Tangkapan layar di `public/apps/` (`android-*.webp`, `ios-*.webp`) dirender dari aplikasi asli: Android lewat Paparazzi, iPhone dari simulator di CI.
 
 ## Menjalankan lokal
 
