@@ -10,9 +10,10 @@ import type { PushState } from "./push-do";
 
 import { handlePm, type PmEnv } from "./pm";
 import { handleDonasika, reconcileDonasika } from "./donasika";
+import type { DonasikaEnv } from "./donasika-gateway";
 import { handlePage, handleRobots, handleSitemap, isPage, siteOrigin, type SeoEnv } from "./seo";
 
-interface Env extends ProxyEnv, PmEnv, SeoEnv, DiscordEnv, GamesEnv {
+interface Env extends ProxyEnv, PmEnv, SeoEnv, DiscordEnv, GamesEnv, DonasikaEnv {
   ASSETS: Fetcher;
   PUSH?: DurableObjectNamespace<PushState>;
 }
