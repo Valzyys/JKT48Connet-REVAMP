@@ -37,7 +37,7 @@ console.log("\n◆ JKT48Connect · deploy otomatis\n");
 
 setupPm();
 
-const deploy = run(["deploy"], { stdio: "inherit" });
+const deploy = run(["deploy", "--keep-vars"], { stdio: "inherit" });
 if (deploy.status !== 0) {
   console.error("✗ wrangler deploy gagal");
   process.exit(deploy.status ?? 1);

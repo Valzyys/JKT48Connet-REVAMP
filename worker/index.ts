@@ -9,6 +9,7 @@ export { PushState } from "./push-do";
 import type { PushState } from "./push-do";
 
 import { handlePm, type PmEnv } from "./pm";
+import { handleDonasika, reconcileDonasika } from "./donasika";
 import { handlePage, handleRobots, handleSitemap, isPage, siteOrigin, type SeoEnv } from "./seo";
 
 interface Env extends ProxyEnv, PmEnv, SeoEnv, DiscordEnv, GamesEnv {
@@ -20,6 +21,7 @@ export default {
   async fetch(request, env, ctx) {
     const activityUrl=new URL(request.url);
     const { pathname } = activityUrl;
+    if (pathname === "/api/donasika" || pathname.startsWith("/api/donasika/")) return handleDonasika(request, env);
     if((request.method==="GET"||request.method==="HEAD")&&(pathname==="/activity"||pathname==="/activity/"||pathname==="/"&&activityUrl.searchParams.has("frame_id")))return activityDocument(request,env.ASSETS,env.DISCORD_CLIENT_ID||"1305141693477027891");
     if (pathname.startsWith("/api/games/")) return handleGames(request,env);
     if (pathname.startsWith("/api/discord/")) return handleDiscord(request, env);
@@ -42,6 +44,7 @@ export default {
   },
   // Cron (wrangler.jsonc → triggers.crons): jadwal/ultah/berita/update + menyalakan alarm live 15 detik (worker/push-do.ts).
   async scheduled(controller, env, ctx) {
+    ctx.waitUntil(reconcileDonasika(env));
     if (!env.PUSH || !env.FCM_SERVICE_ACCOUNT) return;
     ctx.waitUntil(env.PUSH.get(env.PUSH.idFromName("main")).tick(controller.scheduledTime));
   },

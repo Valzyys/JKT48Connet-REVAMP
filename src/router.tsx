@@ -18,6 +18,7 @@ const rootRoute = createRootRoute({
   notFoundComponent: NotFound,
 });
 const parent = () => rootRoute;
+const donasikaRoute = createRoute({ getParentRoute: parent, path: "/donasika", component: lazyRouteComponent(() => import("@/pages/donasika"), "DonasikaPage") });
 
 // Setiap halaman di-load terpisah (code splitting) supaya bundle awal tetap ringan.
 
@@ -192,6 +193,7 @@ const appsRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
+  donasikaRoute,
   appsRoute,
   gamesRoute,activityRoute,
   discordRoute,

@@ -23,7 +23,7 @@ function WebsiteLayout() {
   const tap = useRef({ x: 0, y: 0, t: 0 });
   const dest = navFor(path);
   const isPm = path === "/pm" || path.startsWith("/pm/");
-  const isWorkspace = path === "/games" || isPm || path === "/discord" || path.startsWith("/discord/");
+  const isWorkspace = path === "/donasika" || path === "/games" || isPm || path === "/discord" || path.startsWith("/discord/");
   const prev = useRef(path);
 
   // Judul halaman statis (detail member/theater/berita mengganti sendiri setelah datanya termuat).

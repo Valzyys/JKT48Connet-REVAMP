@@ -17,6 +17,7 @@ const COLS: { title: string; links: { label: string; to: string }[] }[] = [
   {
     title: "Info",
     links: [
+      { label: "Donasi Karhutla", to: "/donasika" },
       { label: "API untuk developer", to: "/developer" },
       { label: "Tentang", to: "/about" },
       { label: "Disclaimer", to: "/disclaimer" },
