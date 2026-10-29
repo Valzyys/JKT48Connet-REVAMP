@@ -1,0 +1,73 @@
+/* Token warna & font yang sama dengan situs jkt48connect.app (src/styles.css). */
+@font-face {
+  font-family: "Archivo";
+  src: url("fonts/archivo.woff2") format("woff2");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: block;
+}
+@font-face {
+  font-family: "Plex Mono";
+  src: url("fonts/plex-mono-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: block;
+}
+:root {
+  --chrome: #141012;
+  --chrome-2: #1d1517;
+  --ink: #f3ece6;
+  --ink-soft: #9f918c;
+  --line: rgb(255 235 230 / 0.09);
+  --brand: #e1243a;
+  --brand-hot: #ff3b52;
+  --brand-strong: #b9172b;
+  --butter: #fde6b0;
+  --cream: #f3eee6;
+  --paper: #fbf8f3;
+  --ink-dark: #1d1517;
+  --sans: "Archivo", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "Plex Mono", "Cascadia Mono", Consolas, monospace;
+}
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.condensed {
+  font-stretch: 75%;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.micro {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}

@@ -150,6 +150,8 @@ export type LiveSession = {
   img: string;
   avatar: string;
   platform: "showroom" | "idn" | string;
+  /** ID room Showroom (angka) untuk komentar live; kosong untuk IDN. */
+  roomId: string;
   startedAt: string;
   title: string;
   link: string;
@@ -191,6 +193,7 @@ function mapLive(l: Raw): LiveSession {
     img: httpUrl(l.img, l.img_alt),
     avatar: httpUrl(l.img_alt, l.img),
     platform,
+    roomId: platform === "showroom" && /^\d{1,12}$/.test(str(l.room_id)) ? str(l.room_id) : "",
     startedAt: str(l.started_at),
     title: titleParts.join(" — ").trim(),
     link: httpUrl(url, fallbackLink),
@@ -205,6 +208,38 @@ export function shapeLive(raw: unknown): LiveSession[] {
   return list(raw)
     .map(mapLive)
     .filter((l) => l.name && !seen.has(l.id) && seen.add(l.id));
+}
+
+/* ───────────────────────────── Komentar live Showroom ───────────────────────────── */
+
+export type LiveComment = { id: string; seq: number; name: string; avatar: string; text: string; at: string };
+/**
+ * Komentar live Showroom yang teramati relay (maks. 100 terbaru). `status`: connecting | connected | reconnecting |
+ * ended | unavailable. `partial` selalu benar (pengamatan, bukan arsip); `gap` = sebagian sudah keluar dari buffer.
+ */
+export type LiveComments = { status: string; dataId: string; partial: boolean; gap: boolean; cursor: number; updatedAt: string; comments: LiveComment[] };
+
+export function shapeShowroomComments(raw: Raw): LiveComments {
+  return {
+    status: str(raw?.status, "unavailable"),
+    dataId: str(raw?.data_id),
+    partial: raw?.partial !== false,
+    gap: !!raw?.gap,
+    cursor: num(raw?.cursor) ?? 0,
+    updatedAt: str(raw?.updated_at),
+    comments: list(raw?.comments)
+      .map((c) => ({
+        id: str(c.id, String(c.sequence ?? "")),
+        seq: num(c.sequence) ?? 0,
+        name: str(c.user?.name),
+        avatar: httpUrl(c.user?.avatar_url),
+        // Teks polos (dirender sebagai teks, bukan HTML), dipangkas supaya satu komentar tidak memenuhi layar.
+        text: str(c.comment).slice(0, 500),
+        at: str(c.observed_at),
+      }))
+      .filter((c) => c.id && c.text)
+      .sort((a, b) => a.seq - b.seq),
+  };
 }
 
 /* ───────────────────────────── Theater ───────────────────────────── */

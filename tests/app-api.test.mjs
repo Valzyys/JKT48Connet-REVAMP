@@ -56,6 +56,21 @@ const env = {
     const url = new URL(String(input));
     upstreamCalls.push({ url: url.href, range: new Headers(init.headers).get("Range") });
     if (url.pathname === "/api/now_live") return Response.json(LIVE);
+    if (url.pathname === "/api/showroom-comments/510000")
+      return Response.json({
+        room_id: 510000,
+        data_id: "sr-510000-1",
+        status: "connected",
+        partial: true,
+        updated_at: "2026-10-29T01:00:00.250Z",
+        cursor: 43,
+        gap: false,
+        comments: [
+          { id: "e43", sequence: 43, user: { id: "2", name: "Fan Dua", avatar_id: 2, avatar_url: "https://image.showroom-cdn.com/showroom-prod/image/avatar/2.png" }, comment: "<b>Halo</b> kak!", observed_at: "2026-10-29T01:00:00.000Z" },
+          { id: "e42", sequence: 42, user: { id: "1", name: "Fan Satu", avatar_id: null, avatar_url: null }, comment: "Semangat", observed_at: "2026-10-29T00:59:59.000Z" },
+          { id: "e41", sequence: 41, user: { id: "3", name: "Kosong" }, comment: "" },
+        ],
+      });
     if (url.pathname === "/api/jkt48_youtube/hAHv54gxD60")
       return Response.json({
         id: "hAHv54gxD60",
@@ -306,6 +321,28 @@ test("app push config is disabled until Firebase is configured on the worker", a
   const res = await call("/api/app/push", { token: await newToken() });
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { enabled: false });
+});
+
+test("Showroom live comments: room id on the live session, latest comments as plain text, oldest first", async () => {
+  const token = await newToken();
+  const live = await (await call("/api/app/now_live", { token })).json();
+  assert.equal(live.find((l) => l.platform === "showroom").roomId, "510000");
+  assert.equal(live.find((l) => l.platform === "idn").roomId, "", "IDN has no Showroom room");
+  const r = await call("/api/app/showroom-comments/510000", { token });
+  assert.equal(r.status, 200);
+  const c = await r.json();
+  assert.equal(c.status, "connected");
+  assert.equal(c.cursor, 43);
+  assert.deepEqual(
+    c.comments.map((x) => [x.seq, x.name, x.text, x.avatar]),
+    [
+      [42, "Fan Satu", "Semangat", ""],
+      [43, "Fan Dua", "<b>Halo</b> kak!", "https://image.showroom-cdn.com/showroom-prod/image/avatar/2.png"],
+    ],
+    "empty comments are dropped; text is passed through as plain text for the UI to render safely",
+  );
+  assert.equal((await call("/api/app/showroom-comments/510000", {})).status, 401, "needs the app token");
+  assert.equal((await call("/api/app/showroom-comments/abc", { token })).status, 404);
 });
 
 test("YouTube detail returns a playable HLS link from the API domain only; comments page with a cursor", async () => {
