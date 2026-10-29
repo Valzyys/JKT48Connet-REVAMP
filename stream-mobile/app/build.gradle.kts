@@ -15,7 +15,7 @@ val releaseKeystore: File? = System.getenv("SIGNING_STORE_FILE")?.takeIf { it.is
 
 android {
     namespace = "app.jkt48connect.stream"
-    compileSdk = 36
+    compileSdk { version = release(37) { minorApiLevel = 0 } }
 
     defaultConfig {
         applicationId = "app.jkt48connect.stream"

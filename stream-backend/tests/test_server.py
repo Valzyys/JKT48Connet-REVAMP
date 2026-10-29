@@ -60,4 +60,14 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
  async def test_chat_rate_limit_is_bounded(self):
   for _ in range(12):s.limit(('chat','u1'),12,30)
   with self.assertRaises(s.HTTPException):s.limit(('chat','u1'),12,30)
+ async def test_live_list_marks_idn_and_showroom_with_watch_link(self):
+  raw={'lives':[
+   {'notification_data_id':'idn-1','name':'IDN member','type':'idn','url_key':'mem one','slug':'live-1'},
+   {'notification_data_id':'sr-1','name':'Showroom member','type':'showroom','streaming_url_list':[]}]}
+  async def upstream(path):return raw
+  with patch.object(s,'upstream',upstream):
+   items=(await s.live(self.u))['items']
+  idn,showroom=items
+  self.assertEqual((idn['platform'],idn['link']),('idn','https://www.idn.app/mem%20one/live/live-1'))
+  self.assertEqual((showroom['platform'],showroom['link']),('showroom',''))
 if __name__=='__main__':unittest.main()
