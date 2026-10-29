@@ -297,20 +297,72 @@ async def live(user=Depends(who)):
         link=''
         if platform=='idn'and s.get('url_key')and s.get('slug'):
             link=f"https://www.idn.app/{quote(str(s['url_key']),safe='')}/live/{quote(str(s['slug']),safe='')}"
+        # notification_caption: "🔴 Nama Lengkap — Judul live\nhttps://…"; judul live = bagian setelah " — ".
+        head=str(s.get('notification_caption')or'').split('\n')[0].split(' — ',1)
         items.append({'id':ident,'kind':'live','title':s.get('name')or'Live member','subtitle':s.get('type',''),
                       'image':image_url(design(s,'notification_designs')or s.get('img')or s.get('img_alt')or''),
+                      'avatar':image_url(s.get('img_alt')or s.get('img')or''),'liveTitle':head[1].strip()if len(head)>1 else'',
                       'date':s.get('started_at',''),'isLive':True,'lineup':[],'platform':platform,'link':link})
     return {'items':items}
+
+
+def whole(value):
+    try:return max(0,int(float(value)))
+    except(TypeError,ValueError):return 0
 
 
 @app.get('/api/app/recent')
 async def recent(page:int=1,user=Depends(who)):
     if not 1<=page<=1000:error(400,'Halaman tidak valid.')
     raw=await upstream(f'/api/recent?page={page}&perpage=12&group=jkt48&type=all&sort=date&order=-1')
-    return {'items':[{'id':s['data_id'],'kind':'recent','title':s.get('member',{}).get('name','Member JKT48'),
-                     'subtitle':s.get('type',''),'image':image_url(design(s,'leaderboard_designs')or s.get('member',{}).get('img','')),
-                     'date':s.get('live_info',{}).get('date',{}).get('end')or s.get('created_at',''),'lineup':[]}for s in objects(raw,'recents')],
-            'page':page,'total':raw.get('total_count',0)}
+    items=[]
+    for s in objects(raw,'recents'):
+        info=s.get('live_info')or{};member=s.get('member')or s.get('room_info')or{}
+        dates=info.get('date')or{};viewers=info.get('viewers')or{}
+        items.append({'id':s['data_id'],'kind':'recent','title':member.get('name')or'Member JKT48',
+                      'subtitle':s.get('type',''),'platform':str(s.get('type')or'').lower(),
+                      'image':image_url(design(s,'leaderboard_designs')or member.get('img','')),
+                      'avatar':image_url(member.get('img')or member.get('img_alt')or''),
+                      'date':dates.get('end')or s.get('created_at',''),'start':dates.get('start',''),
+                      'durationMs':whole(info.get('duration')),'viewers':whole(viewers.get('num')if isinstance(viewers,dict)else 0),
+                      'lineup':[]})
+    return {'items':items,'page':page,'total':raw.get('total_count',0)}
+
+
+def picture(url):
+    """Gambar publik: lewat proxy server bila domainnya diizinkan, selain itu URL https aslinya."""
+    if not isinstance(url,str)or not url.startswith('https://'):return ''
+    return image_url(url)or url
+
+
+@app.get('/api/app/recent/{ident}')
+async def recent_detail(ident:str,user=Depends(who)):
+    """Rekap satu live (pola detail recent aplikasi 2.6.1 & website): statistik, supporter, gift, cuplikan, jumlah bagian rekaman."""
+    if not re.fullmatch(r'[\w♥-]{1,180}',ident):error(400,'ID siaran tidak valid.')
+    r=await upstream('/api/recent/'+quote(ident,safe=''))
+    if not isinstance(r,dict)or not r:error(404,'Rekap live tidak ditemukan.')
+    info=r.get('live_info')or{};member=r.get('member')or r.get('room_info')or{}
+    dates=info.get('date')or{};viewers=info.get('viewers')or{};gift=info.get('gift')or{};comments=info.get('comments')or{};shot=info.get('screenshot')or{}
+    platform=str(r.get('type')or'').lower()
+    unit=str(r.get('point_unit')or('idn_gold'if platform=='idn'else'showroom_points'))
+    # Showroom mengirim seluruh katalog gift; yang tidak terkirim di live ini (num 0) dibuang.
+    gifts=sorted(({'name':str(g.get('name')),'img':''if g.get('image_available')is False else picture(g.get('img')),'num':whole(g.get('num')),'users':whole(g.get('user_count'))}
+                  for g in objects(gift,'list')if isinstance(g,dict)and g.get('name')and whole(g.get('num'))>0),key=lambda g:-g['num'])
+    fans=[{'name':str(f.get('name')),'avatar':picture(f.get('avatar_url')),'amount':whole(f.get('gold')or f.get('point')or f.get('fans_point')or f.get('reported_gold'))}
+          for f in objects(r,'fans')if isinstance(f,dict)and f.get('name')]
+    shots=[];base=str(shot.get('base_url')or'').rstrip('/');fmt=str(shot.get('format')or'jpg')
+    if not re.fullmatch(r'[a-zA-Z0-9]{2,5}',fmt):fmt='jpg'
+    if base.startswith('https://')and isinstance(shot.get('list'),list):
+        shots=[picture(f'{base}/{t}.{fmt}')for t in shot['list'][:400]if re.fullmatch(r'[A-Za-z0-9_-]{1,64}',str(t))]
+    recordings=[x for x in objects(r,'recordings')if isinstance(x,dict)and(x.get('stream_url')or x.get('url'))]
+    return {'id':str(r.get('data_id')or ident),'kind':'recent','title':member.get('name')or'Member JKT48','platform':platform,
+            'image':picture(design(r,'leaderboard_designs')or member.get('img')),'avatar':picture(member.get('img')or member.get('img_alt')),
+            'start':dates.get('start',''),'date':dates.get('end')or r.get('created_at',''),
+            'durationMs':whole(info.get('duration')),'viewers':whole(viewers.get('num')if isinstance(viewers,dict)else 0),
+            'points':whole(r.get('points')or r.get('total_gifts')),'pointLabel':'Gold'if'gold'in unit else'Poin',
+            'comments':whole(comments.get('num')),'commenters':whole(comments.get('users')),
+            'gifts':gifts[:40],'giftsPartial':gift.get('status')=='partial'or gift.get('reason')=='gift_events_not_captured',
+            'fans':fans[:20],'screenshots':[u for u in shots if u],'recordingCount':len(recordings)}
 
 
 @app.post('/api/app/playback/{kind}/{ident}')
@@ -518,21 +570,31 @@ class Message(BaseModel):
 async def chat(room:str,after:int=0,wait:int=0,user=Depends(who)):
     if not re.fullmatch(r'[\w-]{1,180}',room):error(400,'Ruang tidak valid.')
     authorize(user,'theater',room)
-    def messages():return [dict(r)for r in db.execute('SELECT id,name,message,created FROM chat WHERE room=? AND id>? ORDER BY id LIMIT 100',(room,max(0,after)))]
+    def messages():
+        # Penonton baru (after=0) langsung mendapat 50 pesan terakhir, bukan pesan tertua.
+        if after<=0:rows=reversed(db.execute('SELECT * FROM chat WHERE room=? ORDER BY id DESC LIMIT 50',(room,)).fetchall())
+        else:rows=db.execute('SELECT * FROM chat WHERE room=? AND id>? ORDER BY id LIMIT 100',(room,after))
+        return [chat_item(r,user)for r in rows]
     event=events[room];event.clear();items=messages()
     if not items and wait:
         try:await asyncio.wait_for(event.wait(),min(max(wait,0),20))
         except asyncio.TimeoutError:pass
         items=messages()
     return {'items':items}
+def chat_item(row,user):
+    # user_id tidak dikirim ke klien; cukup penanda apakah pesan ini milik penonton yang meminta.
+    return {'id':row['id'],'name':row['name'],'message':row['message'],'created':row['created'],'mine':row['user_id']==user['id']}
 @app.post('/api/app/chat/{room}')
 async def send_chat(room:str,data:Message,user=Depends(who)):
     if not re.fullmatch(r'[\w-]{1,180}',room):error(400,'Ruang tidak valid.')
     authorize(user,'theater',room);limit(('chat',user['id']),12,30)
     text=data.message.strip()
     if not text:error(400,'Pesan masih kosong.')
-    db.execute('INSERT INTO chat(room,user_id,name,message,created) VALUES(?,?,?,?,?)',(room,user['id'],user['name'],text,now()));db.commit();events[room].set()
-    return {'ok':True}
+    cur=db.execute('INSERT INTO chat(room,user_id,name,message,created) VALUES(?,?,?,?,?)',(room,user['id'],user['name'],text,now()));db.commit()
+    # Bangunkan semua long-poll di ruang ini: pesan langsung tampil ke penonton lain.
+    events[room].set()
+    row=db.execute('SELECT * FROM chat WHERE id=?',(cur.lastrowid,)).fetchone()
+    return {'ok':True,'item':chat_item(row,user)}
 
 
 @app.get('/api/app/update')

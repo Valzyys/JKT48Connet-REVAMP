@@ -62,7 +62,8 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(s.HTTPException):s.limit(('chat','u1'),12,30)
  async def test_live_list_marks_idn_and_showroom_with_watch_link(self):
   raw={'lives':[
-   {'notification_data_id':'idn-1','name':'IDN member','type':'idn','url_key':'mem one','slug':'live-1'},
+   {'notification_data_id':'idn-1','name':'IDN member','type':'idn','url_key':'mem one','slug':'live-1',
+    'img_alt':'https://images.jkt48connect.com/a.jpg','notification_caption':'🔴 Member Satu — Ngobrol santai\nhttps://www.idn.app/x'},
    {'notification_data_id':'sr-1','name':'Showroom member','type':'showroom','streaming_url_list':[]}]}
   async def upstream(path):return raw
   with patch.object(s,'upstream',upstream):
@@ -70,4 +71,49 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   idn,showroom=items
   self.assertEqual((idn['platform'],idn['link']),('idn','https://www.idn.app/mem%20one/live/live-1'))
   self.assertEqual((showroom['platform'],showroom['link']),('showroom',''))
+  self.assertEqual((idn['liveTitle'],showroom['liveTitle']),('Ngobrol santai',''))
+  self.assertTrue(idn['avatar'].startswith(s.BASE+'/api/app/image/'));self.assertEqual(showroom['avatar'],'')
+ async def test_recent_list_carries_duration_viewers_and_platform(self):
+  raw={'recents':[
+   {'data_id':'r1','type':'idn','member':{'name':'Member Satu','img':'https://images.jkt48connect.com/m.jpg'},
+    'live_info':{'duration':5400000.0,'viewers':{'num':'1234'},'date':{'start':'2026-10-01T10:00:00Z','end':'2026-10-01T11:30:00Z'}}},
+   {'data_id':'r2','type':'showroom','room_info':{'name':'Member Dua'},'live_info':{'viewers':None},'created_at':'2026-10-02T00:00:00Z'}],
+   'total_count':2}
+  async def upstream(path):return raw
+  with patch.object(s,'upstream',upstream):
+   items=(await s.recent(1,self.u))['items']
+  first,second=items
+  self.assertEqual((first['platform'],first['durationMs'],first['viewers'],first['start']),('idn',5400000,1234,'2026-10-01T10:00:00Z'))
+  self.assertEqual((second['title'],second['durationMs'],second['viewers'],second['date']),('Member Dua',0,0,'2026-10-02T00:00:00Z'))
+ async def test_chat_message_reaches_waiting_viewer_at_once_and_marks_own(self):
+  for e,u in (('e1','u1'),('e2','u2')):s.db.execute('insert into entitlements values(?,?,?,?,?,?)',(e,u,'membership','*',0,s.now()+3600))
+  other={'id':'u2','sid':'session2','name':'Penonton lain'}
+  waiter=asyncio.create_task(s.chat('show',0,20,other))
+  await asyncio.sleep(0.05);self.assertFalse(waiter.done())
+  sent=await s.send_chat('show',s.Message(message='Halo semua'),self.u)
+  got=await asyncio.wait_for(waiter,1)
+  self.assertEqual((sent['item']['message'],sent['item']['mine']),('Halo semua',True))
+  self.assertEqual([(m['message'],m['mine'])for m in got['items']],[('Halo semua',False)])
+  self.assertNotIn('user_id',got['items'][0])
+ async def test_new_viewer_gets_latest_chat_messages(self):
+  for i in range(60):s.db.execute('insert into chat(room,user_id,name,message,created) values(?,?,?,?,?)',('show','u9','X',f'pesan {i}',s.now()))
+  s.db.execute('insert into entitlements values(?,?,?,?,?,?)',('e1','u1','membership','*',0,s.now()+3600))
+  items=(await s.chat('show',0,0,self.u))['items']
+  self.assertEqual((len(items),items[0]['message'],items[-1]['message']),(50,'pesan 10','pesan 59'))
+ async def test_recent_detail_maps_stats_supporters_gifts_and_screenshots(self):
+  raw={'data_id':'r1','type':'showroom','points':321,'room_info':{'name':'Member Satu','img':'https://images.jkt48connect.com/m.jpg'},
+   'live_info':{'duration':3600000,'viewers':{'num':900},'comments':{'num':456,'users':78},'date':{'start':'2026-10-01T10:00:00Z','end':'2026-10-01T11:00:00Z'},
+    'gift':{'list':[{'name':'Bintang','num':3,'user_count':2,'img':'https://images.jkt48connect.com/g1.png'},{'name':'Kosong','num':0},{'name':'Mahkota','num':9,'image_available':False}]},
+    'screenshot':{'base_url':'https://images.jkt48connect.com/shots/','format':'jpg','list':[1759312800000,'../etc',1759312860000]}},
+   'fans':[{'name':'Fan A','gold':50,'avatar_url':'https://images.jkt48connect.com/a.png'},{'name':''}],
+   'recordings':[{'url':'https://st.avonera48.web.id/a.mp4'},{'stream_url':'https://st.avonera48.web.id/b.m3u8'}]}
+  async def upstream(path):
+   self.assertEqual(path,'/api/recent/r1');return raw
+  with patch.object(s,'upstream',upstream):
+   d=await s.recent_detail('r1',self.u)
+  self.assertEqual((d['durationMs'],d['viewers'],d['points'],d['pointLabel'],d['comments'],d['recordingCount']),(3600000,900,321,'Poin',456,2))
+  self.assertEqual([(g['name'],g['num'],g['img']=='')for g in d['gifts']],[('Mahkota',9,True),('Bintang',3,False)])
+  self.assertEqual([(f['name'],f['amount'])for f in d['fans']],[('Fan A',50)])
+  self.assertEqual(len(d['screenshots']),2)
+  self.assertTrue(all(u.startswith(s.BASE+'/api/app/image/')for u in d['screenshots']))
 if __name__=='__main__':unittest.main()
