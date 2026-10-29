@@ -1,0 +1,8 @@
+{
+  "name":"jkt48connect-stream",
+  "main":"index.js",
+  "compatibility_date":"2026-10-01",
+  "routes":[{"pattern":"stream.jkt48connect.app","custom_domain":true}],
+  "vars":{"BRIDGE_ORIGIN":"https://scrape.jkt48connect.com"},
+  "observability":{"enabled":false}
+}
