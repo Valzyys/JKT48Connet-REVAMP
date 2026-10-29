@@ -292,9 +292,14 @@ async def live(user=Depends(who)):
     for s in objects(raw,'lives','data'):
         ident=str(s.get('notification_data_id')or s.get('data_id')or s.get('slug')or s.get('room_id')or'')
         if not ident:continue
+        platform=str(s.get('type')or'').lower()
+        # Tautan publik ke halaman live IDN, dipakai sebagai cadangan bila pemutar di aplikasi belum punya sumber.
+        link=''
+        if platform=='idn'and s.get('url_key')and s.get('slug'):
+            link=f"https://www.idn.app/{quote(str(s['url_key']),safe='')}/live/{quote(str(s['slug']),safe='')}"
         items.append({'id':ident,'kind':'live','title':s.get('name')or'Live member','subtitle':s.get('type',''),
                       'image':image_url(design(s,'notification_designs')or s.get('img')or s.get('img_alt')or''),
-                      'date':s.get('started_at',''),'isLive':True,'lineup':[]})
+                      'date':s.get('started_at',''),'isLive':True,'lineup':[],'platform':platform,'link':link})
     return {'items':items}
 
 
