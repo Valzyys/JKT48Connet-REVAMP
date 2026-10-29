@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Android 12+: splash sistem merah dengan salib piksel, disambung mulus oleh intro Compose. -->
+    <!-- Android 12+: splash hitam hangat dengan salib piksel merah (ikon Stream). -->
     <style name="Theme.JKT48Connect" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/window</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowSplashScreenBackground">@color/brand</item>
+        <item name="android:windowSplashScreenBackground">@color/splash</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
     </style>
 </resources>

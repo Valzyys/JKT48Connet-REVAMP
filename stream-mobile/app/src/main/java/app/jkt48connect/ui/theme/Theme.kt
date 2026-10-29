@@ -26,8 +26,8 @@ import androidx.compose.ui.unit.sp
 import app.jkt48connect.stream.R
 
 /**
- * Palet JKT48Connect ala iOS: latar abu sistem (grouped background) dengan kartu putih di tema terang,
- * hitam pekat dengan kartu abu tua di tema gelap; merah JKT48 sebagai warna aksen.
+ * Palet JKT48Connect Stream: token warna website JKT48Connect (krem hangat + merah, gelap = hitam hangat)
+ * dengan struktur kaca dan kartu dari aplikasi 2.6.1 / iPhone.
  */
 @Immutable
 data class AppColors(
@@ -55,34 +55,35 @@ data class AppColors(
         )
 
     companion object {
+        // Nilai dari :root dan .dark di src/styles.css (website).
         val Light = AppColors(
-            bg = Color(0xFFF2F2F7),
-            card = Color(0xFFFFFFFF),
-            surface = Color(0xFFE5E5EA),
-            ink = Color(0xFF0B0B0F),
-            inkSoft = Color(0xFF6E6E76),
-            line = Color(0x243C3C43),
+            bg = Color(0xFFF3EEE6),
+            card = Color(0xFFFBF8F3),
+            surface = Color(0xFFE9E2D7),
+            ink = Color(0xFF1D1517),
+            inkSoft = Color(0xFF776B66),
+            line = Color(0x1C1D1517),
             brand = Color(0xFFE1243A),
-            blush = Color(0xFFFFE5E8),
-            butter = Color(0xFFFFF0C7),
+            blush = Color(0xFFF6DCDC),
+            butter = Color(0xFFFDE6B0),
             butterInk = Color(0xFF8A5A00),
-            panel = Color(0xFF0E0E11),
-            glass = Color(0xFFFFFFFF).copy(alpha = 0.6f),
+            panel = Color(0xFF1D1517),
+            glass = Color(0xFFFBF8F3).copy(alpha = 0.6f),
             dark = false,
         )
         val Dark = AppColors(
-            bg = Color(0xFF000000),
-            card = Color(0xFF1C1C1E),
-            surface = Color(0xFF2C2C2E),
-            ink = Color(0xFFF5F5F7),
-            inkSoft = Color(0xFF98989F),
-            line = Color(0x26FFFFFF),
-            brand = Color(0xFFFF4259),
-            blush = Color(0xFF3A141B),
+            bg = Color(0xFF141012),
+            card = Color(0xFF1A1518),
+            surface = Color(0xFF211A1D),
+            ink = Color(0xFFF3ECE6),
+            inkSoft = Color(0xFF9F918C),
+            line = Color(0x17FFEBE6),
+            brand = Color(0xFFFF3B52),
+            blush = Color(0xFF3A1D23),
             butter = Color(0xFF2E2410),
             butterInk = Color(0xFFFFC95C),
-            panel = Color(0xFF1A1A1F),
-            glass = Color(0xFF2C2C2E).copy(alpha = 0.55f),
+            panel = Color(0xFF0B0809),
+            glass = Color(0xFF211A1D).copy(alpha = 0.55f),
             dark = true,
         )
     }

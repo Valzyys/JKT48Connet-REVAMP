@@ -81,6 +81,3 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.9.2")
     // Server push (FCM). Dikonfigurasi saat runtime dari worker, jadi tanpa plugin google-services.
 }
-
-// Player streaming memakai kontrol native tanpa layer blur.
-dependencies { implementation("androidx.media3:media3-ui:1.9.2") }

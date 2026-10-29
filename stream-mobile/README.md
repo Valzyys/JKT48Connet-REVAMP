@@ -2,7 +2,26 @@
 
 Aplikasi Kotlin / Jetpack Compose terpisah, berbasis `mobile/` main pada commit f208131 (Android 2.6.1). Package `app.jkt48connect.stream`; aplikasi JKT48Connect utama tidak diubah.
 
-Komponen Liquid Glass `LiquidButton`, `LiquidTabs`, glass/Backdrop, gesture spring, ambient, tema dan font berasal dari basis tersebut. Pemutar memakai Media3/PlayerView tanpa blur. Source yang tidak digunakan tidak disertakan dalam variant Stream.
+Komponen Liquid Glass (`ui/glass`), ambient, dan font berasal dari basis tersebut. Source yang tidak digunakan tidak disertakan dalam variant Stream.
+
+## Tampilan
+
+Isi halaman mengikuti 2.6.1 (kartu kaca putih tembus, ShowTile, RecentTile, LiveCard, grup inset), warna mengikuti token website (krem `#f3eee6`, merah `#e1243a`, gelap hitam hangat). Chrome-nya khas Stream:
+
+| Bagian | Wujud | File |
+| --- | --- | --- |
+| Ikon | Set garis 2px (Beranda = lengkung panggung, Live = gelombang siaran, Theater = tiket, Replay = putar ulang, Akun = orang dalam lingkaran, menu = kisi piksel). Ikon launcher: salib piksel merah di atas hitam hangat dengan segitiga play putih di tengah. | `StreamIcons.kt`, `res/drawable/ic_launcher_*` |
+| Navigasi | Model iPhone: tiap tab punya tumpukan halaman sendiri, ketuk tab aktif = kembali ke akar, push/pop bergeser horizontal. Tab bar = `LiquidTabs` 2.6.1 (Interactive Glass Bottom Bar dari [Backdrop](https://kyant.gitbook.io/backdrop)): pil kaca yang bisa diseret dengan pegas, meregang sesuai kecepatan, ikon di bawah pil merah lewat lensa; memakai ikon garis Stream. | `StreamRoot.kt`, `ui/glass/Liquid.kt` |
+| Bilah atas | Logo piksel + wordmark, pil liquid glass merah "ON AIR · n" (ke tab Live), tombol kisi kaca (menu panel kaca, baris tombol liquid glass). Halaman detail: tombol kembali kaca bulat + judul condensed. | `StreamRoot.kt` |
+| Liquid Glass | Tetap memakai komponen kaca 2.6.1 (`ui/glass`): dua lapis backdrop (latar ambient + isi halaman) untuk kaca yang mengapung; chip & tombol di hero membiaskan foto member; saat video tampil kaca hanya membiaskan latar supaya video mulus. | `StreamRoot.kt`, `StreamScreens.kt` |
+| Judul | Gaya website: "01 —— label", judul condensed besar, "/ jumlah" merah. | `StreamKit.kt` |
+| Beranda | Hero "ON AIR" (carousel live, berganti otomatis seperti Stories) atau "OFF AIR" (hitung mundur show), ticker sinyal, ubin Live/Show/Pass. | `StreamScreens.kt` |
+| Detail replay | Setara 2.6.1: statistik (durasi, penonton, gold/poin, komentar), pemutar di halaman dengan pilihan bagian, top supporter, gift, cuplikan 9 petak + "+N". Data dari `GET /api/app/recent/{id}`. | `StreamScreens.kt` |
+| Theater | Detail dengan hitung mundur & beli tiket; halaman tonton berisi lineup dan obrolan penonton realtime (pesan sendiri = gelembung merah). | `StreamScreens.kt`, `StreamPlayer.kt` |
+| Pemutar | Kontrol 2.6.1 (−10/+10 detik, ketuk dua kali, kecepatan, bar posisi, mode live) dan layar penuh (geser ke bawah untuk keluar). | `StreamPlayer.kt` |
+| Layar penuh gambar | Cuplikan, poster, foto replay, dan lineup: geser, filmstrip, cubit/ketuk dua kali untuk zoom, geser ke bawah untuk menutup. | `StreamViewer.kt` |
+| Pengenalan & masuk | "Tiga babak" di layar merah dengan tirai yang terangkat; halaman masuk berbentuk tiket (stub ADMIT ONE, nomor kursi, garis sobek, barcode). | `StreamAuth.kt` |
+| Bayar | Tagihan QRIS di kartu kaca di atas latar merah: status berdenyut, nominal, QR, hitung mundur, simpan QR, animasi berhasil. | `StreamPay.kt` |
 
 ## Build
 
@@ -23,7 +42,7 @@ Untuk rilis tetap: `SIGNING_STORE_FILE`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_
 - Live IDN/Showroom dan replay member melalui server; replay member tidak memakai jeda 72 jam pada produk ini.
 - Akses theater diperiksa di server, termasuk setiap request playlist/segmen. Tiket Rp4.000/show; mingguan Rp10.000/7 hari, bulanan Rp20.000/30 hari, tahunan Rp120.000/365 hari.
 - QRIS berasal dari gateway, pembayaran divalidasi server setiap 4 detik untuk tagihan pending. Aplikasi membaca status setiap 4 detik saat checkout aktif. Harga dan status dari klien tidak dipercaya.
-- Live chat penonton menggunakan long-poll yang segera bangun saat pesan masuk, bukan polling rapat terus-menerus. Ruang theater memerlukan akses.
+- Live chat penonton menggunakan long-poll yang segera bangun saat pesan masuk, bukan polling rapat terus-menerus. Kiriman langsung membangunkan semua penonton di ruang yang sama, dan balasan kiriman berisi pesannya sehingga pengirim melihatnya seketika. Penonton baru menerima 50 pesan terakhir. Ruang theater memerlukan akses. Long-poll memakai event di memori, jadi server dijalankan dengan satu worker uvicorn (bawaan service).
 - Pembayaran terus diproses server setelah aplikasi ditutup. Job Android mengecek pemberitahuan minimal 15 menit sesuai batas OS; ini bukan jaminan push instan saat aplikasi ditutup. Push FCM khusus package baru belum dikonfigurasi.
 - Cek update saat membuka aplikasi; popup tersedia bila version code server lebih tinggi.
 

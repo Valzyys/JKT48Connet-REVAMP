@@ -1,6 +1,13 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-<path android:fillColor="#27FFFFFF" android:pathData="M27,24L76,24Q84,24 84,32L84,76Q84,84 76,84L32,84Q24,84 24,76L24,32Q24,24 32,24Z"/>
-<path android:fillColor="#50FFFFFF" android:pathData="M27,26L64,26Q78,26 80,36L31,36Q27,36 27,31Z"/>
-<path android:fillColor="#FFFFFF" android:pathData="M42,36Q40,35 40,39L40,70Q40,74 44,72L70,56Q73,54 70,52L44,36Z"/>
-<path android:fillColor="#FFBFC9" android:pathData="M74,34A4,4 0,1 1,74 42A4,4 0,1 1,74 34"/>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Salib piksel JKT48Connect (sama persis dengan ikon 2.6.1), bergradasi merah. -->
+    <path android:pathData="M50.93,30.00h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM41.33,39.60h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM50.93,39.60h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM60.53,39.60h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM31.73,49.20h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM41.33,49.20h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM60.53,49.20h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM70.13,49.20h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM41.33,58.80h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM50.93,58.80h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM60.53,58.80h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73zM50.93,68.40h5.18a1.73,1.73 0 0 1 1.73,1.73v5.18a1.73,1.73 0 0 1 -1.73,1.73h-5.18a1.73,1.73 0 0 1 -1.73,-1.73v-5.18a1.73,1.73 0 0 1 1.73,-1.73z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="30" android:startY="30" android:endX="78" android:endY="78">
+                <item android:offset="0" android:color="#FFFF4A5F" />
+                <item android:offset="1" android:color="#FFE1243A" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Tanda Stream: segitiga play putih di lubang tengah salib. -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M50.7,49.7L57.9,53.5L50.7,57.3Z" />
 </vector>
