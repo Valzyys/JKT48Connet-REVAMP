@@ -11,6 +11,7 @@ const { shapeRecent } = await import(join(scratch, "shape.mjs"));
 test.after(() => rm(scratch, { recursive: true, force: true }));
 
 const AV = (id) => `https://image.showroom-cdn.com/showroom-prod/image/avatar/${id}.png`;
+const LB = (n) => `https://api.jkt48connect.app/media/leaderboards/sr-1-2/${n}.png`;
 const GIFT = (id) => `https://api.jkt48connect.app/media/gifts/showroom/${id}`;
 
 // Bentuk respons Showroom upstream: fans memakai `fans_point`, pengirim gift ada di `live_info.gift.log`
@@ -50,6 +51,12 @@ const RAW = {
     { id: "12", name: "Fan Dua Belas", avatar_url: AV(12), comments: 2 },
   ],
   fans: [{ id: 11, name: "Fan Sebelas", avatar_url: AV(11), fans_point: 6541 }],
+  leaderboard_designs: {
+    photobook: { portrait: { status: "ready", url: LB("p") }, banner: { status: "pending", url: LB("pb") } },
+    avonera48: { portrait: { status: "ready", url: LB("a") }, banner: { status: "ready", url: LB("ab") } },
+    jkt48connect: { portrait: { status: "ready", url: LB("j") }, banner: { status: "ready", url: LB("jb") } },
+    draft: { portrait: { status: "pending", url: LB("d") } },
+  },
 };
 
 test("showroom gifters come from the gift log joined with users, sorted by total", () => {
@@ -80,4 +87,20 @@ test("recents without a gift log have no gifters", () => {
   const r = shapeRecent({ data_id: "idn-x", type: "idn", live_info: { gift: { list: [] } } }, "idn-x");
   assert.deepEqual(r.gifters, []);
   assert.equal(r.giftersMore, false);
+});
+
+test("recap designs list every ready portrait, JKT48Connect first, with optional banner", () => {
+  const r = shapeRecent(RAW, "sr-1-2");
+  assert.deepEqual(r.designs, [
+    { key: "jkt48connect", label: "JKT48Connect", portrait: LB("j"), banner: LB("jb") },
+    { key: "photobook", label: "Photobook", portrait: LB("p"), banner: "" },
+    { key: "avonera48", label: "Avonera48", portrait: LB("a"), banner: LB("ab") },
+  ]);
+  assert.equal(r.leaderboard, LB("j"));
+});
+
+test("chatters are users who commented, most active first", () => {
+  const r = shapeRecent(RAW, "sr-1-2");
+  assert.deepEqual(r.chatters, [{ name: "Fan Dua Belas", avatar: AV(12), comments: 2 }]);
+  assert.deepEqual(shapeRecent({ data_id: "idn-x", type: "idn" }, "idn-x").designs, []);
 });
