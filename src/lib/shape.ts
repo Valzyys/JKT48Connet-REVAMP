@@ -54,6 +54,19 @@ function readyDesign(designs: Raw | undefined, layout: "banner" | "portrait"): s
   return "";
 }
 
+const DESIGN_LABEL: Record<string, string> = { jkt48connect: "JKT48Connect", photobook: "Photobook", avonera48: "Avonera48" };
+
+function shapeDesigns(designs: Raw | undefined): LeaderboardDesign[] {
+  if (!designs || typeof designs !== "object") return [];
+  const ready = (img: Raw | undefined) => (img?.status === "ready" ? httpUrl(img.url) : "");
+  const order = (k: string) => { const i = Object.keys(DESIGN_LABEL).indexOf(k); return i < 0 ? 99 : i; };
+  return Object.keys(designs)
+    .filter((k) => /^[a-z0-9_-]{1,32}$/i.test(k))
+    .sort((a, b) => order(a) - order(b))
+    .map((key) => ({ key, label: DESIGN_LABEL[key] ?? key, portrait: ready(designs[key]?.portrait), banner: ready(designs[key]?.banner) }))
+    .filter((d) => d.portrait);
+}
+
 export type Paged<T> = { items: T[]; page: number; perpage: number; total: number };
 
 function paged<T>(data: Raw, key: string, map: (r: Raw) => T, page: number, perpage: number): Paged<T> {
@@ -325,6 +338,11 @@ export type RecentLive = {
 };
 
 export type Fan = { name: string; avatar: string; amount: number | null };
+/** Pengirim gift (Showroom): dari `live_info.gift.log` digabung `users` untuk nama & avatar. */
+/** Satu desain kartu rekap dari upstream; `banner` bisa kosong bila belum siap. */
+export type LeaderboardDesign = { key: string; label: string; portrait: string; banner: string };
+export type Chatter = { name: string; avatar: string; comments: number };
+export type Gifter = { name: string; avatar: string; total: number | null; gifts: { name: string; img: string; num: number }[] };
 export type GiftSummary = { name: string; img: string; num: number | null; users: number | null };
 
 /** Cuplikan layar live; `at` = waktu tangkap (ISO), diambil dari nama file (epoch ms). */
@@ -347,9 +365,17 @@ export type RecentDetail = RecentLive & {
   gifts: GiftSummary[];
   giftsPartial: boolean;
   fans: Fan[];
+  /** Pengirim gift dengan avatar & rincian gift-nya (Showroom); kosong bila upstream tidak mengirim log. */
+  gifters: Gifter[];
+  /** Upstream punya lebih banyak pengirim daripada yang dikirim (`gift.next_page`). */
+  giftersMore: boolean;
   comments: number | null;
   commenters: number | null;
   leaderboard: string;
+  /** Semua desain rekap yang siap (potret wajib ada), urutan JKT48Connect dulu. */
+  designs: LeaderboardDesign[];
+  /** Penonton paling aktif berkomentar (Showroom `users`), yang berkomentar saja. */
+  chatters: Chatter[];
   /** Kosong selama masa kunci (server tidak mengirim URL apa pun). */
   recordings: Recording[];
   /** Jumlah bagian rekaman yang ada, juga selama masa kunci (untuk panel terkunci). */
@@ -377,6 +403,34 @@ function mapRecent(r: Raw): RecentLive {
     pointUnit: str(r.point_unit, r.type === "idn" ? "idn_gold" : "showroom_points"),
     title: str(r.idn?.title),
   };
+}
+
+/** `gift.log` = [{ user_id, total, gifts: [...] }] per pengirim; nama & avatar diambil dari `users` (id sama). */
+function shapeGifters(log: unknown, users: unknown): Gifter[] {
+  const people = new Map(list(users).map((u) => [str(u.id), u]));
+  return list(log)
+    .map((e) => {
+      const u: Raw = people.get(str(e.user_id)) ?? {};
+      // Gift yang sama bisa tercatat beberapa kali (beberapa kiriman): digabung per jenis.
+      const byGift = new Map<string, { name: string; img: string; num: number }>();
+      for (const g of list(e.gifts)) {
+        const name = str(g.name);
+        if (!name) continue;
+        const key = str(g.id) || name;
+        const prev = byGift.get(key);
+        const n = num(g.num) ?? 0;
+        if (prev) prev.num += n;
+        else byGift.set(key, { name, img: g.image_available === false ? "" : httpUrl(g.img), num: n });
+      }
+      return {
+        name: str(u.name, e.name),
+        avatar: httpUrl(u.avatar_url, e.avatar_url),
+        total: num(e.total),
+        gifts: [...byGift.values()].filter((g) => g.num > 0).sort((a, b) => b.num - a.num),
+      };
+    })
+    .filter((g) => g.name)
+    .sort((a, b) => (b.total ?? 0) - (a.total ?? 0));
 }
 
 export function shapeRecentList(raw: Raw, page: number, perpage: number): Paged<RecentLive> {
@@ -412,16 +466,24 @@ export function shapeRecent(r: Raw, id: string): RecentDetail {
     id: str(r.data_id, id),
     gifts: list(info.gift?.list)
       .map((g) => ({ name: str(g.name), img: g.image_available === false ? "" : httpUrl(g.img), num: num(g.num), users: num(g.user_count) }))
-      .filter((g) => g.name)
+      // Showroom mengirim seluruh katalog gift; yang tidak terkirim di live ini (num 0) tidak ditampilkan.
+      .filter((g) => g.name && g.num !== 0)
       .sort((a, b) => (b.num ?? 0) - (a.num ?? 0)),
+    gifters: shapeGifters(info.gift?.log, r.users),
+    giftersMore: !!info.gift?.next_page && list(info.gift?.log).length > 0,
     // Rincian gift bisa kosong walau total gold ada (`gift_events_not_captured`): tetap ditandai parsial.
     giftsPartial: info.gift?.status === "partial" || info.gift?.reason === "gift_events_not_captured",
     fans: list(r.fans)
-      .map((f) => ({ name: str(f.name), avatar: httpUrl(f.avatar_url), amount: num(f.gold, f.point, f.reported_gold) }))
+      .map((f) => ({ name: str(f.name), avatar: httpUrl(f.avatar_url), amount: num(f.gold, f.point, f.fans_point, f.reported_gold) }))
       .filter((f) => f.name),
     comments: num(info.comments?.num),
     commenters: num(info.comments?.users),
     leaderboard: readyDesign(r.leaderboard_designs, "portrait"),
+    designs: shapeDesigns(r.leaderboard_designs),
+    chatters: list(r.users)
+      .map((u) => ({ name: str(u.name), avatar: httpUrl(u.avatar_url), comments: num(u.comments) ?? 0 }))
+      .filter((u) => u.name && u.comments > 0)
+      .sort((a, b) => b.comments - a.comments),
     recordings: files,
     recordingCount: files.length,
     replayUnlockAt: Number.isFinite(endMs) ? new Date(endMs + replayLockHours(base.platform) * 3_600_000).toISOString() : "",
