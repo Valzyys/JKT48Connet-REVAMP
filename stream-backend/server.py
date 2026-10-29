@@ -29,6 +29,7 @@ BASE = os.environ.get('STREAM_PUBLIC_URL', 'https://stream.jkt48connect.app').rs
 UPSTREAM = os.environ.get('STREAM_DATA_URL', 'https://api.jkt48connect.app:8443').rstrip('/')
 PLANS = {'weekly': ('Mingguan', 10000, 7), 'monthly': ('Bulanan', 20000, 30), 'yearly': ('Tahunan', 120000, 365), 'show': ('Tiket satu show', 4000, 0)}
 cache = {}; locks = defaultdict(asyncio.Lock); events = defaultdict(asyncio.Event)
+renewing = {}; known_images = set()
 rates = defaultdict(deque)
 db = None; http = None; cipher = None
 
@@ -49,8 +50,20 @@ def limit(key, maximum, period):
             if not rates[k] or rates[k][-1] < t - 3600: del rates[k]
 
 
-async def cached(key, ttl, load):
-    if key in cache and cache[key][0] > time.monotonic(): return cache[key][1]
+async def cached(key, ttl, load, stale=0):
+    """`stale` detik setelah kedaluwarsa: nilai lama langsung dikirim sambil diperbarui di latar (tanpa menunggu upstream)."""
+    entry = cache.get(key)
+    if entry and entry[0] > time.monotonic(): return entry[1]
+    if entry and stale and entry[0] + stale > time.monotonic():
+        if key not in renewing:
+            async def renew():
+                try:
+                    async with locks[key]:
+                        value = await load(); cache[key] = (time.monotonic()+ttl, value)
+                except Exception: pass
+                finally: renewing.pop(key, None)
+            renewing[key] = asyncio.create_task(renew())
+        return entry[1]
     async with locks[key]:
         if key in cache and cache[key][0] > time.monotonic(): return cache[key][1]
         value = await load(); cache[key] = (time.monotonic()+ttl, value); return value
@@ -61,6 +74,8 @@ async def upstream(path):
         r = await http.get(UPSTREAM+path, headers={'X-API-Key': os.environ['JKT48CONNECT_API_KEY']}, timeout=20, allow_redirects=False)
         if r.status_code != 200: error(502, 'Sumber data sedang belum tersedia. Coba lagi sebentar.')
         return r.json()
+    # Detail theater & jadwal jarang berubah: disimpan lebih lama dan diperbarui di latar.
+    if path.startswith(('/api/theater/', '/api/next_schedule')): return await cached(path, 600, load, stale=86400)
     return await cached(path, 5 if 'now_live' in path else 30, load)
 
 
@@ -81,7 +96,9 @@ def design(item, key):
 def image_url(url):
     if not url or not allowed(url):return ''
     ident=digest(url)
-    db.execute('INSERT OR IGNORE INTO image_sources VALUES(?,?)',(ident,url));db.commit()
+    # Katalog memanggil ini ratusan kali per permintaan: tulis ke SQLite hanya untuk URL baru.
+    if ident not in known_images:
+        db.execute('INSERT OR IGNORE INTO image_sources VALUES(?,?)',(ident,url));db.commit();known_images.add(ident)
     return BASE+'/api/app/image/'+ident
 
 
@@ -222,7 +239,31 @@ async def logout(user=Depends(who)):
     db.execute('DELETE FROM sessions WHERE token_hash=?',(user['sid'],));db.commit();return {'ok':True}
 
 
-async def shows():
+async def lineup_for(show_id,title,scheduled,lineup):
+    """Lineup dari detail theater (showId) atau dari jadwal berikutnya yang cocok tanggal & judulnya."""
+    if re.fullmatch(r'SH[A-Z0-9]{2,20}',show_id):
+        try:
+            detail=await upstream('/api/theater/'+show_id)
+            lineup=next(iter(objects(detail,'shows')),{}).get('members',lineup)
+        except Exception:pass
+    if not lineup:
+        try:
+            next_shows=await upstream('/api/next_schedule')
+            for day in objects(next_shows,'schedules','shows','theater'):
+                for entry in objects(day,'shows')or[day]:
+                    entry_date=entry.get('date')or entry.get('start_date')or day.get('date')or''
+                    if str(entry_date)[:10]==str(scheduled)[:10]and str(entry.get('title','')).split(' - ')[0].casefold()in title.casefold():
+                        lineup=entry.get('members')or[]
+                        code=str(entry.get('code')or entry.get('id')or'')
+                        if not lineup and re.fullmatch(r'[A-Za-z0-9_-]{2,80}',code):
+                            detail=await upstream('/api/theater/'+quote(code,safe=''))
+                            lineup=next(iter(objects(detail,'shows')),{}).get('members',[])
+        except Exception:pass
+    return lineup
+
+
+async def shows(fresh=False):
+    """Katalog theater. Biasa: nilai cache langsung dikirim lalu diperbarui di latar. `fresh`: maksimal 30 detik (cek status live)."""
     async def load():
         url=os.environ.get('STREAM_SHOWS_URL','https://v5.jkt48connect.com/api/jkt48/idnplus')
         try:
@@ -231,41 +272,25 @@ async def shows():
             raw=r.json()
             items=objects(raw,'data','shows','livestreams','items','theater','schedules')
             if isinstance(raw,dict)and isinstance(raw.get('data'),dict):items=objects(raw['data'],'items','shows','livestreams','schedules')
-            result=[]
+            result=[];pending=[]
             for s in items:
                 slug=str(s.get('slug') or s.get('live_slug') or s.get('id') or '')
                 if not slug:continue
-                lineup=s.get('members')or s.get('lineup')or[]
                 show_id=str(s.get('showId')or'')
-                if show_id:
-                    db.execute('INSERT INTO show_aliases VALUES(?,?) ON CONFLICT(alias) DO UPDATE SET slug=excluded.slug',(show_id,slug));db.commit()
-                if re.fullmatch(r'SH[A-Z0-9]{2,20}',show_id):
-                    try:
-                        detail=await upstream('/api/theater/'+show_id)
-                        lineup=next(iter(objects(detail,'shows')),{}).get('members',lineup)
-                    except HTTPException:pass
+                if show_id:db.execute('INSERT INTO show_aliases VALUES(?,?) ON CONFLICT(alias) DO UPDATE SET slug=excluded.slug',(show_id,slug))
                 title=s.get('title') or s.get('name') or 'JKT48 Theater'
                 scheduled=s.get('start_date')or s.get('scheduled_at')or s.get('date')or''
                 if isinstance(scheduled,(int,float)):
                     from datetime import datetime,timezone
                     scheduled=datetime.fromtimestamp(scheduled,timezone.utc).isoformat()
-                if not lineup:
-                    try:
-                        next_shows=await upstream('/api/next_schedule')
-                        for day in objects(next_shows,'schedules','shows','theater'):
-                            for entry in objects(day,'shows')or[day]:
-                                entry_date=entry.get('date')or entry.get('start_date')or day.get('date')or''
-                                if str(entry_date)[:10]==str(scheduled)[:10]and str(entry.get('title','')).split(' - ')[0].casefold()in title.casefold():
-                                    lineup=entry.get('members')or[]
-                                    code=str(entry.get('code')or entry.get('id')or'')
-                                    if not lineup and re.fullmatch(r'[A-Za-z0-9_-]{2,80}',code):
-                                        detail=await upstream('/api/theater/'+quote(code,safe=''))
-                                        lineup=next(iter(objects(detail,'shows')),{}).get('members',[])
-                    except HTTPException:pass
+                pending.append(lineup_for(show_id,title,scheduled,s.get('members')or s.get('lineup')or[]))
                 result.append({'id':slug,'kind':'theater','title':title,
                     'date':scheduled, 'image':s.get('image_url')or s.get('image')or s.get('thumbnail')or s.get('banner_url')or'',
-                    'lineup':lineup, 'isLive':bool(s.get('is_live')or s.get('isLive')or str(s.get('status','')).lower()in('live','on_air')),
+                    'lineup':[], 'isLive':bool(s.get('is_live')or s.get('isLive')or str(s.get('status','')).lower()in('live','on_air')),
                     'price':4000,'source':'idnplus','showId':show_id})
+            db.commit()
+            # Lineup tiap show diambil bersamaan, bukan satu per satu.
+            for show,lineup in zip(result,await asyncio.gather(*pending)):show['lineup']=lineup
             if result:return result
         except Exception:pass
         # Real archive snapshots are labeled as archives, never fabricated as live.
@@ -277,7 +302,7 @@ async def shows():
             result.append({'id':s['slug'],'kind':'theater','title':s['title'],'date':s.get('scheduled_at')or s.get('show_date')or'',
                            'image':s.get('banner_url')or s.get('poster_url')or'','lineup':lineup,'isLive':False,'price':4000,'source':'archive'})
         return result
-    return await cached('shows',30,load)
+    return await cached('shows',30,load,stale=0 if fresh else 3600)
 
 
 @app.get('/api/app/catalog')
@@ -371,7 +396,7 @@ async def playback(kind:str,ident:str,user=Depends(who)):
     authorize(user,kind,ident)
     files=[];title=''
     if kind=='theater':
-        show=next((s for s in await shows()if s['id']==ident),None)
+        show=next((s for s in await shows(fresh=True)if s['id']==ident),None)
         if not show:error(404,'Show tidak ditemukan.')
         if show.get('source')!='idnplus':error(409,'Jadwal ini masih berupa arsip. Katalog siaran langsung belum tersedia.')
         if not show.get('isLive'):error(409,'Show belum dimulai. Aksesmu tetap tersimpan untuk jadwal ini.')

@@ -61,6 +61,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.jkt48connect.stream.ui.glass.*
 import app.jkt48connect.stream.ui.theme.*
@@ -149,18 +150,20 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
     val context = LocalContext.current
     val ui = remember { PlayerUi() }
     LaunchedEffect(Unit) {
+        val scope = this
         val source = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(mapOf("Authorization" to "Bearer ${StreamApi.token}"))
             .setAllowCrossProtocolRedirects(false)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(20_000)
-        // Live: tunggu ±3 detik cadangan setelah tersendat. VOD: mulai cepat lalu isi cadangan sampai 50 detik.
+        // Live: tunggu ±5 detik cadangan setelah tersendat supaya tidak berhenti-jalan. VOD: mulai cepat lalu isi cadangan sampai 60 detik.
         val load = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(if (src.live) 4_000 else 15_000, if (src.live) 30_000 else 50_000, 1_000, if (src.live) 3_000 else 2_500)
+            .setBufferDurationsMs(if (src.live) 8_000 else 20_000, if (src.live) 30_000 else 60_000, 1_500, 5_000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
         val exo = ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
-            .setMediaSourceFactory(DefaultMediaSourceFactory(source))
+            // Segmen/playlist yang gagal dimuat dicoba ulang lebih banyak sebelum dianggap error.
+            .setMediaSourceFactory(DefaultMediaSourceFactory(source).setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(8)))
             .setLoadControl(load)
             .setHandleAudioBecomingNoisy(true)
             .build()
@@ -171,16 +174,32 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
             // Playlist live pendek: jangan dipercepat untuk mengejar ujung siaran, cukup sedikit diperlambat.
             item.setLiveConfiguration(
                 MediaItem.LiveConfiguration.Builder()
-                    .setTargetOffsetMs(6_000).setMinOffsetMs(2_000).setMaxOffsetMs(45_000)
+                    .setTargetOffsetMs(10_000).setMinOffsetMs(4_000).setMaxOffsetMs(60_000)
                     .setMinPlaybackSpeed(0.97f).setMaxPlaybackSpeed(1f)
                     .build(),
             )
         }
         exo.addListener(object : Player.Listener {
+            /** Pemulihan beruntun sejak terakhir kali video benar-benar berjalan. */
+            var recoveries = 0
+
             override fun onPlayerError(error: PlaybackException) {
+                // Jaringan/sumber tersendat (timeout, HTTP 5xx, playlist live belum lengkap): sambung ulang sendiri
+                // dengan jeda bertahap, bukan berhenti. VOD lanjut dari posisi terakhir, live ke ujung siaran.
+                val transient = error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT ||
+                    error.errorCode in 2000..2999 || (src.live && error.errorCode in 3000..3999)
                 if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
                     exo.seekToDefaultPosition()
                     exo.prepare()
+                } else if (transient && recoveries < 12) {
+                    recoveries++
+                    ui.buffering = true
+                    scope.launch {
+                        delay((recoveries * 1_000L).coerceAtMost(5_000L))
+                        if (src.live) exo.seekToDefaultPosition()
+                        exo.prepare()
+                        exo.play()
+                    }
                 } else {
                     val msg = error.localizedMessage ?: "Video belum bisa diputar"
                     ui.error = msg
@@ -190,7 +209,11 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 ui.playing = isPlaying
-                if (isPlaying) ui.started = true
+                if (isPlaying) {
+                    ui.started = true
+                    ui.error = null
+                    recoveries = 0
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -568,8 +591,8 @@ fun PlayerScreen(item: JSONObject) {
                         title = title,
                         label = label,
                         poster = item.optString("image"),
-                        // Tiket sumber kedaluwarsa → minta URL baru sekali.
-                        onFatal = { if (attempt < 1) attempt++ },
+                        // Sumber tetap gagal setelah disambung ulang → minta tiket/URL baru (maks. 3 kali).
+                        onFatal = { if (attempt < 3) attempt++ },
                     )
                 }
                 error.isNotEmpty() -> Column(Modifier.fillMaxWidth().glassCard(22.dp).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
