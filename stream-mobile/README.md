@@ -6,7 +6,7 @@ Komponen Liquid Glass `LiquidButton`, `LiquidTabs`, glass/Backdrop, gesture spri
 
 ## Build
 
-JDK 17, Android SDK 36 dan Gradle wrapper 9.3.1. SDK 37 pada basis belum tersedia di SDK Manager saat pengerjaan; variant ini memakai compileSdk/targetSdk 36. Dependensi Compose/Backdrop tetap mengikuti basis.
+JDK 17, Android SDK 37.0, AGP 9.2.1 dan Gradle wrapper 9.4.1. compileSdk memakai minorApiLevel 0 karena platform diterbitkan sebagai android-37.0; targetSdk tetap 36. Dependensi Compose/Backdrop tetap mengikuti basis.
 
 ```
 ANDROID_HOME=/path/to/sdk ./gradlew :app:assembleDebug
