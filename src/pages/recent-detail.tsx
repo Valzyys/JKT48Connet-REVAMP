@@ -112,6 +112,38 @@ export function RecentDetailPage() {
                   </section>
                 )}
 
+                {r.gifters.length > 0 && (
+                  <section data-reveal>
+                    <H2>Pengirim gift</H2>
+                    <ol className="panel overflow-hidden">
+                      {r.gifters.slice(0, 20).map((g, i) => (
+                        <li key={`${g.name}-${i}`} className="border-t border-line px-4 py-3 first:border-t-0">
+                          <div className="grid grid-cols-[1.5rem_auto_1fr_auto] items-center gap-3">
+                            <span className="num text-ink-soft">{i + 1}</span>
+                            <Img src={g.avatar} alt={g.name} className="h-9 w-9 rounded-full object-cover" />
+                            <span className="truncate font-medium">{g.name}</span>
+                            <span className="num font-semibold">
+                              {fmtNumber(g.total)} <span className="text-[12px] font-normal text-ink-soft">{unit}</span>
+                            </span>
+                          </div>
+                          {g.gifts.length > 0 && (
+                            <ul className="mt-2 flex flex-wrap gap-1.5 pl-[calc(1.5rem+2.25rem+1.5rem)]">
+                              {g.gifts.slice(0, 10).map((x) => (
+                                <li key={x.name} title={x.name} className="flex items-center gap-1 rounded-full bg-surface py-0.5 pl-1 pr-2">
+                                  {x.img ? <img src={x.img} alt={x.name} loading="lazy" className="h-5 w-5 object-contain" /> : <span className="h-5 w-5 rounded-full bg-line" />}
+                                  <span className="num text-[12px] text-ink-soft">×{fmtNumber(x.num)}</span>
+                                </li>
+                              ))}
+                              {g.gifts.length > 10 && <li className="num self-center text-[12px] text-ink-soft">+{g.gifts.length - 10} jenis</li>}
+                            </ul>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                    {r.giftersMore && <p className="pt-2 text-[13px] text-ink-soft">Menampilkan pengirim yang tercatat; daftar lengkap lebih panjang.</p>}
+                  </section>
+                )}
+
                 {r.gifts.length > 0 && (
                   <section data-reveal>
                     <H2>Gift</H2>
