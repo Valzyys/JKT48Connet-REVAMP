@@ -1,0 +1,502 @@
+@import "tailwindcss";
+@import "@fontsource-variable/archivo/wdth.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-blush: var(--blush);
+  --color-butter: var(--butter);
+  --color-nav: var(--nav);
+
+  --font-sans: "Archivo Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+/* Palet "Fan Signal" yang sama dengan jkt48connect.app: kertas krem, merah JKT48Connect, blush, kuning mentega. */
+:root {
+  --bg: #f3eee6;
+  --surface: #e9e2d7;
+  --card: #fbf8f3;
+  --ink: #1d1517;
+  --ink-soft: #776b66;
+  --line: rgb(29 21 23 / 0.11);
+  --brand: #e1243a;
+  --brand-strong: #b9172b;
+  --blush: #f6dcdc;
+  --butter: #fde6b0;
+  --nav: #1d1517;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #141012;
+  --surface: #211a1d;
+  --card: #1a1518;
+  --ink: #f3ece6;
+  --ink-soft: #9f918c;
+  --line: rgb(255 235 230 / 0.09);
+  --brand: #ff3b52;
+  --brand-strong: #ff6476;
+  --blush: #3a1d23;
+  --butter: #fde6b0;
+  --nav: #0b0809;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background-color: var(--bg);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+::selection {
+  background: var(--brand);
+  color: #fff;
+}
+
+img {
+  -webkit-user-drag: none;
+}
+
+.selectable {
+  user-select: text;
+  cursor: auto;
+}
+
+/* Area seret jendela (title bar sendiri). Tombol & input di dalamnya tetap bisa diklik. */
+.drag {
+  -webkit-app-region: drag;
+}
+.drag :where(button, a, input, select, [role="button"], [data-nodrag]) {
+  -webkit-app-region: no-drag;
+}
+
+@layer components {
+  /* Judul condensed tebal, seperti "THE LINEUP" pada desain brand. */
+  .condensed {
+    font-stretch: 75%;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+
+  /* Label mono kecil, seperti "YOUR NEXT THEATER DATE". */
+  .micro {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .panel {
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--card);
+  }
+
+  .pill {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 999px;
+    padding: 0.6rem 1.1rem;
+    font-size: 14px;
+    font-weight: 700;
+    transition:
+      background-color 0.15s,
+      color 0.15s,
+      border-color 0.15s,
+      transform 0.15s;
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .btn-primary {
+    background: var(--brand);
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background: var(--brand-strong);
+  }
+  .btn-ghost {
+    border: 1px solid var(--line);
+    background: var(--card);
+  }
+  .btn-ghost:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+  }
+
+  .link-more {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    transition: color 0.15s;
+  }
+  .link-more:hover {
+    color: var(--brand);
+  }
+
+  /* Kartu yang bisa diklik: sedikit terangkat saat hover. */
+  .lift {
+    transition:
+      transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 0.2s,
+      border-color 0.2s;
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--brand) 35%, var(--line));
+    box-shadow: 0 14px 30px -18px rgb(29 21 23 / 0.35);
+  }
+
+  .prose-body {
+    user-select: text;
+    cursor: auto;
+  }
+  .prose-body p,
+  .prose-body li {
+    color: var(--ink-soft);
+    line-height: 1.75;
+  }
+  .prose-body p + p {
+    margin-top: 0.85rem;
+  }
+  .prose-body h2,
+  .prose-body h3 {
+    margin-top: 1.6rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .prose-body ul,
+  .prose-body ol {
+    margin-top: 0.6rem;
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+  .prose-body strong {
+    color: var(--ink);
+  }
+  .prose-body img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin-block: 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+  }
+  .prose-body a {
+    color: var(--brand);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+}
+
+/* Gulir halus & tipis, seperti aplikasi Windows modern. */
+.scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink) 22%, transparent) transparent;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Masuknya halaman. */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.page-in {
+  animation: page-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.rise {
+  animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  border-radius: 16px;
+  background: linear-gradient(90deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 55%, var(--card)) 50%, var(--surface) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 70%, transparent);
+  }
+  80%,
+  100% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--brand);
+  animation: pulse-dot 1.6s ease-out infinite;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee {
+  animation: marquee 40s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ───────────── Hero panggung (Beranda) ───────────── */
+@keyframes char-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.55em) rotate(6deg);
+    filter: blur(6px);
+  }
+}
+.stage .char {
+  animation: char-in 0.7s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.fade-up {
+  animation: fade-up 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes roll {
+  from {
+    transform: translateY(70%);
+    opacity: 0;
+  }
+}
+.roll {
+  display: inline-block;
+  animation: roll 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+}
+@keyframes sway-l {
+  0%,
+  100% {
+    transform: rotate(18deg);
+  }
+  50% {
+    transform: rotate(-8deg);
+  }
+}
+@keyframes sway-r {
+  0%,
+  100% {
+    transform: rotate(-16deg);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+}
+.beam {
+  border-radius: 0 0 50% 50%;
+  mix-blend-mode: screen;
+}
+.beam-l {
+  animation: sway-l 9s ease-in-out infinite;
+}
+.beam-r {
+  animation: sway-r 11s ease-in-out infinite;
+}
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(6%, 8%) scale(1.08);
+  }
+}
+.stage-glow {
+  animation: drift 14s ease-in-out infinite;
+}
+.stage-glow-2 {
+  animation: drift 18s ease-in-out infinite reverse;
+}
+.stage .tilt {
+  transform: rotateY(calc(var(--mx) * 14deg)) rotateX(calc(var(--my) * -10deg)) translateZ(0);
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-style: preserve-3d;
+  animation: fade-up 0.9s 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.stage .sheen {
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.22) 48%, transparent 62%);
+  transform: translateX(calc(var(--mx) * 60%));
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(-3deg);
+  }
+}
+.float {
+  animation: float 5s ease-in-out infinite;
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4) translateY(10px);
+  }
+}
+.pop {
+  animation: pop 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) both;
+}
+
+/* ───────────── Pemutar ───────────── */
+@keyframes player-flash {
+  from {
+    opacity: 1;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+.player-flash > span {
+  animation: player-flash 0.6s ease-out forwards;
+}
+.player-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e1243a var(--p), rgb(255 255 255 / 0.25) var(--p));
+  cursor: pointer;
+}
+.player-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: #fde6b0;
+  border: 3px solid #e1243a;
+}
+
+/* Kartu dalam daftar muncul berurutan. */
+.stagger > * {
+  animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.stagger > :nth-child(1) { animation-delay: 35ms; }
+.stagger > :nth-child(2) { animation-delay: 70ms; }
+.stagger > :nth-child(3) { animation-delay: 105ms; }
+.stagger > :nth-child(4) { animation-delay: 140ms; }
+.stagger > :nth-child(5) { animation-delay: 175ms; }
+.stagger > :nth-child(6) { animation-delay: 210ms; }
+.stagger > :nth-child(7) { animation-delay: 245ms; }
+.stagger > :nth-child(8) { animation-delay: 280ms; }
+.stagger > :nth-child(9) { animation-delay: 315ms; }
+.stagger > :nth-child(10) { animation-delay: 350ms; }
+.stagger > :nth-child(11) { animation-delay: 385ms; }
+.stagger > :nth-child(12) { animation-delay: 420ms; }
+.stagger > :nth-child(13) { animation-delay: 455ms; }
+.stagger > :nth-child(14) { animation-delay: 490ms; }
+.stagger > :nth-child(15) { animation-delay: 525ms; }
+.stagger > :nth-child(16) { animation-delay: 560ms; }
+.stagger > :nth-child(17) { animation-delay: 595ms; }
+.stagger > :nth-child(18) { animation-delay: 630ms; }
+.stagger > :nth-child(19) { animation-delay: 665ms; }
+.stagger > :nth-child(20) { animation-delay: 700ms; }
+.stagger > :nth-child(21) { animation-delay: 735ms; }
+.stagger > :nth-child(22) { animation-delay: 770ms; }
+.stagger > :nth-child(23) { animation-delay: 805ms; }
+.stagger > :nth-child(24) { animation-delay: 840ms; }
+.stagger > :nth-child(n + 25) {
+  animation-delay: 860ms;
+}
+
+@keyframes chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    background: rgb(255 59 82 / 0.18);
+  }
+}
+.chat-in {
+  animation: chat-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}

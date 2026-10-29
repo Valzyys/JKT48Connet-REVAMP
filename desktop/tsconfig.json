@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "isolatedModules": true,
+    "types": [],
+    "paths": {
+      "@/*": ["./renderer/src/*"],
+      "@shared/*": ["../src/lib/*"]
+    }
+  },
+  "include": ["renderer/src", "../src/lib/shape.ts", "../src/lib/format.ts"]
+}

@@ -18,6 +18,8 @@ import { STATIC_PAGES } from "@/lib/seo";
 /** APK selalu bernama sama di setiap rilis, jadi tautan "latest" GitHub selalu menuju versi terbaru. */
 const LATEST_APK = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/latest/download/jkt48connect.apk";
 const IOS_BASE = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/ios-latest";
+/** Installer Windows dengan URL tetap (prerelease desktop-latest). */
+const WIN_EXE = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/desktop-latest/JKT48Connect-Setup.exe";
 const IOS_IPA = `${IOS_BASE}/jkt48connect.ipa`;
 /** Repo Scarlet dan sumber AltStore (dibaca SideStore, Feather, ESign); URL tetap, diperbarui tiap rilis iPhone. */
 const IOS_SCARLET = `${IOS_BASE}/scarlet.json`;
@@ -129,6 +131,7 @@ export function AppsPage() {
   const apk = release.data?.apk || LATEST_APK;
   const version = release.data?.version;
   const ios = release.data?.ios;
+  const win = release.data?.desktop;
   const ipa = ios?.ipa || IOS_IPA;
   const liveList = live.data ?? [];
   const show = next.data?.find((s) => s.category === "show") ?? next.data?.[0];
@@ -211,9 +214,10 @@ export function AppsPage() {
             <div data-hero-in className="mt-8 flex flex-wrap gap-3">
               <StoreButton href={apk} dark label="Unduh untuk Android" sub={version ? `APK · v${version}` : "APK"} icon={<IconAndroidPhone />} />
               <StoreButton href="#panduan-iphone" onClick={() => setGuide("iphone")} label="Pasang di iPhone" sub={ios?.version ? `.ipa · v${ios.version}` : ".ipa · tanpa PC"} icon={<IconIphone />} />
+              <StoreButton href={win?.exe || WIN_EXE} label="Unduh untuk Windows" sub={win?.version ? `.exe · v${win.version}` : ".exe · Windows 10/11"} icon={<IconWindows />} />
             </div>
             <p data-hero-in className="mt-5 text-[13px] text-[#8a8a94]">
-              Gratis · tanpa akun · tanpa iklan · Android 8+ · iOS 16+
+              Gratis · tanpa akun · tanpa iklan · Android 8+ · iOS 16+ · Windows 10/11
             </p>
           </div>
 
@@ -411,6 +415,32 @@ export function AppsPage() {
               </a>
             </div>
             <p className="mt-5 text-[12px] text-[#8a8a94]">iOS 16+ · Liquid Glass asli di iOS 26</p>
+          </div>
+
+          <div data-in id="windows" className="relative flex flex-col overflow-hidden rounded-[28px] bg-[#e1243a] p-7 text-white sm:p-9 md:col-span-2 md:flex-row md:items-center md:gap-10">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-3">
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/15"><IconWindows /></span>
+                <div>
+                  <p className="text-[22px] font-extrabold tracking-[-0.03em]">Windows</p>
+                  <p className="text-[13px] text-white/75">Aplikasi desktop dengan tampilan sendiri · installer .exe</p>
+                </div>
+              </div>
+              <p className="mt-6 max-w-2xl text-[14px] leading-relaxed text-white/85">
+                Hero panggung, pemutar custom untuk live Showroom &amp; replay, komentar live Showroom, notifikasi Windows saat member mulai live, tetap jalan di tray, dan update otomatis.
+              </p>
+              <dl className="mt-6 grid max-w-md grid-cols-3 gap-4">
+                <Meta k="Versi" v={win?.version ?? "—"} dark />
+                <Meta k="Ukuran" v={fmtSize(win?.size)} dark />
+                <Meta k="Rilis" v={fmtDate(win?.publishedAt)} dark />
+              </dl>
+            </div>
+            <div className="mt-8 shrink-0 md:mt-0">
+              <a href={win?.exe || WIN_EXE} className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3.5 text-[15px] font-bold text-[#e1243a] transition-transform hover:-translate-y-0.5 active:scale-95">
+                Unduh untuk Windows <IconArrow />
+              </a>
+              <p className="mt-4 max-w-xs text-[12px] text-white/70">Windows 10/11 64-bit. Jika muncul “Windows protected your PC”, klik More info → Run anyway (installer belum bertanda tangan digital).</p>
+            </div>
           </div>
         </div>
       </section>
@@ -905,6 +935,14 @@ function IconAndroidPhone() {
     </svg>
   );
 }
+function IconWindows() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor" aria-hidden>
+      <path d="M3 5.6 10.4 4.6v7H3zM11.4 4.4 21 3v8.6h-9.6zM3 12.6h7.4v7L3 18.5zM11.4 12.6H21V21l-9.6-1.4z" />
+    </svg>
+  );
+}
+
 function IconIphone() {
   return (
     <svg {...svgProps} className="h-6 w-6">

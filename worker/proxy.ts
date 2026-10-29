@@ -22,6 +22,7 @@
 import {
   shapeBirthdays,
   shapeLive,
+  shapeShowroomComments,
   shapeMember,
   shapeMembers,
   shapeNews,
@@ -137,6 +138,9 @@ const ROUTES: Route[] = [
   { re: /^\/api\/member$/, ttl: 300, upstream: () => "/api/member", shape: shapeMembers },
   { re: id("member"), ttl: 300, upstream: ([m]) => `/api/member/${encodeURIComponent(m)}`, shape: (r, [m]) => shapeMember(r, m) },
   { re: /^\/api\/now_live$/, ttl: 20, upstream: () => "/api/now_live?group=jkt48", shape: shapeLive },
+  // Komentar live Showroom: buffer 100 komentar terakhir dari relay (tidak memukul Showroom). Di-cache 3 detik
+  // sehingga semua penonton room yang sama berbagi satu permintaan upstream; salinan lama maksimal 20 detik.
+  { re: /^\/api\/showroom-comments\/(\d{1,12})$/, ttl: 3, swr: 20_000, upstream: ([room]) => `/api/showroom-comments/${room}`, shape: shapeShowroomComments },
   {
     re: /^\/api\/theater$/,
     ttl: 300,
@@ -416,6 +420,26 @@ async function fetchIosRelease(env: ProxyEnv): Promise<IosRelease | null> {
   };
 }
 
+/** Rilis Windows di prerelease tetap `desktop-latest` (installer NSIS); null bila belum ada atau gagal. */
+type DesktopRelease = { version: string; exe: string; size: number; publishedAt: string };
+
+async function fetchDesktopRelease(env: ProxyEnv): Promise<DesktopRelease | null> {
+  const repo = /^[\w.-]+\/[\w.-]+$/.test(env.APP_RELEASE_REPO ?? "") ? env.APP_RELEASE_REPO! : APP_RELEASE_REPO;
+  const res = await (env.UPSTREAM_FETCH ?? fetch)(`https://api.github.com/repos/${repo}/releases/tags/desktop-latest`, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "JKT48Connect update check", "X-GitHub-Api-Version": "2022-11-28" },
+  });
+  if (!res.ok) return null;
+  const r = (await res.json()) as GithubRelease;
+  const exe = r.assets?.find((a) => a.name === "JKT48Connect-Setup.exe" && (a.browser_download_url ?? "").startsWith("https://github.com/"));
+  if (!exe) return null;
+  return {
+    version: /\d+\.\d+\.\d+/.exec(`${r.name ?? ""}`)?.[0] ?? "",
+    exe: String(exe.browser_download_url),
+    size: Number(exe.size ?? 0),
+    publishedAt: String(r.published_at ?? ""),
+  };
+}
+
 /**
  * `GET /api/app/update` → versi terbaru dari GitHub Releases (release "latest": bukan draft/prerelease),
  * di-cache 15 menit. Aplikasi membandingkan `version` (x.y.z dari judul/tag release) dengan versinya sendiri.
@@ -429,24 +453,26 @@ async function handleAppUpdate(c: Call): Promise<Response> {
 
 /**
  * JSON rilis APK terbaru (di-cache di edge), dipakai `/api/app/update` (aplikasi) dan `/api/app_release` (halaman /apps).
- * `ios` berisi rilis iPhone (`ios-latest`) untuk halaman /apps; aplikasi Android mengabaikannya.
+ * `ios` berisi rilis iPhone (`ios-latest`) dan `desktop` rilis Windows (`desktop-latest`) untuk halaman /apps;
+ * aplikasi Android mengabaikan keduanya.
  */
 async function appReleaseBody(c: Call): Promise<string | Response> {
   const { url, env, ctx } = c;
   const cache = edgeCache();
-  const key = new Request(`${url.origin}/__cache/v3/app-update/${env.APP_RELEASE_REPO ?? ""}`);
+  const key = new Request(`${url.origin}/__cache/v4/app-update/${env.APP_RELEASE_REPO ?? ""}`);
   const hit = await cache?.match(key);
   if (hit) return hit.text();
 
   let release: AppRelease | null;
   let ios: IosRelease | null;
+  let desktop: DesktopRelease | null;
   try {
-    [release, ios] = await Promise.all([fetchLatestRelease(env), fetchIosRelease(env).catch(() => null)]);
+    [release, ios, desktop] = await Promise.all([fetchLatestRelease(env), fetchIosRelease(env).catch(() => null), fetchDesktopRelease(env).catch(() => null)]);
   } catch {
     return json({ status: 502, message: "Info update tidak bisa diambil" }, 502);
   }
   if (!release) return json({ status: 404, message: "Belum ada rilis" }, 404);
-  const body = JSON.stringify({ ...release, ios });
+  const body = JSON.stringify({ ...release, ios, desktop });
   if (cache) ctx.waitUntil(cache.put(key, new Response(body, { headers: { "content-type": "application/json", "cache-control": `public, max-age=${UPDATE_TTL}` } })));
   return body;
 }

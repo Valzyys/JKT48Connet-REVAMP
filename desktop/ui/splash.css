@@ -1,0 +1,182 @@
+html,
+body {
+  background: transparent;
+}
+body {
+  padding: 20px;
+  display: grid;
+  place-items: stretch;
+}
+.card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  color: #fff;
+  background:
+    radial-gradient(120% 90% at 85% 10%, rgb(255 90 110 / 0.55), transparent 60%),
+    linear-gradient(150deg, #e1243a 0%, #c81a30 55%, #9e1326 100%);
+  box-shadow:
+    0 22px 50px -18px rgb(80 0 12 / 0.75),
+    inset 0 0 0 1px rgb(255 255 255 / 0.14);
+  animation: rise 0.55s cubic-bezier(0.2, 0.9, 0.25, 1.1) both;
+}
+.card.out {
+  animation: fade 0.38s ease-in forwards;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+@keyframes fade {
+  to {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+}
+
+/* Dua baris teks raksasa bergaris tepi yang melaju berlawanan, seperti intro situs. */
+.marquee {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 0 62px;
+  pointer-events: none;
+}
+.row {
+  display: flex;
+  white-space: nowrap;
+  font-size: 92px;
+  line-height: 1;
+  font-weight: 900;
+  font-stretch: 62%;
+  color: transparent;
+  -webkit-text-stroke: 1.3px rgb(255 255 255 / 0.22);
+}
+.row span {
+  flex-shrink: 0;
+}
+.r1 {
+  animation: left 26s linear infinite;
+}
+.r2 {
+  animation: right 30s linear infinite;
+}
+@keyframes left {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes right {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.hud {
+  position: absolute;
+  top: 20px;
+  color: rgb(255 255 255 / 0.78);
+  font-size: 10px;
+}
+.tl {
+  left: 24px;
+}
+.tr {
+  right: 24px;
+}
+
+.center {
+  position: absolute;
+  inset: 0 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+.cross {
+  width: 86px;
+  height: 86px;
+  fill: #fff;
+  filter: drop-shadow(0 8px 18px rgb(90 0 15 / 0.45));
+}
+.cross rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.2) rotate(-35deg);
+  }
+}
+h1 {
+  display: flex;
+  flex-direction: column;
+  font-size: 56px;
+  line-height: 0.86;
+}
+h1 .a {
+  animation: slidein 0.6s 0.35s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+h1 .b {
+  color: #1d1517;
+  animation: slidein 0.6s 0.45s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+@keyframes slidein {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+
+footer {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 20px;
+}
+.status {
+  color: rgb(255 255 255 / 0.9);
+  font-size: 10.5px;
+  margin-bottom: 9px;
+  min-height: 1em;
+}
+.track {
+  position: relative;
+  height: 3px;
+  border-radius: 99px;
+  background: rgb(0 0 0 / 0.22);
+  overflow: hidden;
+}
+.track i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 8%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #fff, #fde6b0);
+  transition: width 0.6s cubic-bezier(0.3, 0.8, 0.3, 1);
+}
+.track i::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: #fde6b0;
+  box-shadow: 0 0 12px 3px rgb(253 230 176 / 0.8);
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+  }
+}

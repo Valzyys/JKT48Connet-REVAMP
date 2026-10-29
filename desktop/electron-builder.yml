@@ -1,0 +1,50 @@
+# Installer Windows (NSIS) JKT48Connect. Dibangun oleh .github/workflows/desktop*.yml; lihat desktop/README.md.
+appId: app.jkt48connect.desktop
+productName: JKT48Connect
+copyright: "Fan-made oleh Valzyys · tidak berafiliasi dengan JKT48 Operation Team"
+directories:
+  output: dist
+  buildResources: build
+files:
+  - src/**
+  - ui/**
+  - "!ui/app/**/*.map"
+  - package.json
+asar: true
+electronLanguages: [id, en-US]
+
+win:
+  target: [{ target: nsis, arch: [x64] }]
+  icon: build/icon.ico
+  executableName: JKT48Connect
+  legalTrademarks: JKT48Connect (fan-made)
+
+nsis:
+  # Installer bertahap (bukan sekali klik): sambutan bermerek, pilih untuk siapa & folder, lalu selesai.
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  installerSidebar: build/installerSidebar.bmp
+  uninstallerSidebar: build/uninstallerSidebar.bmp
+  installerHeader: build/installerHeader.bmp
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: JKT48Connect
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  installerLanguages: [id_ID]
+  language: "1057"
+  unicode: true
+  include: build/installer.nsh
+  # Nama tetap supaya tautan unduhan & update otomatis tidak berubah antar versi.
+  artifactName: JKT48Connect-Setup.${ext}
+  uninstallDisplayName: JKT48Connect
+
+# Update otomatis membaca latest.yml dari prerelease tetap "desktop-latest".
+publish:
+  provider: generic
+  url: https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/desktop-latest
