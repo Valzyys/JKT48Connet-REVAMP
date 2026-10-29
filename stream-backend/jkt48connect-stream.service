@@ -1,0 +1,28 @@
+[Unit]
+Description=JKT48Connect Stream private app API
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=jkt48-appstream
+Group=jkt48-appstream
+WorkingDirectory=/opt/jkt48connect-stream
+EnvironmentFile=/etc/jkt48connect-stream.env
+Environment=PYTHONUNBUFFERED=1
+Environment=STREAM_STATE_DIR=/var/lib/jkt48connect-stream
+ExecStart=/opt/jkt48connect-stream/.venv/bin/uvicorn server:app --host 127.0.0.1 --port 8801 --no-access-log
+Restart=always
+RestartSec=5
+StateDirectory=jkt48connect-stream
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/jkt48connect-stream
+MemoryMax=350M
+CPUQuota=70%
+TasksMax=60
+TimeoutStopSec=30
+[Install]
+WantedBy=multi-user.target

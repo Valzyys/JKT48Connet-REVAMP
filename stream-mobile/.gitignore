@@ -1,0 +1,11 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+
+# Keystore rilis jangan pernah di-commit
+*.jks
+*.keystore
