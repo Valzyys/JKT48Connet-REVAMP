@@ -4,6 +4,26 @@ Halaman: **https://jkt48connect.app/discord**. Menggunakan shell, token warna,
 Archivo/IBM Plex Mono, komponen `Page`, `PageHeader`, `panel`, `btn`, dan reveal
 GSAP situs yang sama. Tidak memakai tema dashboard terpisah.
 
+## Beberapa channel dan filter member
+
+Setiap jenis notifikasi mendukung sampai 10 channel tujuan. Tambahkan channel
+melalui **Tambah channel**, pilih role mention (maksimal 5), lalu atur **Semua
+member** atau **Member pilihan** pada masing-masing channel. Live, recent, X,
+TikTok, dan Instagram mendukung filter ini secara terpisah. Pencarian, checkbox,
+dan halaman daftar member tidak menghapus pilihan pada halaman lain.
+
+**Semua member** juga mencakup member baru. **Member pilihan** yang kosong
+berarti channel tidak menerima notifikasi member; bukan otomatis semua member.
+Channel lama tetap menerima semua member sampai admin mengganti pilihannya.
+Tekan **Simpan pengaturan**, kemudian **Tes channel tersimpan** pada channel
+yang ingin diperiksa. Tes tidak disebarkan ke channel lain.
+
+Alternatif di Discord: `/notifikasi atur`. Panel privat menyediakan dropdown jenis
+notifikasi/channel, menu member per halaman, pencarian nama, dan role mention.
+Pilihan pada panel Discord langsung tersimpan. Perubahan filter hanya berlaku
+untuk pengiriman berikutnya; pesan yang sudah terkirim tidak dihapus atau dikirim
+ulang. Tidak diperlukan setup OAuth atau izin login tambahan.
+
 ## Dua tingkat pengaturan
 
 - Admin server: masuk dengan Discord, memilih server yang memiliki izin Kelola
