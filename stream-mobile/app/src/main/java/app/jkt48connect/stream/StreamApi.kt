@@ -66,7 +66,8 @@ object StreamApi {
                 conn.doOutput = true; conn.setRequestProperty("Content-Type", "application/json")
                 conn.outputStream.use { it.write((body ?: JSONObject()).toString().toByteArray()) }
             }
-            val status = conn.responseCode
+            // Gangguan jaringan (tanpa sinyal, DNS, proxy) ditampilkan sebagai pesan yang bisa dipahami, bukan teks Java mentah.
+            val status = try { conn.responseCode } catch (e: java.io.IOException) { throw Exception("Koneksi bermasalah. Periksa internet lalu coba lagi.") }
             val text = (if (status >= 400) conn.errorStream else conn.inputStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             val result = runCatching { JSONObject(text) }.getOrElse { throw Exception("Layanan belum dapat dihubungi. Coba lagi sebentar.") }
             if (status == 401 && !path.startsWith("/auth/")) save("")
