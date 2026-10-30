@@ -123,6 +123,30 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
    later=await s.live_comments('sr-1',43,0,self.u)
    self.assertEqual(later['items'],[])
   s.relays.clear()
+ async def test_hls_segments_are_shared_and_next_ones_prefetched(self):
+  s.media_cache.clear();s.inflight.clear();s.following.clear();fetched=[]
+  async def load(url):
+   fetched.append(url);value=(time.monotonic()+60,200,'video/mp2t',b'seg',url);s.media_cache[url]=value;return value
+  data={'u':'https://st.avonera48.web.id/stream/show/index.m3u8','kind':'theater','target':'show','exp':s.now()+60,'h':1}
+  playlist=b'#EXTM3U\n#EXTINF:2,\na.ts\n#EXTINF:2,\nb.ts\n#EXTINF:2,\nc.ts\n#EXTINF:2,\nd.ts\n#EXT-X-ENDLIST\n'
+  with patch.object(s,'load_media',load):
+   body=s.retarget(playlist,data['u'],self.u,data).body.decode()
+   await asyncio.sleep(0)
+   base='https://st.avonera48.web.id/stream/show/'
+   self.assertEqual(fetched,[base+'a.ts',base+'b.ts'])
+   self.assertNotIn('a.ts',body)
+   self.assertEqual(s.following[base+'a.ts'],[base+'b.ts',base+'c.ts',base+'d.ts'])
+   s.prefetch(s.following[base+'b.ts']);await asyncio.sleep(0)
+   self.assertEqual(fetched,[base+'a.ts',base+'b.ts',base+'c.ts',base+'d.ts'])
+  s.media_cache.clear();s.following.clear()
+ async def test_replay_prefers_whole_mp4_over_hls_parts(self):
+  raw={'room_info':{'name':'M'},'recordings':[{'url':'https://api.jkt48connect.app/r/1.mp4','stream_url':'https://api.jkt48connect.app/r/1.m3u8'},{'stream_url':'https://api.jkt48connect.app/r/2.m3u8'}]}
+  async def upstream(path):return raw
+  with patch.object(s,'upstream',upstream):
+   items=(await s.playback('recent','r1',self.u))['items']
+  self.assertEqual([i['hls']for i in items],[False,True])
+  first=s.reveal(items[0]['url'].rsplit('/',1)[1],self.u);second=s.reveal(items[1]['url'].rsplit('/',1)[1],self.u)
+  self.assertEqual((first['u'].endswith('.mp4'),'h'in first,second.get('h')),(True,False,1))
  async def test_recent_detail_maps_stats_supporters_gifts_and_screenshots(self):
   raw={'data_id':'r1','type':'showroom','points':321,'room_info':{'name':'Member Satu','img':'https://images.jkt48connect.com/m.jpg'},
    'live_info':{'duration':3600000,'viewers':{'num':900},'comments':{'num':456,'users':78},'date':{'start':'2026-10-01T10:00:00Z','end':'2026-10-01T11:00:00Z'},

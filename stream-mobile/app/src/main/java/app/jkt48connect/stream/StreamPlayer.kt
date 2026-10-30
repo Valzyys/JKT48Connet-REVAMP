@@ -62,6 +62,9 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.jkt48connect.stream.ui.glass.*
@@ -160,12 +163,19 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
         val source = ResolvingDataSource.Factory(http) { spec ->
             if (spec.uri.toString().startsWith(StreamApi.base + "/")) spec.withAdditionalHeaders(mapOf("Authorization" to "Bearer ${StreamApi.token}")) else spec
         }
-        // Mulai begitu ada 1 detik video (cepat tampil), lalu isi cadangan. Setelah tersendat tunggu 4 detik supaya tidak putus-nyambung.
+        // Mulai setelah 2 detik video. Setelah tersendat tunggu 6 detik cadangan supaya tidak main-berhenti tiap beberapa detik.
+        // Replay terus mengisi cadangan sampai 90 detik untuk menutup jaringan yang naik-turun.
         val load = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(if (src.live) 8_000 else 20_000, if (src.live) 30_000 else 60_000, 1_000, 4_000)
+            .setBufferDurationsMs(if (src.live) 10_000 else 20_000, if (src.live) 40_000 else 90_000, 2_000, 6_000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
+        // Kualitas dipilih hati-hati: mulai dari perkiraan 1 Mbps, hanya 60% bandwidth terukur yang dipakai, dan baru naik
+        // kualitas setelah 15 detik stabil. Jaringan ke server punya jeda per permintaan, jadi perkiraan bawaan terlalu optimis.
+        val selector = DefaultTrackSelector(context, AdaptiveTrackSelection.Factory(15_000, 25_000, 25_000, 0.6f))
+        val meter = DefaultBandwidthMeter.Builder(context).setInitialBitrateEstimate(1_000_000).build()
         val exo = ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+            .setTrackSelector(selector)
+            .setBandwidthMeter(meter)
             // Segmen/playlist yang gagal dimuat dicoba ulang lebih banyak sebelum dianggap error.
             .setMediaSourceFactory(DefaultMediaSourceFactory(source).setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(8)))
             .setLoadControl(load)
@@ -178,7 +188,7 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
             // Playlist live pendek: jangan dipercepat untuk mengejar ujung siaran, cukup sedikit diperlambat.
             item.setLiveConfiguration(
                 MediaItem.LiveConfiguration.Builder()
-                    .setTargetOffsetMs(10_000).setMinOffsetMs(4_000).setMaxOffsetMs(60_000)
+                    .setTargetOffsetMs(12_000).setMinOffsetMs(6_000).setMaxOffsetMs(60_000)
                     .setMinPlaybackSpeed(0.97f).setMaxPlaybackSpeed(1f)
                     .build(),
             )

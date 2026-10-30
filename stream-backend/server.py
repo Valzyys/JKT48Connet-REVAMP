@@ -30,8 +30,8 @@ UPSTREAM = os.environ.get('STREAM_DATA_URL', 'https://api.jkt48connect.app:8443'
 PLANS = {'weekly': ('Mingguan', 10000, 7), 'monthly': ('Bulanan', 20000, 30), 'yearly': ('Tahunan', 120000, 365), 'show': ('Tiket satu show', 4000, 0)}
 cache = {}; locks = defaultdict(asyncio.Lock); events = defaultdict(asyncio.Event)
 renewing = {}; known_images = set()
-media_cache = OrderedDict(); inflight = {}; relays = {}
-MEDIA_CACHE_BYTES = 64*1024*1024; MEDIA_ITEM_BYTES = 8*1024*1024
+media_cache = OrderedDict(); inflight = {}; relays = {}; following = OrderedDict()
+MEDIA_CACHE_BYTES = 96*1024*1024; MEDIA_ITEM_BYTES = 8*1024*1024
 rates = defaultdict(deque)
 db = None; http = None; cipher = None
 
@@ -127,8 +127,10 @@ def authorize(user, kind, target):
     if kind == 'theater' and not access(user, target): error(403, 'Show ini memerlukan tiket atau membership yang aktif.')
 
 
-def ticket(user, url, kind, target, expires=None):
+def ticket(user, url, kind, target, expires=None, shared=False):
+    """`shared`: playlist/segmen HLS (bukan file utuh dengan Range) yang boleh diambil sekali lalu dibagi antarpenonton."""
     data = {'u': url, 'user': user['id'], 'sid': user['sid'], 'kind': kind, 'target': target, 'exp': expires or now()+21600}
+    if shared: data['h'] = 1
     return BASE+'/api/app/media/'+cipher.encrypt(json.dumps(data).encode()).decode()
 
 
@@ -531,7 +533,9 @@ async def playback(kind:str,ident:str,user=Depends(who)):
     elif kind=='recent':
         raw=await upstream('/api/recent/'+quote(ident,safe=''))
         title=raw.get('room_info',{}).get('name','Replay JKT48')
-        files=[{'url':x.get('stream_url')or x.get('url'),'hls':bool(x.get('stream_url'))}for x in objects(raw,'recordings') if x.get('stream_url')or x.get('url')]
+        # MP4 utuh lebih dulu: satu aliran panjang tidak menanggung jeda jaringan untuk tiap potongan 2 detik seperti HLS.
+        files=[{'url':x['url'],'hls':False}if urlparse(str(x.get('url')or'')).path.endswith('.mp4')else{'url':x.get('stream_url')or x.get('url'),'hls':bool(x.get('stream_url'))}
+               for x in objects(raw,'recordings')if isinstance(x,dict)and(x.get('stream_url')or x.get('url'))]
     elif kind=='live':
         raw=await upstream('/api/now_live')
         source=next((s for s in objects(raw,'lives','data') if live_id(s)==ident),None)
@@ -553,21 +557,38 @@ async def playback(kind:str,ident:str,user=Depends(who)):
     # Live member Showroom/IDN adalah siaran publik: diputar langsung dari CDN-nya (tanpa singgah di server ini)
     # supaya cepat mulai dan tidak tersendat. Theater (berbayar) dan replay tetap lewat tiket media.
     direct=kind=='live'
-    return {'title':title,'kind':kind,'items':[{'url':x['url']if direct else ticket(user,x['url'],kind,ident),'hls':x['hls'],'label':f"Bagian {i+1}"}for i,x in enumerate(files)]}
+    return {'title':title,'kind':kind,'items':[{'url':x['url']if direct else ticket(user,x['url'],kind,ident,shared=x['hls']),'hls':x['hls'],'label':f"Bagian {i+1}"}for i,x in enumerate(files)]}
 
 
 def is_playlist(content_type,url):
     return 'mpegurl'in content_type.lower()or urlparse(url).path.endswith('.m3u8')or '/stream/'in urlparse(url).path
 
 
+def prefetch(urls):
+    """Ambil segmen berikutnya ke cache sebelum pemutar memintanya, jadi tiap segmen tidak menunggu origin."""
+    for u in urls:
+        hit=media_cache.get(u)
+        if(hit and hit[0]>time.monotonic())or u in inflight:continue
+        task=inflight[u]=asyncio.create_task(load_media(u))
+        task.add_done_callback(lambda t,u=u:(inflight.pop(u,None),t.cancelled()or t.exception()))
+
+
 def retarget(body,url,user,data):
-    """Playlist: setiap URI (variant, segmen, key, map) diganti tiket yang terikat sesi penonton ini."""
+    """Playlist: setiap URI (variant, segmen, key, map) diganti tiket yang terikat sesi penonton ini.
+    Playlist media: urutan segmen dicatat untuk prefetch; live langsung mengambil segmen terbaru."""
     if not bytes(body).lstrip().startswith(b'#EXTM3U'):error(502,'Playlist siaran belum tersedia.')
-    out=[]
-    for line in bytes(body).decode().splitlines():
-        if not line.startswith('#')and line.strip():line=ticket(user,urljoin(url,line.strip()),data['kind'],data['target'],data['exp'])
-        else:line=re.sub(r'URI="([^"]+)"',lambda m:'URI="'+ticket(user,urljoin(url,m[1]),data['kind'],data['target'],data['exp'])+'"',line)
+    text=bytes(body).decode();out=[]
+    shared=bool(data.get('h'))
+    for line in text.splitlines():
+        if not line.startswith('#')and line.strip():line=ticket(user,urljoin(url,line.strip()),data['kind'],data['target'],data['exp'],shared)
+        else:line=re.sub(r'URI="([^"]+)"',lambda m:'URI="'+ticket(user,urljoin(url,m[1]),data['kind'],data['target'],data['exp'],shared)+'"',line)
         out.append(line)
+    if shared and '#EXTINF'in text:
+        segments=[urljoin(url,l.strip())for l in text.splitlines()if l.strip()and not l.startswith('#')]
+        for i,u in enumerate(segments):
+            following[u]=segments[i+1:i+4];following.move_to_end(u)
+        while len(following)>30000:following.popitem(last=False)
+        prefetch(segments[-3:]if '#EXT-X-ENDLIST'not in text else segments[:2])
     return Response('\n'.join(out)+'\n',media_type='application/vnd.apple.mpegurl',headers={'Cache-Control':'no-store'})
 
 
@@ -581,7 +602,9 @@ async def load_media(url):
             body.extend(chunk)
             if len(body)>MEDIA_ITEM_BYTES:return None
     finally:await r.aclose()
-    value=(time.monotonic()+(1.0 if is_playlist(content_type,final)else 120.0),200,content_type,bytes(body),final)
+    # Playlist live 1 detik; playlist VOD (#EXT-X-ENDLIST) dan segmen tidak berubah.
+    ttl=(600.0 if b'#EXT-X-ENDLIST'in body else 1.0)if is_playlist(content_type,final)else 120.0
+    value=(time.monotonic()+ttl,200,content_type,bytes(body),final)
     media_cache[url]=value
     total=sum(len(v[3])for v in media_cache.values())
     while total>MEDIA_CACHE_BYTES and media_cache:
@@ -590,8 +613,8 @@ async def load_media(url):
 
 
 async def shared_media(url):
-    """Theater: semua penonton meminta playlist & segmen yang sama. Diambil sekali dari origin lalu dibagi
-    (playlist 1 detik, segmen 2 menit, total maks. 64 MB). None = terlalu besar untuk disimpan."""
+    """HLS bertiket: playlist & segmen diambil sekali dari origin lalu dibagi antarpenonton
+    (playlist live 1 detik, segmen 2 menit, total maks. 96 MB). None = terlalu besar untuk disimpan."""
     hit=media_cache.get(url)
     if hit and hit[0]>time.monotonic():
         media_cache.move_to_end(url);return hit
@@ -599,19 +622,20 @@ async def shared_media(url):
     if task is None:
         # Task terpisah: penonton yang memutus koneksi tidak membatalkan unduhan penonton lain.
         task=inflight[url]=asyncio.create_task(load_media(url))
-        task.add_done_callback(lambda _:inflight.pop(url,None))
+        task.add_done_callback(lambda t:(inflight.pop(url,None),t.cancelled()or t.exception()))
     return await asyncio.shield(task)
 
 
 @app.get('/api/app/media/{opaque}')
 async def media(opaque:str,request:Request,user=Depends(who)):
     data=reveal(opaque,user);headers={}
-    if data['kind']=='theater'and 'range'not in request.headers:
+    if data.get('h')and 'range'not in request.headers:
         hit=await shared_media(data['u'])
         if hit is not None:
             _,status,content_type,body,url=hit
             if status!=200:error(502,'Sumber siaran belum dapat diputar.' if status!=404 else 'Bagian siaran belum tersedia.')
             if is_playlist(content_type,url):return retarget(body,url,user,data)
+            prefetch(following.get(data['u'],()))
             return Response(body,media_type=content_type)
     if 'range'in request.headers:
         value=request.headers['range']
