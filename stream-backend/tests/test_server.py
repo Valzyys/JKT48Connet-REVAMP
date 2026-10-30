@@ -100,6 +100,29 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   s.db.execute('insert into entitlements values(?,?,?,?,?,?)',('e1','u1','membership','*',0,s.now()+3600))
   items=(await s.chat('show',0,0,self.u))['items']
   self.assertEqual((len(items),items[0]['message'],items[-1]['message']),(50,'pesan 10','pesan 59'))
+ async def test_comment_relay_targets_showroom_room_and_full_idn_id(self):
+  self.assertEqual(s.comment_source({'type':'showroom','room_id':572591}),('showroom','572591'))
+  self.assertEqual(s.comment_source({'type':'idn','notification_data_id':'idn-9366d380','room_id':5}),('idn','idn-9366d380'))
+  self.assertIsNone(s.comment_source({'type':'idn','notification_data_id':'mem-one'}))
+ async def test_live_comments_share_one_relay_and_wake_waiting_viewer(self):
+  raw={'lives':[{'notification_data_id':'sr-1','type':'showroom','room_id':572591}]}
+  async def upstream(path):return raw
+  async def idle(relay):pass
+  s.relays.clear()
+  with patch.object(s,'upstream',upstream),patch.object(s.Relay,'run',idle):
+   first=await s.live_comments('sr-1',0,0,self.u)
+   self.assertEqual((first['items'],len(s.relays)),([],1))
+   waiter=asyncio.create_task(s.live_comments('sr-1',0,20,{**self.u,'id':'u2'}))
+   await asyncio.sleep(0.05);self.assertFalse(waiter.done())
+   s.relays['showroom:572591'].feed({'type':'comments','status':'connected','cursor':43,'comments':[
+    {'sequence':43,'user':{'name':'Penonton','avatar_url':'https://image.showroom-cdn.com/a/1.png'},'comment':'Halo!','observed_at':'2026-10-29T01:00:00Z'},
+    {'sequence':42,'user':{'name':'Lama'},'comment':'urutan lama'}]})
+   got=await asyncio.wait_for(waiter,1)
+   self.assertEqual([(m['id'],m['name'],m['message'])for m in got['items']],[(42,'Lama','urutan lama'),(43,'Penonton','Halo!')])
+   self.assertEqual((got['cursor'],got['status'],len(s.relays)),(43,'connected',1))
+   later=await s.live_comments('sr-1',43,0,self.u)
+   self.assertEqual(later['items'],[])
+  s.relays.clear()
  async def test_recent_detail_maps_stats_supporters_gifts_and_screenshots(self):
   raw={'data_id':'r1','type':'showroom','points':321,'room_info':{'name':'Member Satu','img':'https://images.jkt48connect.com/m.jpg'},
    'live_info':{'duration':3600000,'viewers':{'num':900},'comments':{'num':456,'users':78},'date':{'start':'2026-10-01T10:00:00Z','end':'2026-10-01T11:00:00Z'},

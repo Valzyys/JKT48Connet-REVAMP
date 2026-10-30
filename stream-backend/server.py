@@ -1,7 +1,7 @@
 """Private Kotlin app backend. No payment keys or origin stream URLs leave here."""
 import asyncio
 import base64
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 from contextlib import asynccontextmanager
 import hashlib
 import hmac
@@ -30,6 +30,8 @@ UPSTREAM = os.environ.get('STREAM_DATA_URL', 'https://api.jkt48connect.app:8443'
 PLANS = {'weekly': ('Mingguan', 10000, 7), 'monthly': ('Bulanan', 20000, 30), 'yearly': ('Tahunan', 120000, 365), 'show': ('Tiket satu show', 4000, 0)}
 cache = {}; locks = defaultdict(asyncio.Lock); events = defaultdict(asyncio.Event)
 renewing = {}; known_images = set()
+media_cache = OrderedDict(); inflight = {}; relays = {}
+MEDIA_CACHE_BYTES = 64*1024*1024; MEDIA_ITEM_BYTES = 8*1024*1024
 rates = defaultdict(deque)
 db = None; http = None; cipher = None
 
@@ -164,12 +166,15 @@ async def lifespan(app):
         fd = os.open(key,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
         with os.fdopen(fd,'wb') as f: f.write(Fernet.generate_key())
     cipher = Fernet(key.read_bytes())
-    async with AsyncSession(max_clients=24, impersonate='chrome') as client:
+    # Banyak penonton = banyak segmen yang dialirkan bersamaan; pool kecil membuat permintaan antre (video lambat mulai).
+    async with AsyncSession(max_clients=64, impersonate='chrome') as client:
         http = client
         task = asyncio.create_task(payment_loop())
         try: yield
         finally:
             task.cancel()
+            for relay in list(relays.values()):
+                if relay.task: relay.task.cancel()
             try: await task
             except asyncio.CancelledError: pass
             db.close()
@@ -311,11 +316,15 @@ async def catalog(user=Depends(who)):
     return {'items':[{**s,'image':image_url(s['image']),'lineup':[{**m,'img':image_url(m.get('img',''))}for m in s['lineup']if isinstance(m,dict)],'hasAccess':access(user,s['id'])}for s in items],'sourceAvailable':any(s.get('source')=='idnplus'for s in items)}
 
 
+def live_id(s):
+    return str(s.get('notification_data_id')or s.get('data_id')or s.get('slug')or s.get('room_id')or'')
+
+
 @app.get('/api/app/live')
 async def live(user=Depends(who)):
     raw=await upstream('/api/now_live');items=[]
     for s in objects(raw,'lives','data'):
-        ident=str(s.get('notification_data_id')or s.get('data_id')or s.get('slug')or s.get('room_id')or'')
+        ident=live_id(s)
         if not ident:continue
         platform=str(s.get('type')or'').lower()
         # Tautan publik ke halaman live IDN, dipakai sebagai cadangan bila pemutar di aplikasi belum punya sumber.
@@ -390,6 +399,124 @@ async def recent_detail(ident:str,user=Depends(who)):
             'fans':fans[:20],'screenshots':[u for u in shots if u],'recordingCount':len(recordings)}
 
 
+COMMENTS_WS=os.environ.get('STREAM_COMMENTS_WS')or'wss://'+UPSTREAM.split('://',1)[-1]
+BLOCKED=(401,403,429)
+
+
+def comment_source(s):
+    """Kunci relay komentar: Showroom memakai room_id, IDN memakai data_id lengkap `idn-…`."""
+    platform=str(s.get('type')or'').lower()
+    if platform=='showroom':
+        room=whole(s.get('room_id'))
+        return('showroom',str(room))if room else None
+    if platform=='idn':
+        ident=next((str(v)for v in(s.get('notification_data_id'),s.get('data_id'))if str(v or'').startswith('idn-')),'')
+        return('idn',ident)if re.fullmatch(r'idn-[A-Za-z0-9_-]{1,120}',ident)else None
+    return None
+
+
+class Relay:
+    """Satu koneksi WebSocket komentar per siaran, dibagi semua penonton aplikasi (upstream membatasi 4 koneksi per key).
+    Berhenti sendiri 90 detik setelah tidak ada penonton yang meminta."""
+    def __init__(self,platform,ident):
+        self.platform=platform;self.ident=ident;self.key=f'{platform}:{ident}'
+        self.items=deque(maxlen=150);self.cursor=0;self.status='connecting'
+        self.seen=time.monotonic();self.wake=asyncio.Event();self.task=None
+
+    @property
+    def path(self):return f"/api/{self.platform}-comments/{quote(self.ident,safe='')}"
+
+    def notify(self):
+        self.wake.set();self.wake=asyncio.Event()
+
+    def feed(self,event):
+        if not isinstance(event,dict):return
+        status=str(event.get('status')or self.status)[:20];changed=status!=self.status;self.status=status
+        comments=[x for x in event.get('comments')or[]if isinstance(x,dict)]
+        for c in sorted(comments,key=lambda x:whole(x.get('sequence'))):
+            seq=whole(c.get('sequence'));text=str(c.get('comment')or'').strip()
+            if seq<=self.cursor:continue
+            self.cursor=seq
+            if not text:continue
+            user=c.get('user')if isinstance(c.get('user'),dict)else{}
+            avatar=user.get('avatar_url')
+            self.items.append({'id':seq,'name':str(user.get('name')or'Penonton')[:60],'message':text[:300],
+                               'avatar':avatar if isinstance(avatar,str)and avatar.startswith('https://')else'',
+                               'at':str(c.get('source_time')or c.get('observed_at')or'')})
+            changed=True
+        if changed:self.notify()
+
+    def idle(self):return time.monotonic()-self.seen>=90
+
+    async def snapshot(self):
+        r=await http.get(UPSTREAM+self.path+(f'?after={self.cursor}'if self.cursor else''),headers={'X-API-Key':os.environ['JKT48CONNECT_API_KEY']},timeout=15,allow_redirects=False)
+        if r.status_code==200:self.feed(r.json())
+        return r.status_code
+
+    async def run(self):
+        import websockets
+        from websockets.asyncio.client import connect
+        delay=1
+        try:
+            while not self.idle():
+                url=COMMENTS_WS+self.path+'/stream'+(f'?after={self.cursor}'if self.cursor else'')
+                try:
+                    async with connect(url,additional_headers={'X-API-Key':os.environ['JKT48CONNECT_API_KEY']},
+                                                  ping_interval=20,ping_timeout=20,open_timeout=15,max_size=1<<20)as ws:
+                        delay=1
+                        while not self.idle():
+                            try:raw=await asyncio.wait_for(ws.recv(),30)
+                            except asyncio.TimeoutError:continue
+                            if isinstance(raw,str)and raw!='PONG':
+                                try:self.feed(json.loads(raw))
+                                except ValueError:pass
+                except asyncio.CancelledError:raise
+                except Exception as e:
+                    # Upstream memutus tiap 15 menit (perbarui autentikasi) atau sedang gangguan: sambung ulang dengan jeda.
+                    # Selama jeda, komentar tetap diambil dari snapshot tiap 3 detik.
+                    code=getattr(getattr(e,'response',None),'status_code',None)
+                    if not isinstance(e,websockets.ConnectionClosedOK):self.status='reconnecting';self.notify()
+                    until=time.monotonic()+(60 if code in BLOCKED else delay);delay=min(30,delay*2)
+                    while time.monotonic()<until and not self.idle():
+                        if code not in BLOCKED:
+                            try:code=await self.snapshot()
+                            except Exception:pass
+                        await asyncio.sleep(3)
+        finally:
+            if relays.get(self.key)is self:relays.pop(self.key,None)
+
+
+def relay_for(platform,ident):
+    relay=relays.get(f'{platform}:{ident}')
+    if relay is None:
+        relay=Relay(platform,ident);relays[relay.key]=relay
+        relay.task=asyncio.create_task(relay.run())
+    relay.seen=time.monotonic()
+    return relay
+
+
+@app.get('/api/app/live/{ident}/comments')
+async def live_comments(ident:str,after:int=0,wait:int=0,user=Depends(who)):
+    """Komentar live Showroom/IDN (hanya baca) dari relay JKT48Connect; long-poll seperti obrolan theater."""
+    if not re.fullmatch(r'[\w♥-]{1,180}',ident):error(400,'ID siaran tidak valid.')
+    limit(f"comments:{user['id']}",120,60)
+    raw=await upstream('/api/now_live')
+    source=next((s for s in objects(raw,'lives','data')if live_id(s)==ident),None)
+    target=comment_source(source)if source else None
+    if not target:return {'items':[],'cursor':after,'status':'ended'if source is None else'unavailable'}
+    relay=relay_for(*target)
+    # Urutan upstream dimulai ulang (live baru di room yang sama): kirim ulang dari awal buffer.
+    if after>relay.cursor and relay.items:after=0
+    pending=relay.wake
+    items=[x for x in relay.items if x['id']>after]
+    if not items and wait>0:
+        try:await asyncio.wait_for(pending.wait(),min(wait,20))
+        except asyncio.TimeoutError:pass
+        relay.seen=time.monotonic()
+        items=[x for x in relay.items if x['id']>after]
+    return {'items':items[-50:]if after<=0 else items[-100:],'cursor':max(after,relay.cursor),'status':relay.status}
+
+
 @app.post('/api/app/playback/{kind}/{ident}')
 async def playback(kind:str,ident:str,user=Depends(who)):
     if not re.fullmatch(r'[\w♥-]{1,180}',ident):error(400,'ID siaran tidak valid.')
@@ -407,7 +534,7 @@ async def playback(kind:str,ident:str,user=Depends(who)):
         files=[{'url':x.get('stream_url')or x.get('url'),'hls':bool(x.get('stream_url'))}for x in objects(raw,'recordings') if x.get('stream_url')or x.get('url')]
     elif kind=='live':
         raw=await upstream('/api/now_live')
-        source=next((s for s in objects(raw,'lives','data') if str(s.get('notification_data_id')or s.get('data_id')or s.get('slug')or s.get('room_id'))==ident),None)
+        source=next((s for s in objects(raw,'lives','data') if live_id(s)==ident),None)
         if not source:error(404,'Siaran sudah selesai.')
         title=source.get('name','Live JKT48')
         urls=source.get('streaming_url_list')or[]
@@ -423,12 +550,69 @@ async def playback(kind:str,ident:str,user=Depends(who)):
     else:error(404,'Jenis siaran tidak ditemukan.')
     files=[x for x in files if allowed(x['url'])]
     if not files:error(409,'Rekaman atau sumber siaran belum tersedia. Coba lagi sebentar.')
-    return {'title':title,'kind':kind,'items':[{'url':ticket(user,x['url'],kind,ident),'hls':x['hls'],'label':f"Bagian {i+1}"}for i,x in enumerate(files)]}
+    # Live member Showroom/IDN adalah siaran publik: diputar langsung dari CDN-nya (tanpa singgah di server ini)
+    # supaya cepat mulai dan tidak tersendat. Theater (berbayar) dan replay tetap lewat tiket media.
+    direct=kind=='live'
+    return {'title':title,'kind':kind,'items':[{'url':x['url']if direct else ticket(user,x['url'],kind,ident),'hls':x['hls'],'label':f"Bagian {i+1}"}for i,x in enumerate(files)]}
+
+
+def is_playlist(content_type,url):
+    return 'mpegurl'in content_type.lower()or urlparse(url).path.endswith('.m3u8')or '/stream/'in urlparse(url).path
+
+
+def retarget(body,url,user,data):
+    """Playlist: setiap URI (variant, segmen, key, map) diganti tiket yang terikat sesi penonton ini."""
+    if not bytes(body).lstrip().startswith(b'#EXTM3U'):error(502,'Playlist siaran belum tersedia.')
+    out=[]
+    for line in bytes(body).decode().splitlines():
+        if not line.startswith('#')and line.strip():line=ticket(user,urljoin(url,line.strip()),data['kind'],data['target'],data['exp'])
+        else:line=re.sub(r'URI="([^"]+)"',lambda m:'URI="'+ticket(user,urljoin(url,m[1]),data['kind'],data['target'],data['exp'])+'"',line)
+        out.append(line)
+    return Response('\n'.join(out)+'\n',media_type='application/vnd.apple.mpegurl',headers={'Cache-Control':'no-store'})
+
+
+async def load_media(url):
+    r,final=await fetch_media(url,{})
+    try:
+        if r.status_code!=200:return (0,r.status_code,'',b'',final)
+        content_type=r.headers.get('Content-Type','application/octet-stream').split(';')[0]
+        body=bytearray()
+        async for chunk in r.aiter_content():
+            body.extend(chunk)
+            if len(body)>MEDIA_ITEM_BYTES:return None
+    finally:await r.aclose()
+    value=(time.monotonic()+(1.0 if is_playlist(content_type,final)else 120.0),200,content_type,bytes(body),final)
+    media_cache[url]=value
+    total=sum(len(v[3])for v in media_cache.values())
+    while total>MEDIA_CACHE_BYTES and media_cache:
+        _,old=media_cache.popitem(last=False);total-=len(old[3])
+    return value
+
+
+async def shared_media(url):
+    """Theater: semua penonton meminta playlist & segmen yang sama. Diambil sekali dari origin lalu dibagi
+    (playlist 1 detik, segmen 2 menit, total maks. 64 MB). None = terlalu besar untuk disimpan."""
+    hit=media_cache.get(url)
+    if hit and hit[0]>time.monotonic():
+        media_cache.move_to_end(url);return hit
+    task=inflight.get(url)
+    if task is None:
+        # Task terpisah: penonton yang memutus koneksi tidak membatalkan unduhan penonton lain.
+        task=inflight[url]=asyncio.create_task(load_media(url))
+        task.add_done_callback(lambda _:inflight.pop(url,None))
+    return await asyncio.shield(task)
 
 
 @app.get('/api/app/media/{opaque}')
 async def media(opaque:str,request:Request,user=Depends(who)):
     data=reveal(opaque,user);headers={}
+    if data['kind']=='theater'and 'range'not in request.headers:
+        hit=await shared_media(data['u'])
+        if hit is not None:
+            _,status,content_type,body,url=hit
+            if status!=200:error(502,'Sumber siaran belum dapat diputar.' if status!=404 else 'Bagian siaran belum tersedia.')
+            if is_playlist(content_type,url):return retarget(body,url,user,data)
+            return Response(body,media_type=content_type)
     if 'range'in request.headers:
         value=request.headers['range']
         if not re.fullmatch(r'bytes=\d*-\d*',value):error(416,'Range tidak valid.')
@@ -437,19 +621,13 @@ async def media(opaque:str,request:Request,user=Depends(who)):
     if r.status_code not in (200,206):
         status=r.status_code;await r.aclose();error(502,'Sumber siaran belum dapat diputar.' if status!=404 else 'Bagian siaran belum tersedia.')
     content_type=r.headers.get('Content-Type','application/octet-stream').split(';')[0]
-    if 'mpegurl'in content_type.lower()or urlparse(url).path.endswith('.m3u8')or '/stream/'in urlparse(url).path:
+    if is_playlist(content_type,url):
         body=bytearray()
         async for chunk in r.aiter_content():
             body.extend(chunk)
             if len(body)>2*1024*1024:await r.aclose();error(502,'Playlist terlalu besar.')
         await r.aclose()
-        if not body.lstrip().startswith(b'#EXTM3U'):error(502,'Playlist siaran belum tersedia.')
-        out=[]
-        for line in body.decode().splitlines():
-            if not line.startswith('#')and line.strip():line=ticket(user,urljoin(url,line.strip()),data['kind'],data['target'],data['exp'])
-            else:line=re.sub(r'URI="([^"]+)"',lambda m:'URI="'+ticket(user,urljoin(url,m[1]),data['kind'],data['target'],data['exp'])+'"',line)
-            out.append(line)
-        return Response('\n'.join(out)+'\n',media_type='application/vnd.apple.mpegurl')
+        return retarget(body,url,user,data)
     out={k:r.headers[k]for k in ('Content-Length','Content-Range','Accept-Ranges')if k in r.headers}
     async def chunks():
         try:

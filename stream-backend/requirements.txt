@@ -4,3 +4,4 @@ curl-cffi>=0.13,<1
 bcrypt>=4,<6
 cryptography>=44
 qrcode[pil]>=8,<9
+websockets>=13

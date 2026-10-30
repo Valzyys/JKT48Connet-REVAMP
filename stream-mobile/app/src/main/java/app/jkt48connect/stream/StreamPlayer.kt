@@ -2,6 +2,7 @@ package app.jkt48connect.stream
 
 import android.content.Intent
 import android.net.Uri
+import android.view.SurfaceView
 import android.view.TextureView
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -58,6 +59,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -151,14 +153,17 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
     val ui = remember { PlayerUi() }
     LaunchedEffect(Unit) {
         val scope = this
-        val source = DefaultHttpDataSource.Factory()
-            .setDefaultRequestProperties(mapOf("Authorization" to "Bearer ${StreamApi.token}"))
+        val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(false)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
-        // Live: tunggu ±5 detik cadangan setelah tersendat supaya tidak berhenti-jalan. VOD: mulai cepat lalu isi cadangan sampai 60 detik.
+            .setConnectTimeoutMs(10_000)
+            .setReadTimeoutMs(15_000)
+        // Token sesi hanya dikirim ke server Stream. Live Showroom/IDN diputar langsung dari CDN publiknya tanpa token.
+        val source = ResolvingDataSource.Factory(http) { spec ->
+            if (spec.uri.toString().startsWith(StreamApi.base + "/")) spec.withAdditionalHeaders(mapOf("Authorization" to "Bearer ${StreamApi.token}")) else spec
+        }
+        // Mulai begitu ada 1 detik video (cepat tampil), lalu isi cadangan. Setelah tersendat tunggu 4 detik supaya tidak putus-nyambung.
         val load = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(if (src.live) 8_000 else 20_000, if (src.live) 30_000 else 60_000, 1_500, 5_000)
+            .setBufferDurationsMs(if (src.live) 8_000 else 20_000, if (src.live) 30_000 else 60_000, 1_000, 4_000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
         val exo = ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
@@ -264,7 +269,7 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
             .fillMaxWidth()
             .heightIn(max = maxH)
             .aspectRatio(ui.ratio, matchHeightConstraintsFirst = ui.ratio < 1f)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(if (src.live) 0.dp else 22.dp))
             .background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
@@ -315,7 +320,13 @@ private fun PlayerSurface(ui: PlayerUi, src: MediaSource, title: String, label: 
             val videoModifier = if (boxRatio > ui.ratio) Modifier.fillMaxHeight().aspectRatio(ui.ratio, matchHeightConstraintsFirst = true)
             else Modifier.fillMaxWidth().aspectRatio(ui.ratio)
             ui.player?.let { p ->
-                AndroidView(
+                // Live: SurfaceView (lapisan video terpisah dari UI) supaya frame tetap mulus walau UI sibuk
+                // (komentar mengalir, animasi). Replay di kartu membulat tetap TextureView agar bisa dipotong sudutnya.
+                if (src.live) AndroidView(
+                    factory = { SurfaceView(it).also { v -> p.setVideoSurfaceView(v) } },
+                    modifier = videoModifier,
+                    onRelease = { p.clearVideoSurfaceView(it) },
+                ) else AndroidView(
                     factory = { TextureView(it).also { v -> p.setVideoTextureView(v) } },
                     modifier = videoModifier,
                     onRelease = { p.clearVideoTextureView(it) },
@@ -582,12 +593,14 @@ fun PlayerScreen(item: JSONObject) {
     // Live: member lain yang sedang live, untuk pindah siaran tanpa kembali ke daftar.
     val others = if (kind == "live") rememberFeed("live", nav.reload, pollMs = 20_000L) { "/live" }.rows.filter { it.optString("id") != id } else emptyList()
 
+    // Live & theater: video selebar layar (tanpa sudut membulat), replay di kartu membulat.
+    val edge = kind != "recent"
     Column(Modifier.fillMaxSize().padding(top = top)) {
-        Box(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Box(Modifier.padding(horizontal = if (edge) 0.dp else 16.dp, vertical = 6.dp)) {
             when {
                 current != null -> key(current.optString("url")) {
                     MediaPlayer(
-                        MediaSource(current.optString("url"), current.optBoolean("hls"), live = kind == "live", liveSince = item.optString("date")),
+                        MediaSource(current.optString("url"), current.optBoolean("hls"), live = edge, liveSince = item.optString("date")),
                         title = title,
                         label = label,
                         poster = item.optString("image"),
@@ -595,7 +608,7 @@ fun PlayerScreen(item: JSONObject) {
                         onFatal = { if (attempt < 3) attempt++ },
                     )
                 }
-                error.isNotEmpty() -> Column(Modifier.fillMaxWidth().glassCard(22.dp).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                error.isNotEmpty() -> Column(Modifier.padding(horizontal = if (edge) 16.dp else 0.dp).fillMaxWidth().glassCard(22.dp).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Micro(label, color = c.brand)
                     Txt(error, AppText.body(15.sp, c.ink, 600))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -604,7 +617,7 @@ fun PlayerScreen(item: JSONObject) {
                         if (platform == "idn" && link.startsWith("https://")) GlassButton("Buka idn.app", Modifier.weight(1f), StreamIcons.External, c.brand) { open(link) }
                     }
                 }
-                else -> Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(22.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
+                else -> Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(if (edge) 0.dp else 22.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
                     Picture(item.optString("image"), Modifier.fillMaxSize().graphicsLayer { alpha = 0.45f })
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Spinner(26.dp, Color.White)
@@ -616,6 +629,8 @@ fun PlayerScreen(item: JSONObject) {
         }
         if (kind == "theater") {
             Chat(id, title, label, item.optJSONArray("lineup")?.rows().orEmpty(), parts.size, part, { part = it }, Modifier.weight(1f), bottom)
+        } else if (kind == "live") {
+            LiveRoom(item, label, others, Modifier.weight(1f), bottom)
         } else {
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = bottom + 24.dp)) {
                 item { NowPlaying(item, label) }
@@ -808,6 +823,117 @@ private fun Chat(room: String, title: String, label: String, lineup: List<JSONOb
                 )
             }
             LiquidIconButton(StreamIcons.Send, { send() }, size = 50.dp, iconSize = 20.dp, tint = c.brand, contentDescription = "Kirim")
+        }
+    }
+}
+
+/**
+ * Halaman live member: info siaran, pindah ke live lain, dan komentar penonton Showroom/IDN (hanya baca).
+ * Komentar datang dari relay JKT48Connect lewat server Stream (long-poll yang bangun begitu komentar masuk).
+ */
+@Composable
+private fun LiveRoom(item: JSONObject, label: String, others: List<JSONObject>, modifier: Modifier, bottom: Dp) {
+    val c = LocalColors.current
+    val nav = LocalNav.current
+    val id = item.optString("id")
+    val source = platformName(item.optString("platform"))
+    var rows by remember(id) { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var status by remember(id) { mutableStateOf("connecting") }
+    var online by remember(id) { mutableStateOf(false) }
+    val state = rememberLazyListState()
+    LaunchedEffect(id) {
+        var after = 0L
+        while (true) {
+            runCatching { StreamApi.request("/live/${Uri.encode(id)}/comments?after=$after&wait=20") }
+                .onSuccess { res ->
+                    val cursor = res.optLong("cursor", after)
+                    // Urutan dimulai ulang (live baru di room yang sama): daftar lama dibuang.
+                    if (cursor < after) rows = emptyList()
+                    val batch = res.optJSONArray("items")?.rows().orEmpty()
+                    if (batch.isNotEmpty()) rows = (rows + batch).distinctBy { it.optLong("id") }.sortedBy { it.optLong("id") }.takeLast(150)
+                    after = cursor
+                    status = res.optString("status")
+                    online = true
+                    if (status == "ended" || status == "unavailable") delay(5_000)
+                }
+                .onFailure {
+                    online = false
+                    delay(3_000)
+                }
+        }
+    }
+    // Ikuti komentar terbaru selama penonton berada di dekat bawah daftar.
+    LaunchedEffect(rows.size) {
+        val last = state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+        if (rows.isNotEmpty() && last >= state.layoutInfo.totalItemsCount - 4) state.animateScrollToItem(rows.size - 1)
+    }
+    Column(modifier.padding(horizontal = 16.dp)) {
+        NowPlaying(item, label)
+        if (others.isNotEmpty()) {
+            VGap(12.dp)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(others, key = { it.optString("id") }) { l ->
+                    Row(
+                        Modifier.glassCard(99.dp).pressable({
+                            nav.pop()
+                            nav.push(Route.Watch(l))
+                        }).padding(start = 4.dp, top = 4.dp, end = 12.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Picture(l.optString("avatar").ifEmpty { l.optString("image") }, Modifier.size(28.dp).clip(CircleShape), alignment = Alignment.TopCenter, fallback = l.optString("title"))
+                        Gap(7.dp)
+                        Txt(l.optString("title").substringBefore(' '), AppText.body(12.5.sp, c.ink, 700), maxLines = 1)
+                        Gap(6.dp)
+                        Box(Modifier.size(6.dp).background(c.brand, CircleShape))
+                    }
+                }
+            }
+        }
+        VGap(14.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(StreamIcons.Chat, null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(c.brand))
+            Gap(8.dp)
+            Micro("Komentar $source · ${rows.size}", Modifier.weight(1f), c.brand)
+            val live = online && status == "connected"
+            Box(Modifier.size(7.dp).background(if (live) Color(0xFF2FA35A) else c.inkSoft, CircleShape))
+            Gap(6.dp)
+            Micro(
+                when {
+                    live -> "Realtime"
+                    status == "ended" -> "Selesai"
+                    status == "unavailable" -> "Belum tersedia"
+                    else -> "Menyambung"
+                },
+                size = 9.5f,
+            )
+        }
+        VGap(8.dp)
+        Box(Modifier.weight(1f).fillMaxWidth().glassCard(22.dp)) {
+            if (rows.isEmpty()) {
+                Txt(
+                    if (status == "unavailable") "Komentar $source untuk siaran ini belum tersedia." else "Menunggu komentar penonton…",
+                    AppText.body(13.5.sp, c.inkSoft),
+                    Modifier.align(Alignment.Center).padding(20.dp),
+                )
+            }
+            LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                items(rows, key = { it.optLong("id") }) { m -> CommentRow(m) }
+            }
+        }
+        Txt("Komentar dari $source · hanya baca", AppText.mono(10.5.sp, c.inkSoft), Modifier.padding(top = 8.dp, bottom = bottom + 10.dp))
+    }
+}
+
+/** Satu komentar live: avatar, nama penonton, isi (teks biasa). */
+@Composable
+private fun CommentRow(m: JSONObject) {
+    val c = LocalColors.current
+    Row(verticalAlignment = Alignment.Top) {
+        Picture(m.optString("avatar"), Modifier.size(28.dp).clip(CircleShape), fallback = m.optString("name"))
+        Gap(9.dp)
+        Column {
+            Txt(m.optString("name"), AppText.body(12.sp, c.brand, 800), maxLines = 1)
+            Txt(m.optString("message"), AppText.body(14.sp, c.ink, 500, 1.35f))
         }
     }
 }

@@ -253,7 +253,8 @@ internal fun StreamApp(nav: StreamNav = remember { StreamNav() }) {
 
     CompositionLocalProvider(LocalNav provides nav, LocalInsets provides insets) {
         Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().layerBackdrop(content)) {
+            // Saat video tampil isi halaman tidak direkam ke backdrop: tiap frame video tidak memaksa perekaman ulang lapisan.
+            Box(Modifier.fillMaxSize().then(if (PlayerPresence.count > 0) Modifier else Modifier.layerBackdrop(content))) {
                 Pages(nav, Modifier.nestedScroll(scrollWatcher))
             }
             if (top !is Route.Gallery) {
