@@ -2,7 +2,6 @@ package app.jkt48connect.stream
 
 import android.content.Intent
 import android.net.Uri
-import android.view.SurfaceView
 import android.view.TextureView
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -320,13 +319,10 @@ private fun PlayerSurface(ui: PlayerUi, src: MediaSource, title: String, label: 
             val videoModifier = if (boxRatio > ui.ratio) Modifier.fillMaxHeight().aspectRatio(ui.ratio, matchHeightConstraintsFirst = true)
             else Modifier.fillMaxWidth().aspectRatio(ui.ratio)
             ui.player?.let { p ->
-                // Live: SurfaceView (lapisan video terpisah dari UI) supaya frame tetap mulus walau UI sibuk
-                // (komentar mengalir, animasi). Replay di kartu membulat tetap TextureView agar bisa dipotong sudutnya.
-                if (src.live) AndroidView(
-                    factory = { SurfaceView(it).also { v -> p.setVideoSurfaceView(v) } },
-                    modifier = videoModifier,
-                    onRelease = { p.clearVideoSurfaceView(it) },
-                ) else AndroidView(
+                // TextureView: SurfaceView di dalam halaman Compose (direkam ke lapisan kaca, digeser saat transisi) dicurigai
+                // membuat halaman live tertutup paksa. Kelancaran dijaga dengan tidak merekam
+                // isi halaman ke backdrop selama video tampil (StreamRoot).
+                AndroidView(
                     factory = { TextureView(it).also { v -> p.setVideoTextureView(v) } },
                     modifier = videoModifier,
                     onRelease = { p.clearVideoTextureView(it) },
@@ -872,7 +868,8 @@ private fun LiveRoom(item: JSONObject, label: String, others: List<JSONObject>, 
         if (others.isNotEmpty()) {
             VGap(12.dp)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(others, key = { it.optString("id") }) { l ->
+                // Kunci harus unik: data live bisa memuat id ganda/kosong, kunci kembar membuat LazyRow crash.
+                itemsIndexed(others.distinctBy { it.optString("id") }, key = { i, l -> "$i:${l.optString("id")}" }) { _, l ->
                     Row(
                         Modifier.glassCard(99.dp).pressable({
                             nav.pop()
