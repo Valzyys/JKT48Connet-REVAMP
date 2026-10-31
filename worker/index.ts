@@ -3,6 +3,7 @@ import {handleGames,type GamesEnv} from "./games/api";
 export {GameRoom} from "./games/room";
 import { handleDiscord, type DiscordEnv } from "./discord";
 import { handleApi, type ProxyEnv } from "./proxy";
+import { handleStreamDownload, STREAM_DOWNLOAD } from "./download";
 
 export { Guard } from "./guard-do";
 export { PushState } from "./push-do";
@@ -29,6 +30,8 @@ export default {
     if (pathname === "/api/pm" || pathname.startsWith("/api/pm/"))
       return handlePm(request, env);
     if (pathname.startsWith("/api/")) return handleApi(request, env, ctx);
+    // Unduhan langsung APK JKT48Connect Stream dari rilis GitHub terbaru (worker/download.ts).
+    if (STREAM_DOWNLOAD.test(pathname)) return handleStreamDownload(request, env, ctx);
     // SEO (worker/seo.ts): robots, sitemap, dan meta per halaman di HTML awal.
     if (pathname === "/robots.txt") return handleRobots(request, env);
     if (pathname === "/sitemap.xml") return handleSitemap(request, env, ctx);
