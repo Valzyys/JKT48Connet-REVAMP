@@ -6,6 +6,7 @@ import { HeroCarousel } from "@/components/carousel";
 import { useIntroDone } from "@/components/intro";
 import { CountUp, SignalBars } from "@/components/motion";
 import { Page } from "@/components/page";
+import { PromoPopup } from "@/components/promo-popup";
 import { BirthdayCard, ScheduleCard } from "@/components/shell";
 import { Empty, ErrorState, SectionHead, SkeletonGrid, SkeletonList } from "@/components/ui";
 import { q } from "@/lib/queries";
@@ -158,6 +159,7 @@ export function HomePage() {
           </section>
         )}
       </div>
+      <PromoPopup ready={ready} />
     </Page>
   );
 }
