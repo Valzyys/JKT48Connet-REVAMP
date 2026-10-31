@@ -67,7 +67,7 @@ export function PromoPopup({ ready }: { ready: boolean }) {
           type="button"
           aria-label="Tutup"
           onClick={() => setOpen(false)}
-          className="btn btn-ghost absolute right-4 top-4 !rounded-full !p-2"
+          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full border border-line bg-card text-ink-soft transition hover:text-ink"
         >
           <X className="h-4 w-4" />
         </button>
