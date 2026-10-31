@@ -165,7 +165,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   r=await s.invalid_request(None,s.RequestValidationError([]))
   self.assertEqual(r.status_code,400);self.assertIn('message',json.loads(r.body))
  async def test_update_offers_current_release_unless_state_is_newer(self):
-  self.assertEqual((await s.update())['code'],2)
+  self.assertEqual((await s.update())['code'],3)
  async def test_avatar_upload_is_squared_stripped_and_replaces_the_old_one(self):
   import io
   from PIL import Image
