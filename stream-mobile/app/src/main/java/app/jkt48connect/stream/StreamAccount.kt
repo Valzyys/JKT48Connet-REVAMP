@@ -231,23 +231,27 @@ private fun ProfileCard(me: JSONObject?, modifier: Modifier = Modifier, onChange
 }
 
 /** Baca foto dari galeri, perkecil ke maks. 1280 px (sisi terpanjang), kompres JPEG. Null bila tidak bisa dibaca. */
-private fun shrinkPhoto(context: android.content.Context, uri: Uri): ByteArray? {
+internal fun shrinkPhoto(context: android.content.Context, uri: Uri): ByteArray? {
     val resolver = context.contentResolver
+    // inJustDecodeBounds hanya mengisi ukuran: decodeStream selalu mengembalikan null di mode ini, jadi yang dicek ukurannya.
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
+    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
     var sample = 1
     while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1280) sample *= 2
     val bitmap = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return null
     // Foto kamera menyimpan arah putar di EXIF; BitmapFactory mengabaikannya, jadi putar di sini sebelum dikompres ulang.
-    val degrees = resolver.openInputStream(uri)?.use {
-        when (android.media.ExifInterface(it).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)) {
-            android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-            android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-            android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-            else -> 0f
+    // EXIF yang tidak terbaca (PNG/WebP, galeri tertentu) bukan alasan menolak foto: anggap tidak diputar.
+    val degrees = runCatching {
+        resolver.openInputStream(uri)?.use {
+            when (android.media.ExifInterface(it).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)) {
+                android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
         }
-    } ?: 0f
+    }.getOrNull() ?: 0f
     val longest = maxOf(bitmap.width, bitmap.height)
     val scale = if (longest > 1280) 1280f / longest else 1f
     val matrix = android.graphics.Matrix().apply { postScale(scale, scale); postRotate(degrees) }

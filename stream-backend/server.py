@@ -896,8 +896,8 @@ async def send_chat(room:str,data:Message,user=Depends(who)):
 
 
 # Versi aplikasi terbaru (ikut stream-mobile/app/build.gradle.kts). release.json di state hanya dipakai bila lebih baru.
-RELEASE={'version':'1.0.1','code':2,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.1.apk',
-         'notes':'Perbaikan daftar akun, pemutar lebih lancar, dan komentar live Showroom/IDN.'}
+RELEASE={'version':'1.0.2','code':3,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.2.apk',
+         'notes':'Foto profil bisa diunggah, perbaikan daftar akun, pemutar lebih lancar, dan komentar live Showroom/IDN.'}
 
 
 @app.get('/api/app/update')
