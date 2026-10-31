@@ -1,7 +1,8 @@
 /**
- * Unduhan langsung APK JKT48Connect Stream: `GET /download/JKT48Connect-Stream-V1.0.0.apk`.
+ * Unduhan langsung APK JKT48Connect Stream: `GET /download/JKT48Connect-Stream-V1.0.1.apk` (versi apa pun di nama,
+ * atau `/download/JKT48Connect-Stream.apk`) selalu memberi APK terbaru dengan nama file sesuai tautan.
  *
- * Sumber utama: aset di rilis tetap `stream-latest` yang selalu ditimpa workflow stream-mobile-release.yml
+ * Sumber utama: aset `JKT48Connect-Stream.apk` di rilis tetap `stream-latest` yang selalu ditimpa workflow stream-mobile-release.yml
  * dengan APK terbaru. URL unduhan GitHub ini tidak memakai API GitHub, jadi tidak terkena batas 60 permintaan/jam
  * per IP yang cepat habis di IP Cloudflare yang dipakai bersama. Bila rilis tetap belum ada, dicari lewat API
  * rilis `stream-mobile-build-N` terbaru. Salinan terakhir yang berhasil disimpan di edge sebagai cadangan
@@ -11,14 +12,22 @@ export type DownloadEnv = { APP_RELEASE_REPO?: string; UPSTREAM_FETCH?: typeof f
 type Ctx = { waitUntil(p: Promise<unknown>): void };
 
 const REPO = "Valzyys/JKT48Connet-REVAMP";
-const ASSET = "JKT48Connect-Stream-v1.0.0.apk";
-const FILENAME = "JKT48Connect-Stream-V1.0.0.apk";
 const FIXED_TAG = "stream-latest";
+/** Nama aset tetap; `-v1.0.0` = nama lama di rilis tetap sebelum versi masuk ke nama file. */
+const FIXED_ASSETS = ["JKT48Connect-Stream.apk", "JKT48Connect-Stream-v1.0.0.apk"];
+/** Aset APK rilis di rilis `stream-mobile-build-N` (bukan versi review). */
+const BUILD_ASSET = /^JKT48Connect-Stream-v\d+\.\d+\.\d+\.apk$/;
 /** File terbaru disimpan 5 menit (build baru cepat terambil); cadangan 30 hari. */
 const FRESH_TTL = 300;
 const STALE_TTL = 30 * 86400;
 
-export const STREAM_DOWNLOAD = /^\/download\/jkt48connect-stream-v1\.0\.0\.apk$/i;
+export const STREAM_DOWNLOAD = /^\/download\/jkt48connect-stream(?:-v(\d{1,3}\.\d{1,3}\.\d{1,3}))?\.apk$/i;
+
+/** Nama file unduhan dari tautan: `JKT48Connect-Stream-V1.0.1.apk` atau `JKT48Connect-Stream.apk`. */
+function fileName(pathname: string) {
+  const version = STREAM_DOWNLOAD.exec(pathname)?.[1];
+  return version ? `JKT48Connect-Stream-V${version}.apk` : "JKT48Connect-Stream.apk";
+}
 
 type Asset = { name?: string; browser_download_url?: string };
 type Release = { tag_name?: string; draft?: boolean; prerelease?: boolean; assets?: Asset[] };
@@ -38,7 +47,7 @@ async function latestBuildUrl(env: DownloadEnv): Promise<{ tag: string; url: str
   const releases = (await res.json()) as Release[];
   for (const r of Array.isArray(releases) ? releases : []) {
     if (r.draft || r.prerelease || !/^stream-mobile-build-\d+$/.test(r.tag_name ?? "")) continue;
-    const url = r.assets?.find((a) => a.name === ASSET)?.browser_download_url ?? "";
+    const url = r.assets?.find((a) => BUILD_ASSET.test(a.name ?? ""))?.browser_download_url ?? "";
     if (url.startsWith("https://github.com/")) return { tag: r.tag_name!, url };
   }
   return null;
@@ -47,18 +56,20 @@ async function latestBuildUrl(env: DownloadEnv): Promise<{ tag: string; url: str
 /** APK dari GitHub: rilis tetap dulu, lalu rilis build terbaru. */
 async function fromGithub(env: DownloadEnv): Promise<{ tag: string; res: Response } | null> {
   const get = env.UPSTREAM_FETCH ?? fetch;
-  const fixed = await get(`https://github.com/${repoOf(env)}/releases/download/${FIXED_TAG}/${ASSET}`, { redirect: "follow" }).catch(() => null);
-  if (fixed?.ok && fixed.body) return { tag: FIXED_TAG, res: fixed };
+  for (const asset of FIXED_ASSETS) {
+    const fixed = await get(`https://github.com/${repoOf(env)}/releases/download/${FIXED_TAG}/${asset}`, { redirect: "follow" }).catch(() => null);
+    if (fixed?.ok && fixed.body) return { tag: FIXED_TAG, res: fixed };
+  }
   const build = await latestBuildUrl(env).catch(() => null);
   if (!build) return null;
   const res = await get(build.url, { redirect: "follow" }).catch(() => null);
   return res?.ok && res.body ? { tag: build.tag, res } : null;
 }
 
-function apkHeaders(tag: string, length: string | null, maxAge: number) {
+function apkHeaders(tag: string, length: string | null, maxAge: number, name = "JKT48Connect-Stream.apk") {
   const headers = new Headers({
     "content-type": "application/vnd.android.package-archive",
-    "content-disposition": `attachment; filename="${FILENAME}"`,
+    "content-disposition": `attachment; filename="${name}"`,
     "cache-control": `public, max-age=${maxAge}`,
     "x-content-type-options": "nosniff",
     "x-stream-build": tag,
@@ -67,10 +78,11 @@ function apkHeaders(tag: string, length: string | null, maxAge: number) {
   return headers;
 }
 
-/** Respons dari cache dengan masa simpan klien 5 menit. */
-function served(cached: Response) {
+/** Respons dari cache dengan masa simpan klien 5 menit dan nama file sesuai tautan yang dibuka. */
+function served(cached: Response, name: string) {
   const out = new Response(cached.body, cached);
   out.headers.set("cache-control", `public, max-age=${FRESH_TTL}`);
+  out.headers.set("content-disposition", `attachment; filename="${name}"`);
   return out;
 }
 
@@ -79,22 +91,23 @@ const fail = (status: number, message: string) =>
 
 export async function handleStreamDownload(request: Request, env: DownloadEnv, ctx: Ctx): Promise<Response> {
   if (request.method !== "GET" && request.method !== "HEAD") return fail(405, "Metode tidak didukung");
-  const origin = new URL(request.url).origin;
+  const { origin, pathname } = new URL(request.url);
+  const name = fileName(pathname);
   const cache = edgeCache();
   const freshKey = new Request(`${origin}/__cache/v2/stream-apk/fresh`);
   const staleKey = new Request(`${origin}/__cache/v2/stream-apk/stale`);
   const head = (r: Response) => (request.method === "HEAD" ? new Response(null, { headers: r.headers }) : r);
 
   const fresh = await cache?.match(freshKey);
-  if (fresh) return head(served(fresh));
+  if (fresh) return head(served(fresh, name));
 
   const got = await fromGithub(env);
   if (!got) {
     const stale = await cache?.match(staleKey);
-    return stale ? head(served(stale)) : fail(502, "APK JKT48Connect Stream belum bisa diambil. Coba lagi sebentar.");
+    return stale ? head(served(stale, name)) : fail(502, "APK JKT48Connect Stream belum bisa diambil. Coba lagi sebentar.");
   }
   const length = got.res.headers.get("content-length");
-  const headers = apkHeaders(got.tag, length, FRESH_TTL);
+  const headers = apkHeaders(got.tag, length, FRESH_TTL, name);
   if (!cache) return head(new Response(got.res.body, { headers }));
   // Satu unduhan dari GitHub: dikirim ke pengguna sekaligus disimpan sebagai salinan terbaru & cadangan.
   const [mine, rest] = got.res.body!.tee();

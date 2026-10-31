@@ -18,6 +18,7 @@ import bcrypt
 from cryptography.fernet import Fernet, InvalidToken
 from curl_cffi.requests import AsyncSession
 from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.responses import FileResponse,HTMLResponse
 from pydantic import BaseModel, Field
@@ -197,6 +198,12 @@ async def protect(request, call_next):
     return response
 
 
+@app.exception_handler(RequestValidationError)
+async def invalid_request(request,exc):
+    # Pydantic menjawab 422 dengan `detail` saja; aplikasi membaca `message`.
+    return JSONResponse({'message':'Data yang dikirim belum lengkap atau tidak valid. Periksa kembali isianmu.'},status_code=400)
+
+
 @app.exception_handler(HTTPException)
 async def known_error(request,exc): return JSONResponse({'message':exc.detail},status_code=exc.status_code)
 
@@ -206,22 +213,26 @@ async def health(): return {'ok':True,'service':'jkt48connect-stream'}
 
 
 class Credentials(BaseModel):
-    email: str = Field(max_length=254)
-    password: str = Field(min_length=1,max_length=72)
-    name: str = Field(default='',max_length=70)
+    # Batas longgar: isian yang salah dijawab authenticate() dengan pesan yang jelas, bukan 422 tanpa pesan.
+    email: str = Field(default='',max_length=1000)
+    password: str = Field(default='',max_length=1000)
+    name: str = Field(default='',max_length=1000)
 
 
 async def authenticate(request, data, register=False):
     ip=request.headers.get('X-Stream-Client-IP',request.client.host)
     limit(('auth-ip',ip),15,900)
     email=data.email.strip().lower()
-    if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email): error(400,'Alamat email belum benar.')
+    if not email:error(400,'Isi alamat email terlebih dahulu.')
+    if len(email)>254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email): error(400,'Alamat email belum benar.')
+    if not data.password:error(400,'Isi password terlebih dahulu.')
     if len(data.password.encode())>72:error(400,'Password terlalu panjang. Gunakan maksimal 72 byte.')
     row=db.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
     if register:
         if len(data.password)<8:error(400,'Gunakan password minimal 8 karakter.')
         if row: error(409,'Email sudah terdaftar. Gunakan menu masuk.')
         if not data.name.strip(): error(400,'Isi nama panggilanmu terlebih dahulu.')
+        if len(data.name.strip())>40: error(400,'Nama panggilan maksimal 40 karakter.')
         password=await asyncio.to_thread(bcrypt.hashpw,data.password.encode(),bcrypt.gensalt(12))
         db.execute('INSERT INTO users(id,email,password_hash,name,avatar) VALUES(?,?,?,?,?)',(uid(),email,password.decode(),data.name.strip(),''));db.commit()
         row=db.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
@@ -676,6 +687,66 @@ async def image(ident:str,user=Depends(who)):
     return Response(bytes(data),media_type=content_type)
 
 
+AVATAR_BYTES=5*1024*1024
+AVATAR_URL=BASE+'/api/app/avatar/'
+
+
+def square_jpeg(raw):
+    """Foto profil: hanya JPEG/PNG/WebP asli, diputar sesuai EXIF, dipotong persegi 512 px, disimpan ulang sebagai
+    JPEG tanpa metadata (lokasi GPS dll. dibuang). None bila bukan gambar yang didukung."""
+    from PIL import Image,ImageOps
+    Image.MAX_IMAGE_PIXELS=40_000_000
+    try:
+        Image.open(io.BytesIO(raw)).verify()
+        img=Image.open(io.BytesIO(raw))
+        if img.format not in('JPEG','PNG','WEBP'):return None
+        if img.format=='JPEG':img.draft('RGB',(1024,1024))
+        img=ImageOps.fit(ImageOps.exif_transpose(img).convert('RGB'),(512,512),Image.Resampling.LANCZOS)
+    except Exception:return None
+    out=io.BytesIO();img.save(out,'JPEG',quality=85,optimize=True)
+    return out.getvalue()
+
+
+def drop_avatar(url):
+    """Hapus file foto lama milik server ini (avatar akun lama dari luar tidak disentuh)."""
+    ident=url[len(AVATAR_URL):]if isinstance(url,str)and url.startswith(AVATAR_URL)else''
+    if re.fullmatch(r'[0-9a-f]{32}',ident):(ROOT/'avatars'/f'{ident}.jpg').unlink(missing_ok=True)
+
+
+@app.post('/api/app/me/avatar')
+async def upload_avatar(request:Request,user=Depends(who)):
+    """Body = berkas gambar mentah (Content-Type image/*), maks. 5 MB."""
+    limit(('avatar',user['id']),10,3600)
+    if whole(request.headers.get('content-length'))>AVATAR_BYTES:error(413,'Foto terlalu besar. Maksimal 5 MB.')
+    raw=bytearray()
+    async for chunk in request.stream():
+        raw.extend(chunk)
+        if len(raw)>AVATAR_BYTES:error(413,'Foto terlalu besar. Maksimal 5 MB.')
+    if not raw:error(400,'Pilih foto terlebih dahulu.')
+    data=await asyncio.to_thread(square_jpeg,bytes(raw))
+    if data is None:error(400,'Format foto belum didukung. Gunakan JPG, PNG, atau WebP.')
+    folder=ROOT/'avatars';folder.mkdir(mode=0o700,exist_ok=True)
+    ident=secrets.token_hex(16);(folder/f'{ident}.jpg').write_bytes(data)
+    url=AVATAR_URL+ident
+    db.execute('UPDATE users SET avatar=? WHERE id=?',(url,user['id']));db.commit()
+    drop_avatar(user['avatar'])
+    return profile({**user,'avatar':url})
+
+
+@app.post('/api/app/me/avatar/remove')
+async def remove_avatar(user=Depends(who)):
+    db.execute("UPDATE users SET avatar='' WHERE id=?",(user['id'],));db.commit()
+    drop_avatar(user['avatar'])
+    return profile({**user,'avatar':''})
+
+
+@app.get('/api/app/avatar/{ident}')
+async def avatar(ident:str,user=Depends(who)):
+    path=ROOT/'avatars'/f'{ident}.jpg'
+    if not re.fullmatch(r'[0-9a-f]{32}',ident)or not path.exists():error(404,'Foto tidak ditemukan.')
+    return FileResponse(path,media_type='image/jpeg',headers={'Cache-Control':'private, max-age=604800'})
+
+
 @app.get('/api/app/plans')
 async def plans(user=Depends(who)):return {'items':[{'id':key,'name':v[0],'price':v[1],'days':v[2]}for key,v in PLANS.items()if key!='show']}
 
@@ -824,10 +895,17 @@ async def send_chat(room:str,data:Message,user=Depends(who)):
     return {'ok':True,'item':chat_item(row,user)}
 
 
+# Versi aplikasi terbaru (ikut stream-mobile/app/build.gradle.kts). release.json di state hanya dipakai bila lebih baru.
+RELEASE={'version':'1.0.1','code':2,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.1.apk',
+         'notes':'Perbaikan daftar akun, pemutar lebih lancar, dan komentar live Showroom/IDN.'}
+
+
 @app.get('/api/app/update')
 async def update():
     p=ROOT/'release.json'
-    return json.loads(p.read_text())if p.exists()else{'version':'1.0.0','code':1,'apk':'','notes':''}
+    try:stored=json.loads(p.read_text())if p.exists()else{}
+    except ValueError:stored={}
+    return stored if isinstance(stored,dict)and whole(stored.get('code'))>RELEASE['code']else RELEASE
 
 
 @app.get('/downloads/JKT48Connect-Stream.apk')

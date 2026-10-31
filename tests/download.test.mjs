@@ -10,8 +10,9 @@ await build({ entryPoints: ["worker/download.ts"], bundle: true, platform: "node
 const { handleStreamDownload, STREAM_DOWNLOAD } = await import(join(scratch, "download.mjs"));
 test.after(() => rm(scratch, { recursive: true, force: true }));
 
-const LINK = "https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.0.apk";
-const FIXED = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/stream-latest/JKT48Connect-Stream-v1.0.0.apk";
+const LINK = "https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.1.apk";
+const FIXED = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/stream-latest/JKT48Connect-Stream.apk";
+const FIXED_OLD = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/stream-latest/JKT48Connect-Stream-v1.0.0.apk";
 const BUILD9 = "https://github.com/Valzyys/JKT48Connet-REVAMP/releases/download/stream-mobile-build-9/JKT48Connect-Stream-v1.0.0.apk";
 const RELEASES = [
   { tag_name: "v2.6.1", assets: [{ name: "jkt48connect.apk", browser_download_url: "https://github.com/x/main.apk" }] },
@@ -38,6 +39,7 @@ function edge() {
 function github(calls, { fixed = 200, api = 200, file = 200 } = {}) {
   return { UPSTREAM_FETCH: async (url) => {
     url = String(url); calls.push(url);
+    if (url === FIXED_OLD) return new Response("Not Found", { status: 404 });
     if (url === FIXED) return fixed === 200 ? new Response(APK, { headers: { "content-length": "4" } }) : new Response("Not Found", { status: fixed });
     if (url.startsWith("https://api.github.com/")) return api === 200 ? Response.json(RELEASES) : new Response("rate limited", { status: api });
     return file === 200 ? new Response(APK, { headers: { "content-length": "4" } }) : new Response("x", { status: file });
@@ -46,7 +48,10 @@ function github(calls, { fixed = 200, api = 200, file = 200 } = {}) {
 
 test("route matches the public link, any letter case", () => {
   assert.ok(STREAM_DOWNLOAD.test("/download/JKT48Connect-Stream-V1.0.0.apk"));
-  assert.ok(STREAM_DOWNLOAD.test("/download/jkt48connect-stream-v1.0.0.apk"));
+  assert.ok(STREAM_DOWNLOAD.test("/download/JKT48Connect-Stream-V1.0.1.apk"));
+  assert.ok(STREAM_DOWNLOAD.test("/download/jkt48connect-stream-v1.0.1.apk"));
+  assert.ok(STREAM_DOWNLOAD.test("/download/JKT48Connect-Stream.apk"));
+  assert.ok(!STREAM_DOWNLOAD.test("/download/JKT48Connect-Stream-V1.0.apk"));
   assert.ok(!STREAM_DOWNLOAD.test("/download/JKT48Connect-Stream-V1.0.0.apk/x"));
 });
 
@@ -57,7 +62,7 @@ test("serves the fixed stream-latest asset without touching the GitHub API, as a
   assert.equal(res.status, 200);
   assert.deepEqual(calls, [FIXED]);
   assert.equal(res.headers.get("content-type"), "application/vnd.android.package-archive");
-  assert.equal(res.headers.get("content-disposition"), 'attachment; filename="JKT48Connect-Stream-V1.0.0.apk"');
+  assert.equal(res.headers.get("content-disposition"), 'attachment; filename="JKT48Connect-Stream-V1.0.1.apk"');
   assert.equal(res.headers.get("x-stream-build"), "stream-latest");
   assert.deepEqual([...new Uint8Array(await res.arrayBuffer())], [80, 75, 3, 4]);
   await settle();
@@ -65,6 +70,8 @@ test("serves the fixed stream-latest asset without touching the GitHub API, as a
   const cached = await handleStreamDownload(new Request(LINK), github(again), ctx);
   assert.equal((await cached.arrayBuffer()).byteLength, 4);
   assert.deepEqual(again, [], "second request comes from the edge cache");
+  const old = await handleStreamDownload(new Request("https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.0.apk"), github([]), ctx);
+  assert.equal(old.headers.get("content-disposition"), 'attachment; filename="JKT48Connect-Stream-V1.0.0.apk"', "old link still works, named as requested");
 });
 
 test("without the fixed release it falls back to the newest published build via the API", async () => {

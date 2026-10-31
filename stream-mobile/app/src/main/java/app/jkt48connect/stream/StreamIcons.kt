@@ -52,6 +52,7 @@ object StreamIcons {
     /** Replay = putar ulang dengan segitiga play. */
     val Replay = line("Replay", "M4.5,12A7.5,7.5 0 1,0 7,6.4", "M4,4.5V8.5H8", "M10.5,9.5L14.5,12L10.5,14.5Z")
     /** Akun = orang dalam lingkaran. */
+    val Camera = line("Foto", "M4,8H7.5L9,5.5H15L16.5,8H20V19H4Z", "M12,10A3.5,3.5 0 1,1 12,17A3.5,3.5 0 1,1 12,10Z")
     val Person = line("Akun", "M12,3A9,9 0 1,1 12,21A9,9 0 1,1 12,3Z", "M12,7.5A2.75,2.75 0 1,1 12,13A2.75,2.75 0 1,1 12,7.5Z", "M7,18.2A6,6 0 0,1 17,18.2")
 
     // Bilah atas

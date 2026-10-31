@@ -147,6 +147,48 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual([i['hls']for i in items],[False,True])
   first=s.reveal(items[0]['url'].rsplit('/',1)[1],self.u);second=s.reveal(items[1]['url'].rsplit('/',1)[1],self.u)
   self.assertEqual((first['u'].endswith('.mp4'),'h'in first,second.get('h')),(True,False,1))
+ async def test_register_mistakes_get_readable_messages_not_422(self):
+  class Req:
+   headers={};client=type('C',(),{'host':'1.2.3.4'})()
+  cases=[(s.Credentials(email='',password='rahasia123',name='A'),'email'),
+         (s.Credentials(email='a@b.co',password='',name='A'),'password'),
+         (s.Credentials(email='a@b.co',password='pendek',name='A'),'8 karakter'),
+         (s.Credentials(email='a@b.co',password='rahasia123',name=''),'nama'),
+         (s.Credentials(email='a@b.co',password='rahasia123',name='x'*41),'40')]
+  for data,needle in cases:
+   with self.assertRaises(s.HTTPException)as e:await s.authenticate(Req(),data,True)
+   self.assertEqual(e.exception.status_code,400);self.assertIn(needle,e.exception.detail.lower()if needle.islower()else e.exception.detail)
+  ok=await s.authenticate(Req(),s.Credentials(email='Baru@Contoh.id',password='rahasia123',name='Baru'),True)
+  self.assertEqual(ok['user']['email'],'baru@contoh.id')
+ async def test_invalid_body_is_answered_with_a_message(self):
+  self.assertIn(s.RequestValidationError,s.app.exception_handlers)
+  r=await s.invalid_request(None,s.RequestValidationError([]))
+  self.assertEqual(r.status_code,400);self.assertIn('message',json.loads(r.body))
+ async def test_update_offers_current_release_unless_state_is_newer(self):
+  self.assertEqual((await s.update())['code'],2)
+ async def test_avatar_upload_is_squared_stripped_and_replaces_the_old_one(self):
+  import io
+  from PIL import Image
+  class Upload:
+   def __init__(self,body):self.body=body;self.headers={'content-length':str(len(body))}
+   async def stream(self):
+    yield self.body
+  s.db.execute("INSERT INTO users(id,email,password_hash,name,avatar) VALUES('u1','a@b.co','','Test','')");s.db.commit()
+  user=dict(s.db.execute('SELECT u.*,? AS sid FROM users u WHERE id=?',('session1','u1')).fetchone())
+  src=io.BytesIO();Image.new('RGB',(1200,800),'red').save(src,'PNG')
+  with patch.object(s,'ROOT',Path(self.tmp.name)):
+   first=await s.upload_avatar(Upload(src.getvalue()),user)
+   self.assertTrue(first['avatar'].startswith(s.AVATAR_URL))
+   stored=Path(self.tmp.name)/'avatars'/(first['avatar'].rsplit('/',1)[1]+'.jpg')
+   with Image.open(stored)as img:self.assertEqual((img.format,img.size,'exif'in img.info),('JPEG',(512,512),False))
+   second=await s.upload_avatar(Upload(src.getvalue()),{**user,'avatar':first['avatar']})
+   self.assertFalse(stored.exists(),'old photo removed')
+   self.assertEqual(s.db.execute("SELECT avatar FROM users WHERE id='u1'").fetchone()[0],second['avatar'])
+   with self.assertRaises(s.HTTPException)as e:await s.upload_avatar(Upload(b'bukan gambar'),user)
+   self.assertEqual(e.exception.status_code,400)
+   with self.assertRaises(s.HTTPException):await s.avatar('../../etc/passwd',user)
+   gone=await s.remove_avatar({**user,'avatar':second['avatar']})
+   self.assertEqual(gone['avatar'],'')
  async def test_recent_detail_maps_stats_supporters_gifts_and_screenshots(self):
   raw={'data_id':'r1','type':'showroom','points':321,'room_info':{'name':'Member Satu','img':'https://images.jkt48connect.com/m.jpg'},
    'live_info':{'duration':3600000,'viewers':{'num':900},'comments':{'num':456,'users':78},'date':{'start':'2026-10-01T10:00:00Z','end':'2026-10-01T11:00:00Z'},

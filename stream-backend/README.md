@@ -14,6 +14,8 @@ Akun dengan hash password dapat login memakai password lama. Akun OAuth tanpa pa
 
 - POST `/api/app/auth/register`, `/auth/login`, `/auth/logout`
 - GET `/api/app/me`, `/catalog`, `/live`, `/recent?page=1`, `/plans`
+- POST `/api/app/me/avatar` (body = gambar JPG/PNG/WebP mentah, maks. 5 MB; disimpan persegi 512 px tanpa metadata), POST `/api/app/me/avatar/remove`, GET `/api/app/avatar/{id}`
+- GET `/api/app/live/{id}/comments?after=&wait=`: komentar live Showroom/IDN (hanya baca)
 - POST `/api/app/playback/{theater|live|recent}/{id}`
 - GET `/api/app/media/{opaque}`: playlist/segmen/MP4 bertiket; tidak mengembalikan redirect origin
 - GET `/api/app/image/{id}`: gambar diproxy dengan autentikasi

@@ -1,5 +1,11 @@
 package app.jkt48connect.stream
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -22,6 +28,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.time.Instant
 
@@ -71,7 +79,7 @@ fun AccountScreen() {
     PullRefresh(onRefresh = { coroutineScope { listOf(async { me.refresh() }, async { payments.refresh() }).awaitAll() } }) {
         LazyColumn(contentPadding = LocalInsets.current) {
             item { PageHeader("04", "Akun", "Profil · Stream Pass") }
-            item { ProfileCard(me.data, Modifier.padding(horizontal = 16.dp).staggerIn(0)) }
+            item { ProfileCard(me.data, Modifier.padding(horizontal = 16.dp).staggerIn(0)) { me.data = it } }
             if (until != null) item { ActivePass(until, Modifier.padding(16.dp, 12.dp, 16.dp, 0.dp).staggerIn(1)) }
             if (me.error.isNotEmpty() && me.data == null) item { ErrorRetry(me.error, { nav.reload++ }) }
 
@@ -140,16 +148,55 @@ fun AccountScreen() {
     }
 }
 
-/** Kartu profil: avatar bulat (foto atau inisial di atas gradien merah), nama, email, status. */
+/**
+ * Kartu profil: avatar bulat (foto atau inisial di atas gradien merah), nama, email, status.
+ * Ketuk avatar → pilih foto dari galeri (Photo Picker, tanpa izin penyimpanan); foto diperkecil di perangkat lalu diunggah.
+ */
 @Composable
-private fun ProfileCard(me: JSONObject?, modifier: Modifier = Modifier) {
+private fun ProfileCard(me: JSONObject?, modifier: Modifier = Modifier, onChanged: (JSONObject) -> Unit) {
     val c = LocalColors.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val name = me?.optString("name").orEmpty().ifEmpty { "Penonton" }
-    Row(modifier.fillMaxWidth().glassCard(26.dp).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(64.dp).clip(CircleShape).background(c.brandGradient), contentAlignment = Alignment.Center) {
-            Txt(name.take(1).uppercase(), AppText.display(30.sp, Color.White))
-            val avatar = me?.optString("avatar").orEmpty()
-            if (avatar.startsWith("https://")) Picture(avatar, Modifier.fillMaxSize())
+    val avatar = me?.optString("avatar").orEmpty()
+    val scope = rememberCoroutineScope()
+    var uploading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null || uploading) return@rememberLauncherForActivityResult
+        uploading = true
+        error = ""
+        scope.launch {
+            runCatching {
+                val jpeg = withContext(Dispatchers.IO) { shrinkPhoto(context, uri) } ?: throw Exception("Foto tidak bisa dibaca. Coba foto lain.")
+                StreamApi.request("/me/avatar", "POST", image = jpeg)
+            }.onSuccess { onChanged(it) }.onFailure { error = it.message.orEmpty() }
+            uploading = false
+        }
+    }
+    fun remove() {
+        if (uploading) return
+        uploading = true
+        error = ""
+        scope.launch {
+            runCatching { StreamApi.request("/me/avatar/remove", "POST") }.onSuccess { onChanged(it) }.onFailure { error = it.message.orEmpty() }
+            uploading = false
+        }
+    }
+    Column(modifier.fillMaxWidth().glassCard(26.dp).padding(16.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(64.dp).pressable({ if (me != null) pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }),
+        ) {
+            Box(Modifier.fillMaxSize().clip(CircleShape).background(c.brandGradient), contentAlignment = Alignment.Center) {
+                Txt(name.take(1).uppercase(), AppText.display(30.sp, Color.White))
+                if (avatar.startsWith("https://")) Picture(avatar, Modifier.fillMaxSize())
+                if (uploading) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) { Spinner(22.dp, Color.White) }
+            }
+            // Lencana kamera: tanda bahwa foto bisa diganti.
+            Box(
+                Modifier.align(Alignment.BottomEnd).offset(2.dp, 2.dp).size(24.dp).clip(CircleShape).background(c.card).padding(2.dp).clip(CircleShape).background(c.brand),
+                contentAlignment = Alignment.Center,
+            ) { Image(StreamIcons.Camera, "Ganti foto profil", Modifier.size(13.dp), colorFilter = ColorFilter.tint(Color.White)) }
         }
         Gap(14.dp)
         Column(Modifier.weight(1f)) {
@@ -165,6 +212,49 @@ private fun ProfileCard(me: JSONObject?, modifier: Modifier = Modifier) {
                 if (passUntil(me) != null) Pill("Pass aktif", c.brand, Color.White) else Pill("Akun gratis", c.surface, c.inkSoft)
             }
         }
+    }
+    if (me != null) {
+        VGap(12.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Txt(
+                if (uploading) "Mengunggah foto…" else "Ketuk foto untuk mengganti",
+                AppText.body(12.5.sp, c.inkSoft),
+                Modifier.weight(1f),
+            )
+            if (!uploading && avatar.startsWith(StreamApi.base + "/")) {
+                Txt("Hapus foto", AppText.body(12.5.sp, c.brand, 700), Modifier.pressable({ remove() }).padding(4.dp))
+            }
+        }
+        if (error.isNotEmpty()) Txt(error, AppText.body(12.5.sp, c.brand, 600), Modifier.padding(top = 4.dp))
+    }
+    }
+}
+
+/** Baca foto dari galeri, perkecil ke maks. 1280 px (sisi terpanjang), kompres JPEG. Null bila tidak bisa dibaca. */
+private fun shrinkPhoto(context: android.content.Context, uri: Uri): ByteArray? {
+    val resolver = context.contentResolver
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1280) sample *= 2
+    val bitmap = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return null
+    // Foto kamera menyimpan arah putar di EXIF; BitmapFactory mengabaikannya, jadi putar di sini sebelum dikompres ulang.
+    val degrees = resolver.openInputStream(uri)?.use {
+        when (android.media.ExifInterface(it).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)) {
+            android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+    } ?: 0f
+    val longest = maxOf(bitmap.width, bitmap.height)
+    val scale = if (longest > 1280) 1280f / longest else 1f
+    val matrix = android.graphics.Matrix().apply { postScale(scale, scale); postRotate(degrees) }
+    val scaled = if (scale != 1f || degrees != 0f) Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true) else bitmap
+    return java.io.ByteArrayOutputStream().use { out ->
+        scaled.compress(Bitmap.CompressFormat.JPEG, 88, out)
+        out.toByteArray()
     }
 }
 

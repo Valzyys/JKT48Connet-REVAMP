@@ -33,7 +33,7 @@ ANDROID_HOME=/path/to/sdk ./gradlew :app:assembleDebug
 ./gradlew :app:assembleRelease -PapiBase=https://stream.jkt48connect.app
 ```
 
-Unduhan langsung APK terbaru: https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.0.apk (Worker website mengambil `JKT48Connect-Stream-v1.0.0.apk` dari rilis tetap `stream-latest` yang ditimpa setiap build, tanpa API GitHub; cadangan: rilis `stream-mobile-build-N` terbaru lalu salinan terakhir di edge. `worker/download.ts`).
+Unduhan langsung APK terbaru: https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.1.apk (versi apa pun di nama tautan, atau `/download/JKT48Connect-Stream.apk`, selalu memberi build terbaru). Versi diatur `versionName`/`versionCode` di `app/build.gradle.kts` dan `RELEASE` di `stream-backend/server.py` (popup update). Worker website mengambil `JKT48Connect-Stream.apk` dari rilis tetap `stream-latest` yang ditimpa setiap build, tanpa API GitHub; cadangan: rilis `stream-mobile-build-N` terbaru lalu salinan terakhir di edge. `worker/download.ts`).
 
 Untuk rilis tetap: `SIGNING_STORE_FILE`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD` disimpan privat. Jangan commit keystore. Workflow memakai secret signing Android yang sudah tersedia di repository; identitas package Stream tetap terpisah. Release Stream tidak ditandai latest agar pembaruan aplikasi utama tidak tertukar.
 
