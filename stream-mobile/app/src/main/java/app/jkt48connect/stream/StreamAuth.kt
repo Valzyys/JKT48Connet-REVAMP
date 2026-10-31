@@ -226,6 +226,18 @@ fun AuthScreen() {
     }
     fun submit() {
         if (busy) return
+        // Periksa isian dulu supaya kesalahan umum langsung dijelaskan, tanpa menunggu server.
+        val mail = email.trim()
+        error = when {
+            mail.isEmpty() -> "Isi alamat email terlebih dahulu."
+            !Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+").matches(mail) -> "Alamat email belum benar."
+            password.isEmpty() -> "Isi password terlebih dahulu."
+            register && name.isBlank() -> "Isi nama panggilanmu terlebih dahulu."
+            register && password.length < 8 -> "Gunakan password minimal 8 karakter."
+            password.toByteArray().size > 72 -> "Password terlalu panjang. Gunakan maksimal 72 karakter."
+            else -> ""
+        }
+        if (error.isNotEmpty()) return
         busy = true
         error = ""
         scope.launch {

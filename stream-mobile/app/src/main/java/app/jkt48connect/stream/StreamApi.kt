@@ -56,22 +56,31 @@ object StreamApi {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
         prefs.edit().putString("session", Base64.encodeToString(cipher.iv + cipher.doFinal(value.toByteArray()), Base64.NO_WRAP)).apply()
     }
-    suspend fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject = withContext(Dispatchers.IO) {
+    /** `image`: kirim JPEG mentah (unggah foto profil) sebagai ganti body JSON. */
+    suspend fun request(path: String, method: String = "GET", body: JSONObject? = null, image: ByteArray? = null): JSONObject = withContext(Dispatchers.IO) {
         val conn = URL("$base/api/app$path").openConnection() as HttpURLConnection
         try {
             conn.requestMethod = method; conn.connectTimeout = 15_000; conn.readTimeout = 28_000; conn.instanceFollowRedirects = false
             conn.setRequestProperty("Accept", "application/json")
             if (token.isNotEmpty()) conn.setRequestProperty("Authorization", "Bearer $token")
             if (method == "POST") {
-                conn.doOutput = true; conn.setRequestProperty("Content-Type", "application/json")
-                conn.outputStream.use { it.write((body ?: JSONObject()).toString().toByteArray()) }
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", if (image != null) "image/jpeg" else "application/json")
+                conn.outputStream.use { it.write(image ?: (body ?: JSONObject()).toString().toByteArray()) }
             }
             // Gangguan jaringan (tanpa sinyal, DNS, proxy) ditampilkan sebagai pesan yang bisa dipahami, bukan teks Java mentah.
             val status = try { conn.responseCode } catch (e: java.io.IOException) { throw Exception("Koneksi bermasalah. Periksa internet lalu coba lagi.") }
             val text = (if (status >= 400) conn.errorStream else conn.inputStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             val result = runCatching { JSONObject(text) }.getOrElse { throw Exception("Layanan belum dapat dihubungi. Coba lagi sebentar.") }
             if (status == 401 && !path.startsWith("/auth/")) save("")
-            if (status !in 200..299) throw Exception(result.optString("message", "Permintaan belum berhasil ($status)."))
+            if (status !in 200..299) throw Exception(result.optString("message").ifBlank {
+                when (status) {
+                    400, 422 -> "Data yang dikirim belum lengkap atau tidak valid. Periksa kembali isianmu."
+                    429 -> "Terlalu banyak percobaan. Coba beberapa saat lagi."
+                    in 500..599 -> "Server sedang bermasalah. Coba lagi sebentar."
+                    else -> "Permintaan belum berhasil ($status)."
+                }
+            })
             result
         } finally { conn.disconnect() }
     }

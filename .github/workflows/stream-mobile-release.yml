@@ -47,7 +47,12 @@ jobs:
           export PATH="$JAVA_HOME/bin:$PATH"
           chmod +x gradlew
           ./gradlew --no-daemon --max-workers=2 :app:assembleRelease :app:assembleDebug -PapiBase=https://stream.jkt48connect.app
-          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/JKT48Connect-Stream-v1.0.0.apk"
+          # Versi dari app/build.gradle.kts (versionName) menentukan nama file APK.
+          version=$(sed -n 's/.*versionName = "\([0-9.]*\)".*/\1/p' app/build.gradle.kts)
+          test -n "$version"
+          echo "STREAM_VERSION=$version" >> "$GITHUB_ENV"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/JKT48Connect-Stream-v$version.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/JKT48Connect-Stream.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/JKT48Connect-Stream-review.apk"
       - name: Publish separate Stream release
         env:
@@ -57,18 +62,18 @@ jobs:
           cat > "$RUNNER_TEMP/stream-notes.md" <<'NOTES'
           Aplikasi Android JKT48Connect Stream, package terpisah app.jkt48connect.stream.
 
-          Unduh JKT48Connect-Stream-v1.0.0.apk untuk pemasangan. File review hanya untuk pemeriksaan UI, bukan distribusi produksi.
+          Unduh JKT48Connect-Stream-v<versi>.apk untuk pemasangan, atau https://jkt48connect.app/download/JKT48Connect-Stream.apk (selalu versi terbaru). File review hanya untuk pemeriksaan UI, bukan distribusi produksi.
 
           Akun password lama, akses dan riwayat pembelian telah diimpor. Akun OAuth tanpa password masih memerlukan konfigurasi penyedia/pemulihan. Pembayaran diproses server setelah aplikasi ditutup; push FCM khusus package baru belum dikonfigurasi.
           NOTES
-          gh release create "$tag" "$RUNNER_TEMP/JKT48Connect-Stream-v1.0.0.apk" "$RUNNER_TEMP/JKT48Connect-Stream-review.apk" --target "$GITHUB_SHA" --latest=false --title "JKT48Connect Stream 1.0.0 ($tag)" --notes-file "$RUNNER_TEMP/stream-notes.md"
+          gh release create "$tag" "$RUNNER_TEMP/JKT48Connect-Stream-v$STREAM_VERSION.apk" "$RUNNER_TEMP/JKT48Connect-Stream-review.apk" --target "$GITHUB_SHA" --latest=false --title "JKT48Connect Stream $STREAM_VERSION ($tag)" --notes-file "$RUNNER_TEMP/stream-notes.md"
       - name: Update fixed download release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Rilis tetap (prerelease, bukan "latest") untuk https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.0.apk:
-          # URL unduhannya tidak berubah, jadi Worker website tidak perlu memanggil API GitHub (batas rate).
+          # Rilis tetap (prerelease, bukan "latest") untuk https://jkt48connect.app/download/JKT48Connect-Stream-V<versi>.apk:
+          # nama aset JKT48Connect-Stream.apk tidak berubah, jadi Worker website tidak perlu memanggil API GitHub (batas rate).
           gh release view stream-latest >/dev/null 2>&1 || gh release create stream-latest --target "$GITHUB_SHA" --prerelease --latest=false \
             --title "JKT48Connect Stream (unduhan terbaru)" \
-            --notes "APK JKT48Connect Stream terbaru untuk https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.0.apk. Ditimpa otomatis setiap build stream-mobile-build-N."
-          gh release upload stream-latest "$RUNNER_TEMP/JKT48Connect-Stream-v1.0.0.apk" --clobber
+            --notes "APK JKT48Connect Stream terbaru untuk https://jkt48connect.app/download/JKT48Connect-Stream.apk. Ditimpa otomatis setiap build stream-mobile-build-N."
+          gh release upload stream-latest "$RUNNER_TEMP/JKT48Connect-Stream.apk" --clobber
