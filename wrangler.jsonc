@@ -18,7 +18,7 @@
     // sitemap.xml juga lewat Worker supaya HTML awalnya membawa meta SEO per halaman (worker/seo.ts).
     "run_worker_first": [
       "/donasika", "/donasika/",
-      "/api/*", "/robots.txt", "/sitemap.xml", "/",
+      "/api/*", "/download/*", "/robots.txt", "/sitemap.xml", "/",
       "/live", "/live/", "/theater", "/theater/*", "/schedule", "/schedule/", "/member", "/member/*",
       "/birthday", "/birthday/", "/recent", "/recent/*", "/news", "/news/*", "/video", "/video/",
       "/games", "/games/*", "/activity", "/activity/*", "/discord", "/discord/*", "/developer", "/developer/", "/apps", "/apps/", "/about", "/about/", "/disclaimer", "/disclaimer/", "/terms", "/terms/", "/privacy", "/privacy/"

@@ -24,6 +24,7 @@
     "test:seo": "node --test tests/seo.test.mjs",
     "test:discord": "node --test tests/discord.test.mjs",
     "test:games": "node --test tests/games-*.test.mjs",
+    "test:download": "node --test tests/download.test.mjs",
     "games:dev": "wrangler dev --local --port 8799"
   },
   "dependencies": {
