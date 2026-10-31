@@ -27,8 +27,10 @@ const DURATION = 6;
 
 /**
  * Banner utama beranda dari gambar desain jkt48connect: kartu notifikasi member
- * yang sedang live dan banner jadwal show berikutnya. Berganti otomatis dengan
- * wipe + zoom pelan, progress bar per slide, bisa digeser di HP.
+ * yang sedang live dan banner jadwal show berikutnya. Tampil editorial dengan
+ * judul raksasa condensed, scrim sinematik, dan nomor slide ala lineup.
+ * Berganti otomatis dengan wipe + zoom pelan, progress bar per slide,
+ * bisa digeser di HP.
  */
 export function HeroCarousel() {
   const live = useQuery(q.live());
@@ -130,25 +132,46 @@ export function HeroCarousel() {
         const inner = (
           <>
             {s.img ? (
-              <img src={s.img} alt={s.title} loading={i === 0 ? "eager" : "lazy"} className="h-full w-full object-cover" draggable={false} />
+              <>
+                <img src={s.img} alt={s.title} loading={i === 0 ? "eager" : "lazy"} className="h-full w-full object-cover" draggable={false} />
+                {/* Scrim sinematik agar judul terbaca di atas banner. */}
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/90 via-ink/20 to-transparent" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-ink/60 to-transparent" />
+              </>
             ) : (
-              <div className="relative flex h-full w-full flex-col justify-center bg-brand px-8 text-white sm:px-12">
+              <div className="relative flex h-full w-full flex-col justify-end bg-brand px-6 pb-6 text-white sm:px-10 sm:pb-8">
                 <PixelCross className="absolute right-8 top-10 h-20 w-20 opacity-25" cellClass="fill-white" />
-                <p className="micro text-white/80">Your next theater date</p>
-                <p className="condensed mt-3 max-w-[80%] text-[clamp(2.5rem,7vw,5rem)] uppercase leading-[0.86]">{s.title}</p>
-                <p className="mt-3 font-mono text-[13px] text-white/85">{s.meta}</p>
+                <p data-cap className="micro text-white/80">
+                  Your next theater date
+                </p>
+                <p data-cap className="condensed mt-3 max-w-[90%] text-[clamp(2.5rem,7vw,5rem)] uppercase leading-[0.86]">
+                  {s.title}
+                </p>
+                <p data-cap className="mt-3 font-mono text-[13px] uppercase tracking-wider text-white/85">
+                  {s.meta}
+                </p>
               </div>
             )}
-            {/* Desain banner sudah memuat judul & tanggal; cukup label kecil di pojok. */}
-            <div className="absolute bottom-4 left-4 flex flex-wrap items-center gap-2 sm:bottom-5 sm:left-5">
-              <span data-cap className={cx("pill py-1", s.live ? "bg-brand text-white" : "bg-ink/85 text-white backdrop-blur")}>
-                {s.live ? <SignalBars className="h-2.5" /> : <PixelCross className="h-2.5 w-2.5" cellClass="fill-white" />}
-                {s.label}
-              </span>
-              <span data-cap className="pill bg-card/90 py-1 text-ink backdrop-blur">
-                {s.title} · {s.meta}
-              </span>
-            </div>
+            {s.img && (
+              <div className="absolute inset-x-0 bottom-0 z-[5] p-5 sm:p-8">
+                <div data-cap className="flex items-center gap-3">
+                  <span className={cx("pill py-1", s.live ? "bg-brand text-white" : "bg-white/15 text-white backdrop-blur")}>
+                    {s.live ? <SignalBars className="h-2.5" /> : <PixelCross className="h-2.5 w-2.5" cellClass="fill-white" />}
+                    {s.label}
+                  </span>
+                  <span aria-hidden className="h-[3px] w-12 rounded-full bg-brand" />
+                </div>
+                <h2
+                  data-cap
+                  className="condensed mt-3 max-w-[92%] text-[clamp(2rem,5.5vw,4.25rem)] uppercase leading-[0.9] text-white drop-shadow-[0_2px_14px_rgb(0_0_0/0.5)]"
+                >
+                  {s.title}
+                </h2>
+                <p data-cap className="mt-2 font-mono text-[12px] uppercase tracking-wider text-white/75 sm:text-[13px]">
+                  {s.meta}
+                </p>
+              </div>
+            )}
           </>
         );
         const cls = "absolute inset-0 block";
@@ -167,14 +190,18 @@ export function HeroCarousel() {
         );
       })}
 
-      {/* Progress per slide, seperti stories. */}
-      <div className="absolute inset-x-5 top-4 z-10 flex gap-1.5 sm:inset-x-7">
+      {/* Progress per slide + nomor slide ala lineup. */}
+      <div className="absolute inset-x-5 top-4 z-10 flex items-center gap-1.5 pr-14 sm:inset-x-7 sm:pr-16">
         {slides.map((s, i) => (
-          <button key={s.key} type="button" onClick={() => go(i)} aria-label={`Slide ${i + 1}`} className="h-1 flex-1 overflow-hidden rounded-full bg-white/35">
+          <button key={s.key} type="button" onClick={() => go(i)} aria-label={`Slide ${i + 1}`} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/30">
             <span data-bar className="block h-full origin-left rounded-full bg-white" />
           </button>
         ))}
       </div>
+      <p aria-hidden className="absolute right-5 top-3 z-10 font-mono text-[12px] text-white/90 sm:right-7">
+        {String(index + 1).padStart(2, "0")}
+        <span className="text-white/45"> / {String(count).padStart(2, "0")}</span>
+      </p>
 
       {count > 1 && (
         <>
