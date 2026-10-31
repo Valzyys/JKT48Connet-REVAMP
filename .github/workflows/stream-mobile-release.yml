@@ -62,3 +62,13 @@ jobs:
           Akun password lama, akses dan riwayat pembelian telah diimpor. Akun OAuth tanpa password masih memerlukan konfigurasi penyedia/pemulihan. Pembayaran diproses server setelah aplikasi ditutup; push FCM khusus package baru belum dikonfigurasi.
           NOTES
           gh release create "$tag" "$RUNNER_TEMP/JKT48Connect-Stream-v1.0.0.apk" "$RUNNER_TEMP/JKT48Connect-Stream-review.apk" --target "$GITHUB_SHA" --latest=false --title "JKT48Connect Stream 1.0.0 ($tag)" --notes-file "$RUNNER_TEMP/stream-notes.md"
+      - name: Update fixed download release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Rilis tetap (prerelease, bukan "latest") untuk https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.0.apk:
+          # URL unduhannya tidak berubah, jadi Worker website tidak perlu memanggil API GitHub (batas rate).
+          gh release view stream-latest >/dev/null 2>&1 || gh release create stream-latest --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "JKT48Connect Stream (unduhan terbaru)" \
+            --notes "APK JKT48Connect Stream terbaru untuk https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.0.apk. Ditimpa otomatis setiap build stream-mobile-build-N."
+          gh release upload stream-latest "$RUNNER_TEMP/JKT48Connect-Stream-v1.0.0.apk" --clobber
