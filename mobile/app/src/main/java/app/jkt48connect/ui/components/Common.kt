@@ -278,7 +278,7 @@ fun Modifier.glassCard(radius: Dp = 24.dp, tint: Color = Color.Unspecified): Mod
 private fun Modifier.glassBody(dark: Boolean): Modifier = drawWithCache {
     val glowH = minOf(size.height * 0.55f, 26.dp.toPx())
     val glow = Brush.verticalGradient(
-        0f to Color.White.copy(alpha = if (dark) 0.14f else 0.5f),
+        0f to Color.White.copy(alpha = if (dark) 0.07f else 0.26f),
         1f to Color.Transparent,
         startY = 0f,
         endY = glowH,
@@ -309,8 +309,9 @@ private fun Modifier.glassBody(dark: Boolean): Modifier = drawWithCache {
 fun Modifier.glassRim(shape: Shape, dark: Boolean, strength: Float = 1f): Modifier = drawWithCache {
     val outline = shape.createOutline(size, layoutDirection, this)
     val w = 1.dp.toPx()
-    val top = Color.White.copy(alpha = ((if (dark) 0.42f else 1f) * strength).coerceAtMost(1f))
-    val bottom = Color.White.copy(alpha = ((if (dark) 0.16f else 0.55f) * strength).coerceAtMost(1f))
+    // Atas sama redupnya dengan bawah.
+    val top = Color.White.copy(alpha = ((if (dark) 0.18f else 0.55f) * strength).coerceAtMost(1f))
+    val bottom = top
     val vertical = Brush.verticalGradient(0f to top, 0.22f to top.copy(alpha = 0f), 0.78f to bottom.copy(alpha = 0f), 1f to bottom)
     // Mask horizontal: penuh di bagian tengah, memudar lembut ke kiri-kanan sebelum lengkung pojok.
     val mask = Brush.horizontalGradient(0f to Color.Transparent, 0.07f to Color.Transparent, 0.3f to Color.Black, 0.7f to Color.Black, 0.93f to Color.Transparent, 1f to Color.Transparent)
