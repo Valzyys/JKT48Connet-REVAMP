@@ -204,6 +204,16 @@ fun clearGlassFill(): Color {
     }
 }
 
+/**
+ * Bayangan tepi yang lebih tegas untuk kaca yang mengapung di atas isi (tab bar, mini player), supaya tepinya
+ * tetap terlihat jelas di atas latar terang maupun gambar.
+ */
+fun floatingShadow(dark: Boolean): Shadow = Shadow(
+    radius = 22.dp,
+    offset = androidx.compose.ui.unit.DpOffset(0.dp, 6.dp),
+    color = Color.Black.copy(alpha = if (dark) 0.55f else 0.22f),
+)
+
 /** Kaca statis: blur + lensa + isian, dengan sorot tepi dan bayangan bawaan Backdrop. */
 fun Modifier.glass(
     backdrop: Backdrop,
@@ -218,6 +228,8 @@ fun Modifier.glass(
     layerBlock: (androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit)? = null,
     exportedBackdrop: com.kyant.backdrop.backdrops.LayerBackdrop? = null,
     rim: Highlight = RimHighlight,
+    /** Ganti bayangan bawaan (mis. [floatingShadow] untuk kaca yang mengapung). */
+    shadowStyle: Shadow? = null,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
@@ -227,7 +239,7 @@ fun Modifier.glass(
         lens(lensHeight.toPx(), lensAmount.toPx(), depth)
     },
     highlight = { if (!RimOk) null else rim },
-    shadow = if (shadow) ({ Shadow() }) else null,
+    shadow = if (shadowStyle != null) ({ shadowStyle }) else if (shadow) ({ Shadow() }) else null,
     layerBlock = layerBlock,
     exportedBackdrop = exportedBackdrop,
     onDrawSurface = {
@@ -438,6 +450,8 @@ fun LiquidTabs(
                     shape = { Capsule() },
                     // Kaca bening ala tab bar iOS 26: blur tipis, isi di belakang tetap terlihat & terbiaskan lensa.
                     effects = { vibrancy(); blur(3.dp.toPx()); lens(24.dp.toPx(), 24.dp.toPx()) },
+                    // Tab bar mengapung: bayangan tepi tegas agar terlihat jelas di atas isi halaman.
+                    shadow = { if (segmented) Shadow() else floatingShadow(c.dark) },
                     highlight = { if (!RimOk) null else RimHighlight },
                     layerBlock = {
                         val scale = lerp(1f, 1f + 16.dp.toPx() / size.width, drag.pressProgress)

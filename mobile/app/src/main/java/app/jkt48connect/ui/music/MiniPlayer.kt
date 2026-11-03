@@ -42,6 +42,7 @@ import app.jkt48connect.core.Music
 import app.jkt48connect.ui.components.pressable
 import app.jkt48connect.ui.glass.LocalBackdrop
 import app.jkt48connect.ui.glass.clearGlassFill
+import app.jkt48connect.ui.glass.floatingShadow
 import app.jkt48connect.ui.glass.glass
 import app.jkt48connect.ui.theme.AppText
 import app.jkt48connect.ui.theme.LocalColors
@@ -68,7 +69,7 @@ fun MiniPlayer(modifier: Modifier = Modifier) {
         modifier
             .fillMaxWidth()
             .height(62.dp)
-            .glass(LocalBackdrop.current, Capsule(), clearGlassFill(), blur = 3.dp, lensHeight = 18.dp, lensAmount = 24.dp)
+            .glass(LocalBackdrop.current, Capsule(), clearGlassFill(), blur = 3.dp, lensHeight = 18.dp, lensAmount = 24.dp, shadowStyle = floatingShadow(c.dark))
             .drawWithContent {
                 drawContent()
                 // Progres di tepi bawah kapsul (tipis, merah brand).
