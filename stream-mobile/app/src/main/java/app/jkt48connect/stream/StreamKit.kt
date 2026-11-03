@@ -135,10 +135,19 @@ object StreamCache {
     val docs = mutableMapOf<String, JSONObject>()
 }
 
+/**
+ * Baris unik per `id`: data sumber kadang memuat item yang sama dua kali, dan kunci ganda di LazyColumn/LazyRow
+ * membuat aplikasi tertutup paksa ("Key was already used"). Baris tanpa id dipertahankan apa adanya.
+ */
+fun List<JSONObject>.unique(): List<JSONObject> = distinctBy { it.optString("id").ifEmpty { "#" + System.identityHashCode(it) } }
+
+/** Kunci LazyList yang selalu unik: id, atau posisi bila id kosong. */
+fun rowKey(index: Int, row: JSONObject): String = row.optString("id").ifEmpty { "#$index" }
+
 /** Daftar dari server: muat ulang, muat-lanjut (halaman berikutnya), dan pesan galat. */
 @Stable
 class Feed(private val path: (Int) -> String, private val paged: Boolean) {
-    var rows by mutableStateOf(StreamCache.lists[path(1)].orEmpty())
+    var rows by mutableStateOf(StreamCache.lists[path(1)].orEmpty().unique())
     var loading by mutableStateOf(rows.isEmpty())
     var error by mutableStateOf("")
     var end by mutableStateOf(!paged)
@@ -148,7 +157,7 @@ class Feed(private val path: (Int) -> String, private val paged: Boolean) {
     suspend fun refresh() {
         runCatching { StreamApi.request(path(1)) }
             .onSuccess {
-                val batch = it.optJSONArray("items")?.rows().orEmpty()
+                val batch = it.optJSONArray("items")?.rows().orEmpty().unique()
                 rows = batch
                 page = 1
                 end = !paged || batch.isEmpty()
@@ -167,7 +176,7 @@ class Feed(private val path: (Int) -> String, private val paged: Boolean) {
                 val batch = it.optJSONArray("items")?.rows().orEmpty()
                 if (batch.isEmpty()) end = true else {
                     page++
-                    rows = (rows + batch).distinctBy { r -> r.optString("id") }
+                    rows = (rows + batch).unique()
                 }
             }
             .onFailure { error = it.message.orEmpty() }

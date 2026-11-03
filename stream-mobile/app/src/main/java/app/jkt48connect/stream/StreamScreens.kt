@@ -147,7 +147,7 @@ fun HomeScreen() {
                 item { SectionHead("IDN Live · Showroom", "Live sekarang", "${live.rows.size}") { nav.tab = 1 } }
                 item {
                     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        itemsIndexed(live.rows, key = { _, l -> l.optString("id") }) { i, l ->
+                        itemsIndexed(live.rows, key = { i, l -> rowKey(i, l) }) { i, l ->
                             LiveCard(l, Modifier.fillParentMaxWidth(0.8f).staggerIn(i), 230.dp) { nav.push(Route.Watch(l)) }
                         }
                     }
@@ -212,7 +212,7 @@ private fun OnAirHero(live: List<JSONObject>?, show: JSONObject?, onWatch: (JSON
             LaunchedEffect(pager, live.size) {
                 while (live.size > 1) {
                     delay(4_500)
-                    pager.animateScrollToPage((pager.currentPage + 1) % live.size)
+                    if (live.isNotEmpty()) pager.animateScrollToPage((pager.currentPage + 1) % live.size)
                 }
             }
             Box(
@@ -226,7 +226,8 @@ private fun OnAirHero(live: List<JSONObject>?, show: JSONObject?, onWatch: (JSON
                     .staggerIn(0),
             ) {
                 HorizontalPager(pager, Modifier.fillMaxSize()) { p ->
-                    val l = live[p]
+                    // Daftar live bisa menyusut saat dimuat ulang sementara pager masih di halaman terakhir.
+                    val l = live.getOrNull(p) ?: return@HorizontalPager
                     // Foto direkam sebagai backdrop: chip & tombol di atasnya liquid glass yang membiaskan foto.
                     val photo = rememberLayerBackdrop()
                     Box(Modifier.fillMaxSize().pressable({ onWatch(l) }, 0.99f)) {
@@ -279,7 +280,7 @@ private fun OnAirHero(live: List<JSONObject>?, show: JSONObject?, onWatch: (JSON
                             Txt("ON AIR", AppText.micro(Color.White, 10.5.sp))
                         }
                         Spacer(Modifier.weight(1f))
-                        Txt("%02d / %02d".format(pager.currentPage + 1, live.size), AppText.mono(12.sp, Color.White.copy(alpha = 0.85f), FontWeight.SemiBold))
+                        Txt("%02d / %02d".format(minOf(pager.currentPage + 1, live.size), live.size), AppText.mono(12.sp, Color.White.copy(alpha = 0.85f), FontWeight.SemiBold))
                     }
                 }
             }
@@ -560,7 +561,7 @@ fun LiveScreen() {
                         if (filter == 0) "Belum ada member yang live. Tarik ke bawah untuk memeriksa lagi." else "Tidak ada live di ${if (filter == 1) "IDN" else "Showroom"} saat ini.",
                     )
                 }
-                else -> itemsIndexed(list, key = { _, l -> l.optString("id") }) { i, l ->
+                else -> itemsIndexed(list, key = { i, l -> rowKey(i, l) }) { i, l ->
                     LiveCard(l, Modifier.padding(16.dp, 0.dp, 16.dp, 12.dp).staggerIn(i)) { nav.push(Route.Watch(l)) }
                 }
             }
@@ -594,7 +595,7 @@ fun TheaterScreen() {
                         onAction = if (filter == 1) ({ nav.tab = 4 }) else null,
                     )
                 }
-                else -> itemsIndexed(list, key = { _, t -> t.optString("id") }) { i, t ->
+                else -> itemsIndexed(list, key = { i, t -> rowKey(i, t) }) { i, t ->
                     ShowTile(t, Modifier.padding(16.dp, 0.dp, 16.dp, 10.dp).staggerIn(i)) { nav.push(Route.Theater(t)) }
                 }
             }
@@ -770,7 +771,7 @@ fun ReplayScreen() {
                 recent.rows.isEmpty() && recent.loading -> items(5) { Skeleton(Modifier.padding(16.dp, 0.dp, 16.dp, 10.dp).fillMaxWidth().height(94.dp)) }
                 recent.rows.isEmpty() && recent.error.isNotEmpty() -> item { ErrorRetry(recent.error, { nav.reload++ }) }
                 list.isEmpty() -> item { EmptyState(StreamIcons.Replay, "Belum ada replay di sini. Gulir untuk memuat lebih banyak.") }
-                else -> itemsIndexed(list, key = { _, r -> r.optString("id") }) { i, r ->
+                else -> itemsIndexed(list, key = { i, r -> rowKey(i, r) }) { i, r ->
                     RecentTile(r, Modifier.padding(16.dp, 0.dp, 16.dp, 10.dp).staggerIn(i % 12)) { nav.push(Route.Recent(r)) }
                 }
             }
