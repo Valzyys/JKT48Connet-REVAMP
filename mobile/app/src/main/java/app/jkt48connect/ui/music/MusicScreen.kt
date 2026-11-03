@@ -1,5 +1,13 @@
 package app.jkt48connect.ui.music
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Favorite
+import app.jkt48connect.core.MusicSheet
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
@@ -144,11 +152,16 @@ fun MusicScreen() {
     val home = submitted == "JKT48"
     val play = { list: List<MusicTrack>, i: Int -> Music.play(context, list, i); Music.nowPlayingOpen = true }
     val musicBg = rememberLayerBackdrop()
+    // Koleksi yang sedang dibuka ("liked" atau id playlist); null = beranda musik.
+    var openCollection by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(openCollection != null) { openCollection = null }
 
     Box(Modifier.fillMaxSize()) {
         MusicAmbient(feature, Modifier.fillMaxSize().layerBackdrop(musicBg))
         CompositionLocalProvider(LocalBackdrop provides musicBg) {
-            LazyColumn(state = rememberLazyListState(), contentPadding = LocalInsets.current) {
+            AnimatedContent(openCollection, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) }, label = "collection") { open ->
+            if (open != null) CollectionView(open, onBack = { openCollection = null }, play = play)
+            else LazyColumn(state = rememberLazyListState(), contentPadding = LocalInsets.current) {
                 item { Wordmark(tracks, onShuffle = { list -> play(list.shuffled(), 0) }) }
                 item {
                     SearchField(
@@ -180,8 +193,12 @@ fun MusicScreen() {
                     item { Heading("Sorotan harian", action = "Putar semua") { play(tracks, 0) } }
                     item { DailyCards(tracks) { i -> play(tracks, i) } }
                 }
+                if (home) {
+                    item { Heading("Koleksi") }
+                    item { CollectionShelf(onOpen = { openCollection = it }) }
+                }
                 if (query.isBlank() && Music.history.isNotEmpty()) {
-                    item { Heading("Baru diputar") }
+                    item { Heading("Baru diputar", action = "Hapus") { Music.clearHistory() } }
                     item {
                         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             itemsIndexed(Music.history, key = { _, t -> "h" + t.id }) { i, t ->
@@ -227,6 +244,7 @@ fun MusicScreen() {
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -402,7 +420,12 @@ private fun DailyCards(tracks: List<MusicTrack>, onPlay: (Int) -> Unit) {
                     MusicCover(t, Modifier.fillMaxSize(), 0.dp)
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.45f), 0.3f to Color.Transparent, 0.7f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.5f))))
                 }
-                Column(Modifier.align(Alignment.TopStart).padding(18.dp)) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).padding(10.dp).size(36.dp)
+                        .glass(coverBg, CircleShape, Color.Black.copy(alpha = 0.18f), blur = 6.dp, lensHeight = 8.dp, lensAmount = 14.dp, shadow = false),
+                    contentAlignment = Alignment.Center,
+                ) { TrackMenuButton(t, tint = Color.White) }
+                Column(Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 18.dp, end = 52.dp)) {
                     Txt(t.title, AppText.title(20.sp, Color.White), maxLines = 2)
                     Txt(t.artist.ifEmpty { "JKT48" }, AppText.body(13.sp, Color.White.copy(alpha = 0.8f), 600), maxLines = 1)
                 }
@@ -489,7 +512,7 @@ private fun SearchField(value: String, onChange: (String) -> Unit, onSubmit: () 
 
 /** Baris lagu polos di atas latar: thumbnail, judul, artis · durasi; lagu yang diputar diberi ekualiser & warna aksen. */
 @Composable
-private fun TrackRow(t: MusicTrack, modifier: Modifier, onClick: () -> Unit) {
+private fun TrackRow(t: MusicTrack, modifier: Modifier, from: String? = null, onClick: () -> Unit) {
     val c = LocalColors.current
     val isCurrent = Music.current?.id == t.id
     Row(
@@ -512,6 +535,121 @@ private fun TrackRow(t: MusicTrack, modifier: Modifier, onClick: () -> Unit) {
             Spacer(Modifier.height(2.dp))
             Txt(listOfNotNull(t.artist.ifEmpty { "JKT48" }, t.duration?.let { fmtClock(it * 1000L) }).joinToString(" · "), AppText.body(12.5.sp, c.inkSoft), maxLines = 1)
         }
-        Image(Icons.Rounded.PlayArrow, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(if (isCurrent) c.ink else c.inkSoft))
+        if (Music.isLiked(t.id)) Image(Icons.Rounded.Favorite, "Disukai", Modifier.size(16.dp), colorFilter = ColorFilter.tint(c.brand))
+        TrackMenuButton(t, from)
+    }
+}
+
+/** Rak koleksi: Disukai, playlist buatan sendiri, dan tombol playlist baru. */
+@Composable
+private fun CollectionShelf(onOpen: (String) -> Unit) {
+    val c = LocalColors.current
+    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        item(key = "liked") {
+            ShelfCard("Disukai", "${Music.liked.size} lagu", { onOpen("liked") }) {
+                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(c.brand, Color(0xFFFF6FA3)))), contentAlignment = Alignment.Center) {
+                    Image(Icons.Rounded.Favorite, null, Modifier.size(44.dp), colorFilter = ColorFilter.tint(Color.White))
+                }
+            }
+        }
+        items(Music.playlists, key = { it.id }) { p ->
+            ShelfCard(p.name, "${p.tracks.size} lagu", { onOpen(p.id) }) { PlaylistArt(p.tracks) }
+        }
+        item(key = "new") {
+            ShelfCard("Playlist baru", "Buat koleksimu", { Music.sheet = MusicSheet.NewPlaylist(null) }) {
+                Box(Modifier.fillMaxSize().glass(LocalBackdrop.current, RoundedRectangle(18.dp), frost(), blur = 6.dp, lensHeight = 14.dp, lensAmount = 28.dp, shadow = false), contentAlignment = Alignment.Center) {
+                    Image(Icons.Rounded.Add, null, Modifier.size(40.dp), colorFilter = ColorFilter.tint(c.ink))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShelfCard(title: String, sub: String, onClick: () -> Unit, art: @Composable () -> Unit) {
+    val c = LocalColors.current
+    Column(Modifier.width(132.dp).pressable(onClick)) {
+        Box(Modifier.size(132.dp).clip(RoundedCornerShape(18.dp))) { art() }
+        Spacer(Modifier.height(8.dp))
+        Txt(title, AppText.body(13.sp, c.ink, 750), maxLines = 1)
+        Txt(sub, AppText.body(12.sp, c.inkSoft), maxLines = 1)
+    }
+}
+
+/** Sampul playlist: kolase 2×2 dari cover lagu pertama (atau satu cover / ikon bila sedikit). */
+@Composable
+private fun PlaylistArt(tracks: List<MusicTrack>) {
+    val c = LocalColors.current
+    when {
+        tracks.isEmpty() -> Box(Modifier.fillMaxSize().background(c.ink.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
+            Image(Icons.AutoMirrored.Rounded.QueueMusic, null, Modifier.size(40.dp), colorFilter = ColorFilter.tint(c.inkSoft))
+        }
+        tracks.size < 4 -> MusicCover(tracks.first(), Modifier.fillMaxSize(), 0.dp)
+        else -> Column(Modifier.fillMaxSize()) {
+            tracks.take(4).chunked(2).forEach { row ->
+                Row(Modifier.weight(1f)) { row.forEach { t -> MusicCover(t, Modifier.weight(1f).fillMaxSize(), 0.dp) } }
+            }
+        }
+    }
+}
+
+/** Halaman koleksi (Disukai / playlist): sampul besar, judul, putar & acak, ganti nama / hapus, daftar lagu. */
+@Composable
+private fun CollectionView(id: String, onBack: () -> Unit, play: (List<MusicTrack>, Int) -> Unit) {
+    val c = LocalColors.current
+    val p = if (id == "liked") null else Music.playlists.firstOrNull { it.id == id }
+    if (id != "liked" && p == null) { LaunchedEffect(Unit) { onBack() }; return }
+    val name = p?.name ?: "Disukai"
+    val tracks = p?.tracks ?: Music.liked
+    val total = tracks.sumOf { it.duration ?: 0 }
+    LazyColumn(contentPadding = LocalInsets.current) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(16.dp, 4.dp, 16.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                LiquidIconButton(Icons.AutoMirrored.Rounded.ArrowBack, onBack, size = 42.dp, iconSize = 22.dp, iconColor = c.ink, fill = frost(), contentDescription = "Kembali")
+                Spacer(Modifier.weight(1f))
+                if (p != null) {
+                    LiquidIconButton(Icons.Rounded.Edit, { Music.sheet = MusicSheet.Rename(p) }, size = 42.dp, iconSize = 20.dp, iconColor = c.ink, fill = frost(), contentDescription = "Ganti nama")
+                    Spacer(Modifier.width(8.dp))
+                    LiquidIconButton(Icons.Rounded.Delete, { Music.deletePlaylist(p.id); onBack() }, size = 42.dp, iconSize = 20.dp, iconColor = c.ink, fill = frost(), contentDescription = "Hapus playlist")
+                }
+            }
+        }
+        item {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(196.dp).clip(RoundedCornerShape(26.dp))) {
+                    if (p == null) Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(c.brand, Color(0xFFFF6FA3)))), contentAlignment = Alignment.Center) {
+                        Image(Icons.Rounded.Favorite, null, Modifier.size(72.dp), colorFilter = ColorFilter.tint(Color.White))
+                    } else PlaylistArt(tracks)
+                }
+                Spacer(Modifier.height(16.dp))
+                Txt(name, AppText.title(26.sp, c.ink), maxLines = 2)
+                Txt(
+                    listOfNotNull("${tracks.size} lagu", total.takeIf { it > 0 }?.let { "${it / 60} menit" }).joinToString(" · "),
+                    AppText.body(13.sp, c.inkSoft, 600),
+                )
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LiquidButton(onClick = { if (tracks.isNotEmpty()) play(tracks, 0) }, modifier = Modifier.height(46.dp).width(140.dp), tint = c.brand) {
+                        Image(Icons.Rounded.PlayArrow, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(Color.White))
+                        Txt("Putar", AppText.body(15.sp, Color.White, 800))
+                    }
+                    LiquidButton(onClick = { if (tracks.isNotEmpty()) play(tracks.shuffled(), 0) }, modifier = Modifier.height(46.dp).width(140.dp), fill = frost()) {
+                        Image(Icons.Rounded.Shuffle, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.ink))
+                        Txt("Acak", AppText.body(15.sp, c.ink, 750))
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+            }
+        }
+        if (tracks.isEmpty()) item {
+            Txt(
+                if (p == null) "Belum ada lagu yang disukai. Ketuk ⋮ di lagu mana pun lalu pilih Sukai." else "Playlist ini masih kosong. Ketuk ⋮ di lagu mana pun lalu pilih Tambahkan ke playlist.",
+                AppText.body(14.sp, c.inkSoft),
+                Modifier.padding(24.dp, 8.dp),
+            )
+        }
+        itemsIndexed(tracks, key = { _, t -> "c" + t.id }) { i, t ->
+            TrackRow(t, Modifier.padding(horizontal = 8.dp), from = id) { play(tracks, i) }
+        }
     }
 }

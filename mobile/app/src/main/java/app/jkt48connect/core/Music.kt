@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -66,11 +68,38 @@ object Music {
     /** Layar "Sedang diputar" terbuka (mini player disembunyikan). */
     var nowPlayingOpen by mutableStateOf(false)
 
+    /** Lagu yang disukai (terbaru di depan) & playlist buatan pengguna; disimpan di perangkat. */
+    var liked by mutableStateOf<List<MusicTrack>>(emptyList())
+        private set
+    var playlists by mutableStateOf<List<Playlist>>(emptyList())
+        private set
+
+    /** Lembar aksi yang sedang terbuka (menu lagu, playlist baru, timer tidur, kecepatan). */
+    var sheet by mutableStateOf<MusicSheet?>(null)
+
+    /** Pesan singkat di atas layar ("Ditambahkan ke antrean"). */
+    var toast by mutableStateOf<String?>(null)
+        private set
+    private var toastJob: Job? = null
+
+    /** Timer tidur: waktu berhenti (epoch ms, 0 = mati) atau berhenti di akhir lagu ini. */
+    var sleepAt by mutableLongStateOf(0L)
+        private set
+    var sleepEndOfTrack by mutableStateOf(false)
+        private set
+    private var sleepJob: Job? = null
+
+    var speed by mutableFloatStateOf(1f)
+        private set
+
     fun init(context: Context) {
         if (::prefs.isInitialized) return
         prefs = context.getSharedPreferences("music", Context.MODE_PRIVATE)
         history = runCatching { JSONArray(prefs.getString("history", "[]")).objects().map(MusicTrack::from) }.getOrDefault(emptyList())
         history.forEach { known[it.id] = it }
+        liked = runCatching { JSONArray(prefs.getString("liked", "[]")).objects().map(MusicTrack::from) }.getOrDefault(emptyList())
+        playlists = runCatching { JSONArray(prefs.getString("playlists", "[]")).objects().map(Playlist::from) }.getOrDefault(emptyList())
+        (liked + playlists.flatMap { it.tracks }).forEach { known[it.id] = it }
         // Service masih memutar dari sesi sebelumnya (aplikasi dibuka lagi dari notifikasi): sambungkan diam-diam.
         connect(context)
     }
@@ -131,6 +160,140 @@ object Music {
         }
     }
 
+    // ---- Antrean ----
+
+    /** Sisipkan tepat setelah lagu yang sedang diputar (atau mulai putar bila antrean kosong). */
+    fun playNext(context: Context, t: MusicTrack) {
+        known[t.id] = t
+        connect(context) {
+            val c = controller ?: return@connect
+            if (c.mediaItemCount == 0) play(context, listOf(t), 0) else c.addMediaItem(c.currentMediaItemIndex + 1, item(t))
+        }
+        say("Diputar berikutnya: ${t.title}")
+    }
+
+    /** Tambahkan ke akhir antrean. */
+    fun addToQueue(context: Context, t: MusicTrack) {
+        known[t.id] = t
+        connect(context) {
+            val c = controller ?: return@connect
+            if (c.mediaItemCount == 0) play(context, listOf(t), 0) else c.addMediaItem(item(t))
+        }
+        say("Ditambahkan ke antrean")
+    }
+
+    fun removeAt(i: Int) = controller?.run { if (i != currentMediaItemIndex && i in 0 until mediaItemCount) removeMediaItem(i) }
+
+    fun move(from: Int, to: Int) = controller?.run { if (from in 0 until mediaItemCount && to in 0 until mediaItemCount && from != to) moveMediaItem(from, to) }
+
+    /** Hapus semua lagu setelah yang sedang diputar. */
+    fun clearUpNext() = controller?.run {
+        val start = currentMediaItemIndex + 1
+        if (start < mediaItemCount) { removeMediaItems(start, mediaItemCount); say("Antrean dibersihkan") }
+    }
+
+    // ---- Suka & playlist ----
+
+    fun isLiked(id: String) = liked.any { it.id == id }
+
+    fun toggleLike(t: MusicTrack) {
+        known[t.id] = t
+        val was = isLiked(t.id)
+        liked = if (was) liked.filter { it.id != t.id } else listOf(t) + liked
+        save("liked", liked)
+        say(if (was) "Dihapus dari Disukai" else "Ditambahkan ke Disukai")
+    }
+
+    fun createPlaylist(name: String, first: MusicTrack?): Playlist {
+        val p = Playlist("p" + System.currentTimeMillis().toString(36), name.trim().ifEmpty { "Playlist baru" }.take(60), listOfNotNull(first))
+        playlists = playlists + p
+        savePlaylists()
+        say(if (first != null) "Playlist “${p.name}” dibuat dengan ${first.title}" else "Playlist “${p.name}” dibuat")
+        return p
+    }
+
+    fun addToPlaylist(id: String, t: MusicTrack) {
+        known[t.id] = t
+        val p = playlists.firstOrNull { it.id == id } ?: return
+        if (p.tracks.any { it.id == t.id }) { say("Sudah ada di “${p.name}”"); return }
+        playlists = playlists.map { if (it.id == id) it.copy(tracks = it.tracks + t) else it }
+        savePlaylists()
+        say("Ditambahkan ke “${p.name}”")
+    }
+
+    fun removeFromPlaylist(id: String, trackId: String) {
+        playlists = playlists.map { if (it.id == id) it.copy(tracks = it.tracks.filter { t -> t.id != trackId }) else it }
+        savePlaylists()
+        say("Dihapus dari playlist")
+    }
+
+    fun renamePlaylist(id: String, name: String) {
+        playlists = playlists.map { if (it.id == id) it.copy(name = name.trim().ifEmpty { it.name }.take(60)) else it }
+        savePlaylists()
+    }
+
+    fun deletePlaylist(id: String) {
+        val p = playlists.firstOrNull { it.id == id } ?: return
+        playlists = playlists.filter { it.id != id }
+        savePlaylists()
+        say("Playlist “${p.name}” dihapus")
+    }
+
+    fun clearHistory() {
+        history = emptyList()
+        save("history", history)
+        say("Riwayat dihapus")
+    }
+
+    // ---- Timer tidur & kecepatan ----
+
+    /** `minutes` > 0: berhenti setelah sekian menit; -1: di akhir lagu ini; null: matikan. */
+    fun setSleep(minutes: Int?) {
+        sleepJob?.cancel()
+        sleepAt = 0L
+        sleepEndOfTrack = false
+        when {
+            minutes == null -> say("Timer tidur dimatikan")
+            minutes < 0 -> { sleepEndOfTrack = true; say("Berhenti di akhir lagu ini") }
+            else -> {
+                sleepAt = System.currentTimeMillis() + minutes * 60_000L
+                sleepJob = scope.launch {
+                    delay(minutes * 60_000L)
+                    controller?.pause()
+                    sleepAt = 0L
+                }
+                say("Berhenti dalam $minutes menit")
+            }
+        }
+    }
+
+    fun changeSpeed(v: Float) {
+        controller?.setPlaybackSpeed(v)
+        speed = v
+    }
+
+    fun say(msg: String) {
+        toast = msg
+        toastJob?.cancel()
+        toastJob = scope.launch { delay(2200); toast = null }
+    }
+
+    private fun trackJson(t: MusicTrack) = JSONObject().put("id", t.id).put("title", t.title).put("artist", t.artist).put("album", t.album).put("duration", t.duration ?: JSONObject.NULL).put("cover", t.cover)
+
+    private fun save(key: String, list: List<MusicTrack>) {
+        if (!::prefs.isInitialized) return
+        val arr = JSONArray()
+        list.forEach { arr.put(trackJson(it)) }
+        prefs.edit().putString(key, arr.toString()).apply()
+    }
+
+    private fun savePlaylists() {
+        if (!::prefs.isInitialized) return
+        val arr = JSONArray()
+        playlists.forEach { p -> arr.put(JSONObject().put("id", p.id).put("name", p.name).put("tracks", JSONArray().also { a -> p.tracks.forEach { a.put(trackJson(it)) } })) }
+        prefs.edit().putString("playlists", arr.toString()).apply()
+    }
+
     /** Posisi saat ini (ms); dibaca per frame oleh lirik & scrubber. */
     fun position(): Long = controller?.currentPosition ?: 0L
 
@@ -169,6 +332,7 @@ object Music {
         durationMs = c.duration.takeIf { it > 0 } ?: ((now?.duration ?: 0) * 1000L)
         shuffle = c.shuffleModeEnabled
         repeat = c.repeatMode
+        speed = c.playbackParameters.speed
     }
 
     private fun onTrack(t: MusicTrack?) {
@@ -187,17 +351,19 @@ object Music {
 
     private fun addToHistory(t: MusicTrack) {
         history = (listOf(t) + history.filter { it.id != t.id }).take(20)
-        if (::prefs.isInitialized) {
-            val arr = JSONArray()
-            history.forEach {
-                arr.put(JSONObject().put("id", it.id).put("title", it.title).put("artist", it.artist).put("album", it.album).put("duration", it.duration ?: JSONObject.NULL).put("cover", it.cover))
-            }
-            prefs.edit().putString("history", arr.toString()).apply()
-        }
+        save("history", history)
     }
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = sync(player)
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // Timer "akhir lagu": lagu selesai sendiri (lanjut/ulang) → jeda di awal lagu berikutnya.
+            if (sleepEndOfTrack && (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)) {
+                controller?.pause()
+                sleepEndOfTrack = false
+            }
+        }
 
         override fun onPlayerError(e: PlaybackException) {
             val c = controller ?: return
@@ -216,4 +382,25 @@ object Music {
             }
         }
     }
+}
+
+/** Playlist buatan pengguna. */
+data class Playlist(val id: String, val name: String, val tracks: List<MusicTrack>) {
+    companion object {
+        fun from(j: JSONObject) = Playlist(
+            j.optString("id"),
+            j.optString("name"),
+            (j.optJSONArray("tracks") ?: JSONArray()).objects().map(MusicTrack::from),
+        )
+    }
+}
+
+/** Lembar aksi musik. `from` = id koleksi asal ("liked" / id playlist) supaya menu bisa menawarkan "hapus dari sini". */
+sealed interface MusicSheet {
+    data class Track(val track: MusicTrack, val from: String? = null, val queueIndex: Int? = null, val player: Boolean = false) : MusicSheet
+    data class AddTo(val track: MusicTrack) : MusicSheet
+    data class NewPlaylist(val track: MusicTrack?) : MusicSheet
+    data class Rename(val playlist: Playlist) : MusicSheet
+    data object Sleep : MusicSheet
+    data object Speed : MusicSheet
 }

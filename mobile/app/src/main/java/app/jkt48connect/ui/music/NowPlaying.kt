@@ -53,6 +53,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -204,7 +210,10 @@ private fun Header(mode: Int, onClose: () -> Unit, dismiss: Modifier) {
                 BasicText(when (mode) { MODE_LYRICS -> "LIRIK"; MODE_QUEUE -> "ANTREAN"; else -> "SEDANG DIPUTAR" }, style = AppText.micro(Color.White.copy(alpha = 0.65f)))
                 BasicText("JKT48Connect Musik", style = AppText.body(13.sp, Color.White, 700))
             }
-            Spacer(Modifier.size(42.dp))
+            // Penanda timer tidur aktif (ketuk untuk mengatur); selain itu ruang kosong penyeimbang.
+            if (Music.sleepAt > 0 || Music.sleepEndOfTrack) {
+                LiquidIconButton(Icons.Rounded.Bedtime, { Music.sheet = app.jkt48connect.core.MusicSheet.Sleep }, size = 42.dp, iconSize = 20.dp, iconColor = Color.White, fill = Color.White.copy(alpha = 0.24f), contentDescription = "Timer tidur")
+            } else Spacer(Modifier.size(42.dp))
         }
     }
 }
@@ -219,7 +228,16 @@ private fun TitleRow(track: MusicTrack, modifier: Modifier) {
             BasicText(track.artist.ifEmpty { "JKT48" }.uppercase(), style = AppText.body(13.sp, Color.White.copy(alpha = 0.72f), 700), maxLines = 1)
         }
         Spacer(Modifier.width(12.dp))
-        LiquidIconButton(Icons.Rounded.Share, { shareTrack(context, track) }, size = 42.dp, iconSize = 19.dp, iconColor = Color.White, fill = GlassWhite, contentDescription = "Bagikan")
+        val liked = Music.isLiked(track.id)
+        LiquidIconButton(
+            if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, { Music.toggleLike(track) },
+            size = 42.dp, iconSize = 20.dp, iconColor = if (liked) Color(0xFFFF4D6D) else Color.White, fill = GlassWhite, contentDescription = if (liked) "Hapus dari Disukai" else "Sukai",
+        )
+        Spacer(Modifier.width(8.dp))
+        LiquidIconButton(
+            Icons.Rounded.MoreHoriz, { Music.sheet = app.jkt48connect.core.MusicSheet.Track(track, player = true) },
+            size = 42.dp, iconSize = 22.dp, iconColor = Color.White, fill = GlassWhite, contentDescription = "Lainnya",
+        )
     }
 }
 
@@ -237,11 +255,6 @@ private fun CompactHead(track: MusicTrack, onCover: () -> Unit) {
     }
 }
 
-private fun shareTrack(context: android.content.Context, t: MusicTrack) {
-    val text = "${t.title} – ${t.artist.ifEmpty { "JKT48" }}\nhttps://music.youtube.com/watch?v=${t.id}"
-    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text)
-    runCatching { context.startActivity(android.content.Intent.createChooser(send, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-}
 
 @Composable
 private fun Controls(clock: LongState, mode: Int, onMode: (Int) -> Unit) {
@@ -470,26 +483,53 @@ private fun VolumePill(modifier: Modifier = Modifier) {
 @Composable
 private fun QueueList(modifier: Modifier) {
     val q = Music.queue
-    LazyColumn(modifier.padding(horizontal = 16.dp)) {
+    val now = Music.index
+    LazyColumn(modifier.padding(horizontal = 12.dp)) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    BasicText("Berikutnya", style = AppText.title(18.sp, Color.White))
+                    BasicText("${(q.size - now - 1).coerceAtLeast(0)} lagu${if (Music.shuffle) " · acak" else ""}", style = AppText.body(12.sp, Color.White.copy(alpha = 0.6f), 600))
+                }
+                if (q.size - now - 1 > 0) {
+                    BasicText(
+                        "Bersihkan", style = AppText.body(13.sp, Color.White, 700),
+                        modifier = Modifier.glass(LocalBackdrop.current, Capsule(), GlassWhite, blur = 6.dp, lensHeight = 8.dp, lensAmount = 16.dp, shadow = false)
+                            .pressable({ Music.clearUpNext() }, 0.92f).padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                }
+            }
+        }
         itemsIndexed(q, key = { i, t -> "$i-${t.id}" }) { i, t ->
-            val now = i == Music.index
+            val playing = i == now
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 2.dp)
+                    .graphicsLayer { alpha = if (i < now) 0.5f else 1f }
                     .clip(RoundedCornerShape(16.dp))
-                    .background(if (now) Color.White.copy(alpha = 0.16f) else Color.Transparent)
+                    .background(if (playing) Color.White.copy(alpha = 0.16f) else Color.Transparent)
                     .pressable({ Music.playAt(i) })
-                    .padding(8.dp),
+                    .padding(start = 8.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MusicCover(t, Modifier.size(48.dp), 10.dp)
+                MusicCover(t, Modifier.size(46.dp), 10.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     BasicText(t.title, style = AppText.body(15.sp, Color.White, 700), maxLines = 1)
                     BasicText(t.artist.ifEmpty { "JKT48" }, style = AppText.body(12.5.sp, Color.White.copy(alpha = 0.6f)), maxLines = 1)
                 }
-                if (now) EqualizerBars(Music.playing, Color.White)
+                if (playing) EqualizerBars(Music.playing, Color.White, Modifier.padding(end = 12.dp))
+                else {
+                    if (i > now + 1) {
+                        Box(Modifier.size(38.dp).pressable({ Music.move(i, i - 1) }, 0.85f), contentAlignment = Alignment.Center) {
+                            Image(Icons.Rounded.KeyboardArrowUp, "Naikkan", Modifier.size(22.dp), colorFilter = ColorFilter.tint(Color.White.copy(alpha = 0.75f)))
+                        }
+                    }
+                    Box(Modifier.size(38.dp).pressable({ Music.sheet = app.jkt48connect.core.MusicSheet.Track(t, queueIndex = i) }, 0.85f), contentAlignment = Alignment.Center) {
+                        Image(Icons.Rounded.MoreVert, "Menu lagu", Modifier.size(22.dp), colorFilter = ColorFilter.tint(Color.White.copy(alpha = 0.75f)))
+                    }
+                }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }

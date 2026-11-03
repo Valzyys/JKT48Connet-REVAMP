@@ -277,6 +277,8 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
                     }
                     MenuPopover(nav, status)
                     app.jkt48connect.ui.music.NowPlayingHost()
+                    app.jkt48connect.ui.music.MusicSheetHost()
+                    app.jkt48connect.ui.music.MusicToast()
                     UpdateDialog()
                 }
                 if (showIntro) Intro { showIntro = false }
