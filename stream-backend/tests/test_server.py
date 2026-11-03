@@ -139,14 +139,53 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
    s.prefetch(s.following[base+'b.ts']);await asyncio.sleep(0)
    self.assertEqual(fetched,[base+'a.ts',base+'b.ts',base+'c.ts',base+'d.ts'])
   s.media_cache.clear();s.following.clear()
- async def test_replay_prefers_whole_mp4_over_hls_parts(self):
+ async def test_replay_prefers_whole_mp4_over_hls_parts_and_plays_direct(self):
   raw={'room_info':{'name':'M'},'recordings':[{'url':'https://api.jkt48connect.app/r/1.mp4','stream_url':'https://api.jkt48connect.app/r/1.m3u8'},{'stream_url':'https://api.jkt48connect.app/r/2.m3u8'}]}
   async def upstream(path):return raw
   with patch.object(s,'upstream',upstream):
    items=(await s.playback('recent','r1',self.u))['items']
-  self.assertEqual([i['hls']for i in items],[False,True])
-  first=s.reveal(items[0]['url'].rsplit('/',1)[1],self.u);second=s.reveal(items[1]['url'].rsplit('/',1)[1],self.u)
-  self.assertEqual((first['u'].endswith('.mp4'),'h'in first,second.get('h')),(True,False,1))
+  self.assertEqual([(i['url'],i['hls'])for i in items],[('https://api.jkt48connect.app/r/1.mp4',False),('https://api.jkt48connect.app/r/2.m3u8',True)])
+ async def test_replay_reads_new_playback_and_youtube_formats(self):
+  r2='https://api.jkt48connect.app/media/live/idn-1/recording.m3u8'
+  yt='https://api.jkt48connect.app/media/youtube/abc/1.x/index.m3u8'
+  new={'member':{'name':'Fahira Putri'},'playback':{'storage':'r2','status':'ready','format':'m3u8','stream_url':r2},
+       'youtube_replay':{'videos':[{'playback_status':'processing','stream_url':None,'playback':None}]}}
+  only_youtube={'playback':{'status':'processing'},'youtube_replay':{'videos':[
+       {'playback_status':'unavailable','stream_url':'https://api.jkt48connect.app/media/youtube/bad/index.m3u8','playback':{'status':'unavailable'}},
+       {'playback_status':'ready','stream_url':yt,'playback':{'status':'ready','url':yt}}]}}
+  self.assertEqual(s.recordings_of(new),[{'url':r2,'hls':True}])
+  self.assertEqual(s.recordings_of(only_youtube),[{'url':yt,'hls':True}])
+  self.assertEqual(s.recordings_of({'playback':{'status':'processing'}}),[])
+  async def upstream(path):return new
+  with patch.object(s,'upstream',upstream):
+   res=await s.playback('recent','idn-1',self.u)
+   detail=await s.recent_detail('idn-1',self.u)
+  self.assertEqual((res['title'],res['items'][0]['url'],detail['recordingCount']),('Fahira Putri',r2,1))
+ async def test_theater_not_live_yet_and_live_channel(self):
+  s.cache.clear()
+  s.db.execute('insert into entitlements values(?,?,?,?,?,?)',('e','u1','membership','*',0,s.now()+3600))
+  show={'id':'show-1','title':'Pajama Drive','source':'idnplus','isLive':False,'date':'','lineup':[],'image':''}
+  async def shows(fresh=False):return[show]
+  async def ticket():return s.THEATER_BASE+'/stream/live?t=abc'
+  for state,expect in(('off',409),('error',502)):
+   s.cache.clear()
+   async def status(fresh=False,state=state):return state
+   with patch.object(s,'shows',shows),patch.object(s,'theater_status',status),patch.object(s,'theater_ticket',ticket):
+    with self.assertRaises(s.HTTPException)as e:await s.playback('theater','show-1',self.u)
+   self.assertEqual(e.exception.status_code,expect)
+  async def live(fresh=False):return'live'
+  with patch.object(s,'shows',shows),patch.object(s,'theater_status',live),patch.object(s,'theater_ticket',ticket):
+   res=await s.playback('theater','show-1',self.u)
+  data=s.reveal(res['items'][0]['url'].rsplit('/',1)[1],self.u)
+  self.assertEqual((data['u'],data.get('h')),(s.THEATER_BASE+'/stream/live?t=abc',1))
+  self.assertEqual(s.source_headers(s.THEATER_BASE+'/x.ts',{'Range':'bytes=0-'})['Origin'],'https://jkt48connect.app')
+  self.assertNotIn('Origin',s.source_headers('https://api.jkt48connect.app/x.ts',{}))
+ async def test_duplicate_live_ids_are_listed_once(self):
+  raw={'lives':[{'notification_data_id':'idn-1','name':'A','type':'idn'},{'notification_data_id':'idn-1','name':'A','type':'idn'},{'notification_data_id':'sr-2','name':'B','type':'showroom'}]}
+  async def upstream(path):return raw
+  with patch.object(s,'upstream',upstream):
+   items=(await s.live(self.u))['items']
+  self.assertEqual([i['id']for i in items],['idn-1','sr-2'])
  async def test_register_mistakes_get_readable_messages_not_422(self):
   class Req:
    headers={};client=type('C',(),{'host':'1.2.3.4'})()
@@ -165,7 +204,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   r=await s.invalid_request(None,s.RequestValidationError([]))
   self.assertEqual(r.status_code,400);self.assertIn('message',json.loads(r.body))
  async def test_update_offers_current_release_unless_state_is_newer(self):
-  self.assertEqual((await s.update())['code'],3)
+  self.assertEqual((await s.update())['code'],s.RELEASE['code'])
  async def test_avatar_upload_is_squared_stripped_and_replaces_the_old_one(self):
   import io
   from PIL import Image

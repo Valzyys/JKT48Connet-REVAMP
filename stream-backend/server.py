@@ -150,10 +150,22 @@ def reveal(value, user):
     return data
 
 
+THEATER_BASE = os.environ.get('STREAM_THEATER_URL', 'https://st.avonera48.web.id').rstrip('/')
+# Client key player theater (publik, sama dengan yang tertanam di iframe player). Akses diizinkan untuk origin jkt48connect.app.
+THEATER_KEY = os.environ.get('STREAM_THEATER_KEY', 'ck_299ba35d1b93e6776bc318a796d52eae')
+SITE_HEADERS = {'Origin': 'https://jkt48connect.app', 'Referer': 'https://jkt48connect.app/'}
+
+
+def source_headers(url, headers):
+    """Sumber theater hanya melayani permintaan dari origin jkt48connect.app (playlist, segmen, key)."""
+    host = (urlparse(url).hostname or '').lower()
+    return {**SITE_HEADERS, **headers} if host == 'avonera48.web.id' or host.endswith('.avonera48.web.id') else headers
+
+
 async def fetch_media(url, headers):
     for _ in range(4):
         if not allowed(url): error(403, 'Sumber media tidak diizinkan.')
-        r = await http.get(url, headers=headers, stream=True, timeout=30, allow_redirects=False)
+        r = await http.get(url, headers=source_headers(url, headers), stream=True, timeout=30, allow_redirects=False)
         if r.status_code not in (301,302,303,307,308): return r, url
         following = urljoin(url, r.headers.get('Location','')); await r.aclose(); url = following
     error(502, 'Sumber media sedang bermasalah.')
@@ -325,7 +337,10 @@ async def shows(fresh=False):
 
 @app.get('/api/app/catalog')
 async def catalog(user=Depends(who)):
-    items=await shows()
+    items=list({s['id']:s for s in reversed(await shows())}.values())[::-1]
+    # Channel theater sedang live tapi katalog belum menandai: tandai show terdekat dengan waktu sekarang.
+    current=on_stage(items)if await theater_status()=='live'and not any(s.get('isLive')for s in items)else None
+    items=[{**s,'isLive':True}if s is current else s for s in items]
     return {'items':[{**s,'image':image_url(s['image']),'lineup':[{**m,'img':image_url(m.get('img',''))}for m in s['lineup']if isinstance(m,dict)],'hasAccess':access(user,s['id'])}for s in items],'sourceAvailable':any(s.get('source')=='idnplus'for s in items)}
 
 
@@ -335,10 +350,12 @@ def live_id(s):
 
 @app.get('/api/app/live')
 async def live(user=Depends(who)):
-    raw=await upstream('/api/now_live');items=[]
+    raw=await upstream('/api/now_live');items=[];seen=set()
     for s in objects(raw,'lives','data'):
         ident=live_id(s)
-        if not ident:continue
+        # Satu siaran bisa muncul dua kali di sumber; id ganda membuat daftar di aplikasi crash.
+        if not ident or ident in seen:continue
+        seen.add(ident)
         platform=str(s.get('type')or'').lower()
         # Tautan publik ke halaman live IDN, dipakai sebagai cadangan bila pemutar di aplikasi belum punya sumber.
         link=''
@@ -363,7 +380,10 @@ async def recent(page:int=1,user=Depends(who)):
     if not 1<=page<=1000:error(400,'Halaman tidak valid.')
     raw=await upstream(f'/api/recent?page={page}&perpage=12&group=jkt48&type=all&sort=date&order=-1')
     items=[]
+    seen=set()
     for s in objects(raw,'recents'):
+        if not s.get('data_id')or s['data_id']in seen:continue
+        seen.add(s['data_id'])
         info=s.get('live_info')or{};member=s.get('member')or s.get('room_info')or{}
         dates=info.get('date')or{};viewers=info.get('viewers')or{}
         items.append({'id':s['data_id'],'kind':'recent','title':member.get('name')or'Member JKT48',
@@ -380,6 +400,28 @@ def picture(url):
     """Gambar publik: lewat proxy server bila domainnya diizinkan, selain itu URL https aslinya."""
     if not isinstance(url,str)or not url.startswith('https://'):return ''
     return image_url(url)or url
+
+
+def recordings_of(raw):
+    """Rekaman replay yang siap diputar, urut prioritas:
+    1. `playback` (format baru: R2 atau HLS YouTube) berstatus ready,
+    2. `youtube_replay.videos[]` yang HLS-nya ready,
+    3. `recordings[]` format lama (MP4 utuh lebih dulu)."""
+    files=[];seen=set()
+    def add(url,hls):
+        if isinstance(url,str)and url.startswith('https://')and url not in seen:seen.add(url);files.append({'url':url,'hls':hls})
+    playback=raw.get('playback')if isinstance(raw.get('playback'),dict)else{}
+    if playback.get('status')=='ready':add(playback.get('stream_url')or playback.get('url'),True)
+    if not files:
+        for v in objects(raw.get('youtube_replay')or{},'videos'):
+            nested=v.get('playback')if isinstance(v,dict)and isinstance(v.get('playback'),dict)else{}
+            if isinstance(v,dict)and(v.get('playback_status')=='ready'or nested.get('status')=='ready'):add(v.get('stream_url')or nested.get('url'),True)
+    if not files:
+        for x in objects(raw,'recordings'):
+            if not isinstance(x,dict):continue
+            if urlparse(str(x.get('url')or'')).path.endswith('.mp4'):add(x['url'],False)
+            else:add(x.get('stream_url')or x.get('url'),bool(x.get('stream_url')))
+    return files
 
 
 @app.get('/api/app/recent/{ident}')
@@ -401,7 +443,7 @@ async def recent_detail(ident:str,user=Depends(who)):
     if not re.fullmatch(r'[a-zA-Z0-9]{2,5}',fmt):fmt='jpg'
     if base.startswith('https://')and isinstance(shot.get('list'),list):
         shots=[picture(f'{base}/{t}.{fmt}')for t in shot['list'][:400]if re.fullmatch(r'[A-Za-z0-9_-]{1,64}',str(t))]
-    recordings=[x for x in objects(r,'recordings')if isinstance(x,dict)and(x.get('stream_url')or x.get('url'))]
+    recordings=recordings_of(r)
     return {'id':str(r.get('data_id')or ident),'kind':'recent','title':member.get('name')or'Member JKT48','platform':platform,
             'image':picture(design(r,'leaderboard_designs')or member.get('img')),'avatar':picture(member.get('img')or member.get('img_alt')),
             'start':dates.get('start',''),'date':dates.get('end')or r.get('created_at',''),
@@ -530,6 +572,38 @@ async def live_comments(ident:str,after:int=0,wait:int=0,user=Depends(who)):
     return {'items':items[-50:]if after<=0 else items[-100:],'cursor':max(after,relay.cursor),'status':relay.status}
 
 
+async def theater_ticket():
+    """URL master m3u8 channel live theater dengan tiket baru (tiket dipakai sekali)."""
+    try:r=await http.get(f'{THEATER_BASE}/auth/ticket?key={quote(THEATER_KEY,safe="")}',headers=SITE_HEADERS,timeout=15,allow_redirects=False)
+    except Exception:error(502,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
+    ticket=str((r.json()if r.status_code==200 else{}).get('ticket')or'')
+    if not re.fullmatch(r'[0-9A-Za-z_-]{16,2048}',ticket):error(502,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
+    return f'{THEATER_BASE}/stream/live?t={ticket}'
+
+
+async def theater_status(fresh=False):
+    """'live' (master m3u8 tersedia), 'off' (404: belum mulai) atau 'error'. Disimpan 15 detik (fresh: 5 detik)."""
+    async def load():
+        try:
+            r=await http.get(await theater_ticket(),headers=SITE_HEADERS,timeout=15,allow_redirects=False)
+            return 'live'if r.status_code==200 else'off'if r.status_code==404 else'error'
+        except Exception:return'error'
+    return await cached('theater-status-fresh'if fresh else'theater-status',5 if fresh else 15,load)
+
+
+def on_stage(shows_):
+    """Show IDN Plus yang jadwalnya paling dekat dengan sekarang (5 jam lalu s/d 1 jam lagi)."""
+    from datetime import datetime
+    best=None;gap=None
+    for s in shows_:
+        if s.get('source')!='idnplus':continue
+        try:t=datetime.fromisoformat(str(s.get('date')).replace('Z','+00:00')).timestamp()
+        except ValueError:continue
+        if -5*3600<=now()-t<=3600 or -3600<=t-now()<=3600:
+            if gap is None or abs(now()-t)<gap:best,gap=s,abs(now()-t)
+    return best
+
+
 @app.post('/api/app/playback/{kind}/{ident}')
 async def playback(kind:str,ident:str,user=Depends(who)):
     if not re.fullmatch(r'[\w♥-]{1,180}',ident):error(400,'ID siaran tidak valid.')
@@ -539,14 +613,15 @@ async def playback(kind:str,ident:str,user=Depends(who)):
         show=next((s for s in await shows(fresh=True)if s['id']==ident),None)
         if not show:error(404,'Show tidak ditemukan.')
         if show.get('source')!='idnplus':error(409,'Jadwal ini masih berupa arsip. Katalog siaran langsung belum tersedia.')
-        if not show.get('isLive'):error(409,'Show belum dimulai. Aksesmu tetap tersimpan untuk jadwal ini.')
-        files=[{'url':os.environ.get('STREAM_ORIGIN','https://st.avonera48.web.id').rstrip('/')+'/stream/'+quote(ident,safe=''),'hls':True}];title=show['title']
+        # Channel live theater: 404 dari sumber = show belum dimulai.
+        status=await theater_status(fresh=True)
+        if status=='off':error(409,'Show belum dimulai. Aksesmu tetap tersimpan, buka lagi saat show live.')
+        if status!='live':error(502,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
+        files=[{'url':await theater_ticket(),'hls':True}];title=show['title']
     elif kind=='recent':
         raw=await upstream('/api/recent/'+quote(ident,safe=''))
-        title=raw.get('room_info',{}).get('name','Replay JKT48')
-        # MP4 utuh lebih dulu: satu aliran panjang tidak menanggung jeda jaringan untuk tiap potongan 2 detik seperti HLS.
-        files=[{'url':x['url'],'hls':False}if urlparse(str(x.get('url')or'')).path.endswith('.mp4')else{'url':x.get('stream_url')or x.get('url'),'hls':bool(x.get('stream_url'))}
-               for x in objects(raw,'recordings')if isinstance(x,dict)and(x.get('stream_url')or x.get('url'))]
+        title=(raw.get('member')or raw.get('room_info')or{}).get('name')or'Replay JKT48'
+        files=recordings_of(raw)
     elif kind=='live':
         raw=await upstream('/api/now_live')
         source=next((s for s in objects(raw,'lives','data') if live_id(s)==ident),None)
@@ -567,7 +642,8 @@ async def playback(kind:str,ident:str,user=Depends(who)):
     if not files:error(409,'Rekaman atau sumber siaran belum tersedia. Coba lagi sebentar.')
     # Live member Showroom/IDN adalah siaran publik: diputar langsung dari CDN-nya (tanpa singgah di server ini)
     # supaya cepat mulai dan tidak tersendat. Theater (berbayar) dan replay tetap lewat tiket media.
-    direct=kind=='live'
+    # Replay: rekaman sudah publik di CDN api.jkt48connect.app (Cloudflare), jadi juga diputar langsung tanpa singgah.
+    direct=kind in('live','recent')
     return {'title':title,'kind':kind,'items':[{'url':x['url']if direct else ticket(user,x['url'],kind,ident,shared=x['hls']),'hls':x['hls'],'label':f"Bagian {i+1}"}for i,x in enumerate(files)]}
 
 
@@ -896,8 +972,8 @@ async def send_chat(room:str,data:Message,user=Depends(who)):
 
 
 # Versi aplikasi terbaru (ikut stream-mobile/app/build.gradle.kts). release.json di state hanya dipakai bila lebih baru.
-RELEASE={'version':'1.0.2','code':3,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.2.apk',
-         'notes':'Foto profil bisa diunggah, perbaikan daftar akun, pemutar lebih lancar, dan komentar live Showroom/IDN.'}
+RELEASE={'version':'1.0.3','code':4,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.3.apk',
+         'notes':'Perbaikan aplikasi tertutup sendiri, pemutar live & replay lebih lancar, replay format baru, dan theater live.'}
 
 
 @app.get('/api/app/update')

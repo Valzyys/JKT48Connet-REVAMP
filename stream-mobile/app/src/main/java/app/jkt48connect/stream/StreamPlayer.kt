@@ -2,6 +2,7 @@ package app.jkt48connect.stream
 
 import android.content.Intent
 import android.net.Uri
+import android.view.SurfaceView
 import android.view.TextureView
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -58,6 +59,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -200,8 +202,11 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
             override fun onPlayerError(error: PlaybackException) {
                 // Jaringan/sumber tersendat (timeout, HTTP 5xx, playlist live belum lengkap): sambung ulang sendiri
                 // dengan jeda bertahap, bukan berhenti. VOD lanjut dari posisi terakhir, live ke ujung siaran.
-                val transient = error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT ||
-                    error.errorCode in 2000..2999 || (src.live && error.errorCode in 3000..3999)
+                // Tautan sumber kedaluwarsa/ditolak (401/403/404/410): mengulang URL yang sama percuma, langsung minta yang baru.
+                val status = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+                val expired = status in setOf(401, 403, 404, 410)
+                val transient = !expired && (error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT ||
+                    error.errorCode in 2000..2999 || (src.live && error.errorCode in 3000..3999))
                 if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
                     exo.seekToDefaultPosition()
                     exo.prepare()
@@ -329,10 +334,14 @@ private fun PlayerSurface(ui: PlayerUi, src: MediaSource, title: String, label: 
             val videoModifier = if (boxRatio > ui.ratio) Modifier.fillMaxHeight().aspectRatio(ui.ratio, matchHeightConstraintsFirst = true)
             else Modifier.fillMaxWidth().aspectRatio(ui.ratio)
             ui.player?.let { p ->
-                // TextureView: SurfaceView di dalam halaman Compose (direkam ke lapisan kaca, digeser saat transisi) dicurigai
-                // membuat halaman live tertutup paksa. Kelancaran dijaga dengan tidak merekam
-                // isi halaman ke backdrop selama video tampil (StreamRoot).
-                AndroidView(
+                // Live & theater: SurfaceView, lapisan video terpisah dari UI, jadi frame tidak ikut tersendat saat UI sibuk
+                // (komentar mengalir, animasi). Replay di kartu membulat tetap TextureView supaya sudutnya bisa dipotong.
+                // (Force close halaman live dulu berasal dari kunci daftar ganda, bukan SurfaceView; lihat rowKey.)
+                if (src.live) AndroidView(
+                    factory = { SurfaceView(it).also { v -> p.setVideoSurfaceView(v) } },
+                    modifier = videoModifier,
+                    onRelease = { p.clearVideoSurfaceView(it) },
+                ) else AndroidView(
                     factory = { TextureView(it).also { v -> p.setVideoTextureView(v) } },
                     modifier = videoModifier,
                     onRelease = { p.clearVideoTextureView(it) },
@@ -582,7 +591,17 @@ fun PlayerScreen(item: JSONObject) {
         error = ""
         runCatching { StreamApi.request("/playback/$kind/${Uri.encode(id)}", "POST") }
             .onSuccess { data = it }
-            .onFailure { error = it.message.orEmpty() }
+            .onFailure {
+                data = null
+                error = it.message.orEmpty()
+            }
+    }
+    // Theater/live belum mulai atau sumber sesaat tidak tersedia: cek lagi otomatis tiap 15 detik.
+    LaunchedEffect(error) {
+        if (error.isNotEmpty() && kind != "recent") {
+            delay(15_000)
+            attempt++
+        }
     }
     val parts = data?.optJSONArray("items")?.rows().orEmpty()
     val current = parts.getOrNull(part)
@@ -611,7 +630,7 @@ fun PlayerScreen(item: JSONObject) {
                         label = label,
                         poster = item.optString("image"),
                         // Sumber tetap gagal setelah disambung ulang → minta tiket/URL baru (maks. 3 kali).
-                        onFatal = { if (attempt < 3) attempt++ },
+                        onFatal = { if (attempt < 6) attempt++ },
                     )
                 }
                 error.isNotEmpty() -> Column(Modifier.padding(horizontal = if (edge) 16.dp else 0.dp).fillMaxWidth().glassCard(22.dp).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
