@@ -370,7 +370,10 @@ fun LiquidTabs(
                 valueRange = 0f..(count - 1).toFloat(),
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
-                pressedScale = 78f / 56f,
+                // Saat ditekan pil meregang keluar dari tab bar seperti 2.6.1 (±78dp tinggi); pil tab bar lebih pendek,
+                // jadi skala vertikalnya lebih besar dari horizontal supaya tingginya tetap sama.
+                pressedScale = if (segmented) 78f / 56f else 1.3f,
+                pressedScaleY = if (segmented) 78f / 56f else 78f / (height - 18.dp).value,
                 onDragStarted = {},
                 onDragStopped = {
                     val target = targetValue.fastRoundToInt().fastCoerceIn(0, count - 1)

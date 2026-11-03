@@ -155,9 +155,7 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
         // Ikon status bar putih saat intro (layar merah) dan penampil cuplikan (layar hitam).
         val immersive = nav.stack.lastOrNull() is Route.Shots
         val nowPlaying = Music.nowPlayingOpen && Music.current != null
-        // Tab Musik selalu imersif gelap (latar gambar lagu): status bar, bilah atas, mini player & tab bar ikut gelap.
-        val musicTab = nav.tab == 5 && nav.stack.isEmpty()
-        LaunchedEffect(dark, showIntro, immersive, nowPlaying, musicTab) { onDarkChanged(dark || showIntro || immersive || nowPlaying || musicTab) }
+        LaunchedEffect(dark, showIntro, immersive, nowPlaying) { onDarkChanged(dark || showIntro || immersive || nowPlaying) }
         LaunchedEffect(openTarget) {
             openTarget?.let {
                 if (it == "update") Updater.dialog = true else nav.open(it)
@@ -228,14 +226,14 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
                 CompositionLocalProvider(LocalBackdrop provides if (app.jkt48connect.ui.player.PlayerPresence.count > 0) ambient else overlay) {
                     val top = nav.stack.lastOrNull()
                     val scrolled = if (top == null) (offsets[nav.tab] ?: 0f) > compactPx else true
-                    if (top !is Route.Shots && top !is Route.Member) AppTheme(dark || musicTab) { TopScrim(status + 60.dp, if (top == null) scrolled else true) }
+                    if (top !is Route.Shots && top !is Route.Member) TopScrim(status + 60.dp, if (top == null) scrolled else true)
                     AnimatedContent(
                         targetState = top == null,
                         transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) },
                         label = "chrome",
                     ) { onTabs ->
                         Box(Modifier.fillMaxSize()) {
-                            if (onTabs) AppTheme(dark || nav.tab == 5) {
+                            if (onTabs) {
                                 NavBar(
                                     title = TAB_TITLES[nav.tab],
                                     showTitle = (offsets[nav.tab] ?: 0f) > compactPx * 2,

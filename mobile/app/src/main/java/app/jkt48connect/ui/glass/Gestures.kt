@@ -162,6 +162,8 @@ class DampedDragAnimation(
     visibilityThreshold: Float,
     private val initialScale: Float,
     private val pressedScale: Float,
+    /** Skala vertikal saat ditekan (bawaan sama dengan [pressedScale]); pil lonjong perlu lebih tinggi agar meluap keluar wadah. */
+    private val pressedScaleY: Float = pressedScale,
     val onDragStarted: DampedDragAnimation.(position: Offset) -> Unit,
     val onDragStopped: DampedDragAnimation.() -> Unit,
     val onDrag: DampedDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
@@ -201,7 +203,7 @@ class DampedDragAnimation(
         animationScope.launch {
             launch { pressAnim.animateTo(1f, pressSpec) }
             launch { scaleXAnim.animateTo(pressedScale, scaleXSpec) }
-            launch { scaleYAnim.animateTo(pressedScale, scaleYSpec) }
+            launch { scaleYAnim.animateTo(pressedScaleY, scaleYSpec) }
         }
     }
 
