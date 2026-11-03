@@ -56,6 +56,38 @@ const env = {
     const url = new URL(String(input));
     upstreamCalls.push({ url: url.href, range: new Headers(init.headers).get("Range") });
     if (url.pathname === "/api/now_live") return Response.json(LIVE);
+    if (url.pathname === "/api/music/search")
+      return Response.json({
+        query: url.searchParams.get("q"),
+        identified_song: { track: "Heavy Rotation", artist: "JKT48", needs_confirmation: true },
+        tracks: [
+          { id: "0OBtAawaxcU", title: "Heavy Rotation", artist: "JKT48", version_title: "HEAVY ROTATION - JKT48", duration: 283, cover: "https://i.ytimg.com/vi/0OBtAawaxcU/hqdefault.jpg" },
+          { id: "0OBtAawaxcU", title: "dup", artist: "JKT48" },
+          { id: "../evil", title: "Bad id", artist: "x" },
+        ],
+      });
+    if (url.pathname === "/api/music/0OBtAawaxcU")
+      return Response.json({
+        id: "0OBtAawaxcU",
+        title: "Heavy Rotation",
+        artist: "JKT48",
+        duration: 282,
+        cover: "https://i.ytimg.com/vi/0OBtAawaxcU/hqdefault.jpg",
+        audio: { status: "ready", url: "https://api.jkt48connect.app/media/music/0OBtAawaxcU/1.sig/audio.m4a", mime_type: "audio/mp4", seekable: true, expires_at: 1793721044 },
+      });
+    if (url.pathname === "/api/music/evilAudio01")
+      return Response.json({ id: "evilAudio01", title: "x", audio: { status: "ready", url: "https://evil.test/a.m4a" } });
+    if (url.pathname === "/api/music/0OBtAawaxcU/lyrics")
+      return Response.json({
+        status: "synced",
+        source: "lrclib",
+        duration_difference_seconds: 1,
+        lines: [
+          { time: 8.79, text: "I want you (I want you)" },
+          { time: 2.52, text: "One, two, three, four!" },
+          { time: 5.64, text: "" },
+        ],
+      });
     if (url.pathname === "/api/showroom-comments/510000")
       return Response.json({
         room_id: 510000,
@@ -321,6 +353,26 @@ test("app push config is disabled until Firebase is configured on the worker", a
   const res = await call("/api/app/push", { token: await newToken() });
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { enabled: false });
+});
+
+test("music: search, audio from the media domain only, and synced lyrics sorted by time", async () => {
+  const token = await newToken();
+  const s = await (await call("/api/app/music/search?q=JKT48%20Heavy%20Rotation&mode=auto", { token })).json();
+  assert.deepEqual(s.identified, { track: "Heavy Rotation", artist: "JKT48" });
+  assert.deepEqual(s.tracks.map((t) => [t.id, t.title, t.duration]), [["0OBtAawaxcU", "Heavy Rotation", 283]], "duplicates and bad ids are dropped");
+  assert.equal((await call("/api/app/music/search?q=a", { token })).status, 400, "query must be 2+ characters");
+  assert.equal((await call("/api/app/music/search?q=ok&mode=evil", { token })).status, 400);
+
+  const d = await (await call("/api/app/music/0OBtAawaxcU", { token })).json();
+  assert.equal(d.audio.url, "https://api.jkt48connect.app/media/music/0OBtAawaxcU/1.sig/audio.m4a");
+  assert.equal(d.audio.mime, "audio/mp4");
+  const evil = await (await call("/api/app/music/evilAudio01", { token })).json();
+  assert.equal(evil.audio, null, "audio from other hosts is dropped");
+
+  const l = await (await call("/api/app/music/0OBtAawaxcU/lyrics", { token })).json();
+  assert.equal(l.status, "synced");
+  assert.deepEqual(l.lines.map((x) => x.time), [2.52, 5.64, 8.79]);
+  assert.equal((await call("/api/app/music/bad!id/lyrics", { token })).status, 404);
 });
 
 test("Showroom live comments: room id on the live session, latest comments as plain text, oldest first", async () => {

@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
         Api.init(this)
         Images.init(this)
         app.jkt48connect.core.Favorites.init(this)
+        app.jkt48connect.core.Music.init(this)
         ThemeController.init(this)
         Notify.schedule(this)
         openTarget = intent?.getStringExtra(Notify.EXTRA_OPEN)

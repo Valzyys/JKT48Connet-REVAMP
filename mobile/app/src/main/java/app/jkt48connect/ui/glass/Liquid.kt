@@ -75,6 +75,7 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.isRenderEffectSupported
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
@@ -88,6 +89,81 @@ import kotlin.math.cos
 import kotlin.math.sign
 import kotlin.math.sin
 import kotlin.math.tanh
+
+/**
+ * Kilau tepi kaca ala iOS 26/27: garis cahaya tipis & samar di tengah sisi atas (dan lebih redup di bawah) yang
+ * memudar halus ke kiri-kanan, tanpa outline di sekeliling kaca dan tanpa sorot diagonal di pojok.
+ */
+private class SoftRimStyle(override val color: Color = Color.White, private val falloff: Float = 2.2f, private val spread: Float = 0.78f) : HighlightStyle {
+    override val blendMode: BlendMode get() = BlendMode.Plus
+
+    override fun androidx.compose.ui.graphics.drawscope.DrawScope.createShader(shape: Shape, runtimeShaderCache: com.kyant.backdrop.RuntimeShaderCache): com.kyant.backdrop.RuntimeShader? {
+        if (!com.kyant.backdrop.isRuntimeShaderSupported()) return null
+        val shader = runtimeShaderCache.obtainRuntimeShader("JkcSoftRim", SOFT_RIM)
+        val w = size.width
+        val h = size.height
+        val radii = when (val o = shape.createOutline(size, layoutDirection, this)) {
+            is androidx.compose.ui.graphics.Outline.Rounded -> o.roundRect.let { floatArrayOf(it.topLeftCornerRadius.x, it.topRightCornerRadius.x, it.bottomRightCornerRadius.x, it.bottomLeftCornerRadius.x) }
+            else -> floatArrayOf(0f, 0f, 0f, 0f)
+        }
+        shader.setFloatUniform("size", w, h)
+        shader.setFloatUniform("cornerRadii", radii)
+        shader.setColorUniform("color", color)
+        shader.setFloatUniform("falloff", falloff)
+        shader.setFloatUniform("spread", spread)
+        return shader
+    }
+}
+
+private const val SOFT_RIM = """
+uniform float2 size;
+uniform float4 cornerRadii;
+layout(color) uniform half4 color;
+uniform float falloff;
+uniform float spread;
+
+float radiusAt(float2 coord, float4 radii) {
+    if (coord.x >= 0.0) { return coord.y <= 0.0 ? radii.y : radii.z; }
+    return coord.y <= 0.0 ? radii.x : radii.w;
+}
+
+float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {
+    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));
+    if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {
+        return sign(coord) * normalize(max(cornerCoord, 0.0));
+    }
+    float gradX = step(cornerCoord.y, cornerCoord.x);
+    return sign(coord) * float2(gradX, 1.0 - gradX);
+}
+
+half4 main(float2 coord) {
+    float2 halfSize = size * 0.5;
+    float2 c = coord - halfSize;
+    float radius = radiusAt(c, cornerRadii);
+    float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
+    float2 grad = gradSdRoundedRect(c, halfSize, gradRadius);
+    // Hanya atas & bawah (normal vertikal), pangkat tinggi supaya tipis.
+    float intensity = pow(abs(grad.y), falloff);
+    // Memudar ke kiri-kanan: terang di tengah, hilang sebelum mencapai pojok.
+    float x = abs(c.x) / max(halfSize.x, 1.0);
+    float fade = 1.0 - smoothstep(spread * 0.25, spread, x);
+    float side = c.y < 0.0 ? 1.0 : 0.4;
+    return color * (intensity * fade * side);
+}
+"""
+
+/**
+ * Tanpa RuntimeShader (Android 12 ke bawah) library menggambar kilau sebagai garis penuh di sekeliling bentuk
+ * (outline); di perangkat itu kilau dimatikan saja supaya kaca tetap tanpa outline.
+ */
+val RimOk: Boolean = com.kyant.backdrop.isRuntimeShaderSupported()
+
+val RimHighlight: Highlight = Highlight.Default.copy(
+    width = Highlight.Default.width * 0.75f,
+    blurRadius = Highlight.Default.blurRadius * 1.8f,
+    alpha = 0.7f,
+    style = SoftRimStyle(),
+)
 
 /** Backdrop latar (ambient + isi halaman) untuk kaca yang mengapung di atasnya. */
 val LocalBackdrop = staticCompositionLocalOf<Backdrop> { emptyBackdrop() }
@@ -131,6 +207,7 @@ fun Modifier.glass(
         blur(blur.toPx())
         lens(lensHeight.toPx(), lensAmount.toPx(), depth)
     },
+    highlight = { if (!RimOk) null else RimHighlight },
     shadow = if (shadow) ({ Shadow() }) else null,
     layerBlock = layerBlock,
     exportedBackdrop = exportedBackdrop,
@@ -336,6 +413,7 @@ fun LiquidTabs(
                     shape = { Capsule() },
                     // Kaca bening ala tab bar iOS 26: blur tipis, isi di belakang tetap terlihat & terbiaskan lensa.
                     effects = { vibrancy(); blur(3.dp.toPx()); lens(24.dp.toPx(), 24.dp.toPx()) },
+                    highlight = { if (!RimOk) null else RimHighlight },
                     layerBlock = {
                         val scale = lerp(1f, 1f + 16.dp.toPx() / size.width, drag.pressProgress)
                         scaleX = scale
@@ -363,7 +441,7 @@ fun LiquidTabs(
                         val p = drag.pressProgress
                         vibrancy(); blur(3.dp.toPx()); lens(24.dp.toPx() * p, 24.dp.toPx() * p)
                     },
-                    highlight = { Highlight.Default.copy(alpha = drag.pressProgress) },
+                    highlight = { if (!RimOk) null else RimHighlight.copy(alpha = drag.pressProgress) },
                     onDrawSurface = { drawRect(container) },
                 )
                 .then(highlight.modifier)
@@ -386,7 +464,7 @@ fun LiquidTabs(
                         val p = drag.pressProgress
                         lens(10.dp.toPx() * p, 14.dp.toPx() * p, chromaticAberration = true)
                     },
-                    highlight = { Highlight.Default.copy(alpha = drag.pressProgress) },
+                    highlight = { if (!RimOk) null else RimHighlight.copy(alpha = drag.pressProgress) },
                     shadow = { Shadow(alpha = drag.pressProgress) },
                     innerShadow = { InnerShadow(radius = 8.dp * drag.pressProgress, alpha = drag.pressProgress) },
                     layerBlock = {
@@ -502,7 +580,7 @@ fun LiquidSlider(
                         lens(10.dp.toPx() * p, 14.dp.toPx() * p, chromaticAberration = true)
                     },
                     highlight = {
-                        Highlight.Ambient.copy(
+                        if (!RimOk) null else RimHighlight.copy(
                             width = Highlight.Ambient.width / 1.5f,
                             blurRadius = Highlight.Ambient.blurRadius / 1.5f,
                             alpha = drag.pressProgress,
@@ -593,7 +671,7 @@ fun LiquidToggle(
                         blur(8.dp.toPx() * (1f - p))
                         lens(5.dp.toPx() * p, 10.dp.toPx() * p, chromaticAberration = true)
                     },
-                    highlight = { Highlight.Ambient.copy(width = Highlight.Ambient.width / 1.5f, blurRadius = Highlight.Ambient.blurRadius / 1.5f, alpha = drag.pressProgress) },
+                    highlight = { if (!RimOk) null else RimHighlight.copy(width = Highlight.Ambient.width / 1.5f, blurRadius = Highlight.Ambient.blurRadius / 1.5f, alpha = drag.pressProgress) },
                     shadow = { Shadow(radius = 4.dp, color = Color.Black.copy(alpha = 0.1f)) },
                     innerShadow = { InnerShadow(radius = 4.dp * drag.pressProgress, alpha = drag.pressProgress) },
                     layerBlock = {
