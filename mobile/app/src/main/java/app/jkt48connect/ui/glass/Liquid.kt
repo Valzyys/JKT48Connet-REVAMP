@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
@@ -94,7 +95,15 @@ import kotlin.math.tanh
  * Kilau tepi kaca ala iOS 26/27: garis cahaya tipis & samar di tengah sisi atas (dan lebih redup di bawah) yang
  * memudar halus ke kiri-kanan, tanpa outline di sekeliling kaca dan tanpa sorot diagonal di pojok.
  */
-private class SoftRimStyle(override val color: Color = Color.White, private val falloff: Float = 2.2f, private val spread: Float = 0.78f) : HighlightStyle {
+private class SoftRimStyle(
+    override val color: Color = Color.White,
+    private val falloff: Float = 2.2f,
+    private val spread: Float = 0.78f,
+    /** false = atas & bawah, true = kiri & kanan. */
+    private val sides: Boolean = false,
+    /** Kecerahan, sama untuk kedua sisi (atas tidak lebih terang dari bawah). */
+    private val level: Float = 0.42f,
+) : HighlightStyle {
     override val blendMode: BlendMode get() = BlendMode.Plus
 
     override fun androidx.compose.ui.graphics.drawscope.DrawScope.createShader(shape: Shape, runtimeShaderCache: com.kyant.backdrop.RuntimeShaderCache): com.kyant.backdrop.RuntimeShader? {
@@ -111,6 +120,8 @@ private class SoftRimStyle(override val color: Color = Color.White, private val 
         shader.setColorUniform("color", color)
         shader.setFloatUniform("falloff", falloff)
         shader.setFloatUniform("spread", spread)
+        shader.setFloatUniform("axis", if (sides) 1f else 0f)
+        shader.setFloatUniform("level", level)
         return shader
     }
 }
@@ -121,6 +132,8 @@ uniform float4 cornerRadii;
 layout(color) uniform half4 color;
 uniform float falloff;
 uniform float spread;
+uniform float axis;
+uniform float level;
 
 float radiusAt(float2 coord, float4 radii) {
     if (coord.x >= 0.0) { return coord.y <= 0.0 ? radii.y : radii.z; }
@@ -142,13 +155,14 @@ half4 main(float2 coord) {
     float radius = radiusAt(c, cornerRadii);
     float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
     float2 grad = gradSdRoundedRect(c, halfSize, gradRadius);
-    // Hanya atas & bawah (normal vertikal), pangkat tinggi supaya tipis.
-    float intensity = pow(abs(grad.y), falloff);
-    // Memudar ke kiri-kanan: terang di tengah, hilang sebelum mencapai pojok.
-    float x = abs(c.x) / max(halfSize.x, 1.0);
-    float fade = 1.0 - smoothstep(spread * 0.25, spread, x);
-    float side = c.y < 0.0 ? 1.0 : 0.4;
-    return color * (intensity * fade * side);
+    // axis 0: hanya atas & bawah (normal vertikal); axis 1: hanya kiri & kanan. Pangkat tinggi supaya tipis.
+    bool sides = axis > 0.5;
+    float intensity = pow(abs(sides ? grad.x : grad.y), falloff);
+    // Memudar sepanjang sisinya: terang di tengah, hilang (blur) sebelum mencapai pojok.
+    float t = sides ? abs(c.y) / max(halfSize.y, 1.0) : abs(c.x) / max(halfSize.x, 1.0);
+    float fade = 1.0 - smoothstep(spread * 0.25, spread, t);
+    // Kedua sisi sama redupnya.
+    return color * (intensity * fade * level);
 }
 """
 
@@ -158,12 +172,16 @@ half4 main(float2 coord) {
  */
 val RimOk: Boolean = com.kyant.backdrop.isRuntimeShaderSupported()
 
+/** Kilau atas & bawah: wadah dan panel (tab bar, kartu, hero, kolom cari, mini player). */
 val RimHighlight: Highlight = Highlight.Default.copy(
     width = Highlight.Default.width * 0.75f,
     blurRadius = Highlight.Default.blurRadius * 1.8f,
-    alpha = 0.7f,
+    alpha = 1f,
     style = SoftRimStyle(),
 )
+
+/** Kilau kiri & kanan: tombol, chip, pil tab, jempol slider & toggle. */
+val SideHighlight: Highlight = RimHighlight.copy(style = SoftRimStyle(sides = true, spread = 0.9f))
 
 /** Backdrop latar (ambient + isi halaman) untuk kaca yang mengapung di atasnya. */
 val LocalBackdrop = staticCompositionLocalOf<Backdrop> { emptyBackdrop() }
@@ -199,6 +217,7 @@ fun Modifier.glass(
     shadow: Boolean = true,
     layerBlock: (androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit)? = null,
     exportedBackdrop: com.kyant.backdrop.backdrops.LayerBackdrop? = null,
+    rim: Highlight = RimHighlight,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
@@ -207,7 +226,7 @@ fun Modifier.glass(
         blur(blur.toPx())
         lens(lensHeight.toPx(), lensAmount.toPx(), depth)
     },
-    highlight = { if (!RimOk) null else RimHighlight },
+    highlight = { if (!RimOk) null else rim },
     shadow = if (shadow) ({ Shadow() }) else null,
     layerBlock = layerBlock,
     exportedBackdrop = exportedBackdrop,
@@ -246,6 +265,7 @@ fun LiquidButton(
         modifier
             .glass(
                 backdrop, shape, fill, tint, blur, lensHeight, lensAmount,
+                rim = SideHighlight,
                 layerBlock = {
                     val w = size.width
                     val h = size.height
@@ -340,7 +360,9 @@ fun LiquidTabs(
         }
         val scope = rememberCoroutineScope()
         var currentIndex by remember { mutableIntStateOf(selectedIndex) }
-        val pillHeight = height - 8.dp
+        // Tab bar: pil lebih pendek dan sedikit lebih lebar dari slot tab supaya lonjong (bukan bulat).
+        val pillHeight = if (segmented) height - 8.dp else height - 18.dp
+        val pillExtra = if (segmented) 0.dp else 6.dp
         val drag = remember(scope, count) {
             DampedDragAnimation(
                 animationScope = scope,
@@ -441,7 +463,7 @@ fun LiquidTabs(
                         val p = drag.pressProgress
                         vibrancy(); blur(3.dp.toPx()); lens(24.dp.toPx() * p, 24.dp.toPx() * p)
                     },
-                    highlight = { if (!RimOk) null else RimHighlight.copy(alpha = drag.pressProgress) },
+                    highlight = { if (!RimOk) null else SideHighlight.copy(alpha = drag.pressProgress) },
                     onDrawSurface = { drawRect(container) },
                 )
                 .then(highlight.modifier)
@@ -453,7 +475,7 @@ fun LiquidTabs(
         // Pil yang bisa diseret.
         Box(
             Modifier
-                .padding(horizontal = 4.dp)
+                .padding(horizontal = 4.dp - pillExtra / 2)
                 .graphicsLayer { translationX = drag.value * tabWidth + panelOffset }
                 .then(highlight.gestureModifier)
                 .then(drag.modifier)
@@ -464,7 +486,7 @@ fun LiquidTabs(
                         val p = drag.pressProgress
                         lens(10.dp.toPx() * p, 14.dp.toPx() * p, chromaticAberration = true)
                     },
-                    highlight = { if (!RimOk) null else RimHighlight.copy(alpha = drag.pressProgress) },
+                    highlight = { if (!RimOk) null else SideHighlight.copy(alpha = 0.6f + 0.4f * drag.pressProgress) },
                     shadow = { Shadow(alpha = drag.pressProgress) },
                     innerShadow = { InnerShadow(radius = 8.dp * drag.pressProgress, alpha = drag.pressProgress) },
                     layerBlock = {
@@ -487,7 +509,7 @@ fun LiquidTabs(
                     },
                 )
                 .height(pillHeight)
-                .fillMaxWidth(1f / count),
+                .width(with(density) { tabWidth.toDp() } + pillExtra),
         )
     }
 }
@@ -580,7 +602,7 @@ fun LiquidSlider(
                         lens(10.dp.toPx() * p, 14.dp.toPx() * p, chromaticAberration = true)
                     },
                     highlight = {
-                        if (!RimOk) null else RimHighlight.copy(
+                        if (!RimOk) null else SideHighlight.copy(
                             width = Highlight.Ambient.width / 1.5f,
                             blurRadius = Highlight.Ambient.blurRadius / 1.5f,
                             alpha = drag.pressProgress,
@@ -671,7 +693,7 @@ fun LiquidToggle(
                         blur(8.dp.toPx() * (1f - p))
                         lens(5.dp.toPx() * p, 10.dp.toPx() * p, chromaticAberration = true)
                     },
-                    highlight = { if (!RimOk) null else RimHighlight.copy(width = Highlight.Ambient.width / 1.5f, blurRadius = Highlight.Ambient.blurRadius / 1.5f, alpha = drag.pressProgress) },
+                    highlight = { if (!RimOk) null else SideHighlight.copy(width = Highlight.Ambient.width / 1.5f, blurRadius = Highlight.Ambient.blurRadius / 1.5f, alpha = drag.pressProgress) },
                     shadow = { Shadow(radius = 4.dp, color = Color.Black.copy(alpha = 0.1f)) },
                     innerShadow = { InnerShadow(radius = 4.dp * drag.pressProgress, alpha = drag.pressProgress) },
                     layerBlock = {

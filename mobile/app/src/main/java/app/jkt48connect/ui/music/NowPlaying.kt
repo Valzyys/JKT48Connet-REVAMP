@@ -53,6 +53,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
@@ -104,6 +106,7 @@ import app.jkt48connect.ui.components.glassRim
 import app.jkt48connect.ui.components.pressable
 import app.jkt48connect.ui.glass.LiquidIconButton
 import app.jkt48connect.ui.glass.LocalBackdrop
+import app.jkt48connect.ui.glass.SideHighlight
 import app.jkt48connect.ui.glass.glass
 import app.jkt48connect.ui.theme.AppText
 import androidx.compose.runtime.CompositionLocalProvider
@@ -159,49 +162,31 @@ private fun NowPlaying(onClose: () -> Unit) {
         }
     }
 
+    val lyricsMode = mode != MODE_COVER
+
     Box(Modifier.fillMaxSize().graphicsLayer { translationY = drag.value; val r = 1f - (drag.value / 4000f).coerceIn(0f, 0.08f); scaleX = r; scaleY = r }) {
-        LivingArtwork(track, Modifier.fillMaxSize().clip(RoundedCornerShape(if (drag.value > 1f) 28.dp else 0.dp)).layerBackdrop(bg))
+        LivingArtwork(track, lyricsMode, Modifier.fillMaxSize().clip(RoundedCornerShape(if (drag.value > 1f) 28.dp else 0.dp)).layerBackdrop(bg))
         CompositionLocalProvider(LocalBackdrop provides bg) {
             Column(Modifier.fillMaxSize().padding(top = status, bottom = navBar + 12.dp)) {
                 Header(mode, onClose, dismiss)
-                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                    val big = minOf(maxWidth - 56.dp, maxHeight - 120.dp)
-                    val small = 58.dp
-                    val lyricsMode = mode != MODE_COVER
-                    val playing = Music.playing
-                    // Cover "bernapas" seperti iPhone: penuh saat diputar, mengecil saat dijeda.
-                    val coverSize by animateDpAsState(if (lyricsMode) small else if (playing) big else big * 0.84f, spring(dampingRatio = 0.72f, stiffness = 220f), label = "cover")
-                    val coverX by animateDpAsState(if (lyricsMode) 24.dp else (maxWidth - coverSize) / 2, spring(dampingRatio = 0.8f, stiffness = 260f), label = "coverX")
-                    val coverY by animateDpAsState(if (lyricsMode) 6.dp else ((maxHeight - 96.dp - coverSize) / 2).coerceAtLeast(8.dp), spring(dampingRatio = 0.8f, stiffness = 260f), label = "coverY")
-                    val radius by animateDpAsState(if (lyricsMode) 12.dp else 22.dp, tween(300), label = "radius")
-                    val shadow by animateFloatAsState(if (lyricsMode || !playing) 0.25f else 0.6f, tween(400), label = "shadow")
-
-                    // Lirik / antrean (di bawah kepala kecil).
-                    AnimatedContent(
-                        targetState = mode,
-                        transitionSpec = { (fadeIn(tween(320, 120)) + scaleIn(tween(320, 120), 0.97f)) togetherWith fadeOut(tween(160)) },
-                        modifier = Modifier.fillMaxSize().padding(top = if (lyricsMode) small + 18.dp else 0.dp),
-                        label = "mode",
-                    ) { m ->
-                        when (m) {
-                            MODE_LYRICS -> SyncedLyrics(Music.lyrics, Music.lyricsLoading, clock, onSeek = { Music.seekTo(it) }, modifier = Modifier.fillMaxSize())
-                            MODE_QUEUE -> QueueList(Modifier.fillMaxSize())
-                            else -> Box(Modifier.fillMaxSize())
+                AnimatedContent(
+                    targetState = mode,
+                    transitionSpec = { (fadeIn(tween(320, 100)) + scaleIn(tween(320, 100), 0.98f)) togetherWith fadeOut(tween(160)) },
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    label = "mode",
+                ) { m ->
+                    if (m == MODE_COVER) {
+                        // Gambar lagu adalah latarnya; area kosong bisa diketuk untuk membuka lirik atau diseret untuk menutup.
+                        Box(Modifier.fillMaxSize().then(dismiss).pointerInput(Unit) { detectTapGestures { mode = MODE_LYRICS } }) {
+                            TitleRow(track, Modifier.align(Alignment.BottomStart).padding(start = 24.dp, end = 20.dp, bottom = 10.dp))
+                        }
+                    } else {
+                        Column(Modifier.fillMaxSize()) {
+                            CompactHead(track) { mode = MODE_COVER }
+                            if (m == MODE_LYRICS) SyncedLyrics(Music.lyrics, Music.lyricsLoading, clock, onSeek = { Music.seekTo(it) }, modifier = Modifier.weight(1f).fillMaxWidth())
+                            else QueueList(Modifier.weight(1f).fillMaxWidth())
                         }
                     }
-                    // Judul & artis: di bawah cover (mode cover) atau di samping cover kecil (mode lirik).
-                    val titleY by animateDpAsState(if (lyricsMode) 10.dp else coverY + coverSize + 26.dp, spring(dampingRatio = 0.82f, stiffness = 260f), label = "titleY")
-                    val titleX by animateDpAsState(if (lyricsMode) 24.dp + small + 14.dp else 28.dp, spring(dampingRatio = 0.82f, stiffness = 260f), label = "titleX")
-                    TitleBlock(track, lyricsMode, Modifier.offset { IntOffset(titleX.roundToPx(), titleY.roundToPx()) }.width(maxWidth - titleX - 24.dp))
-                    MusicCover(
-                        track,
-                        Modifier
-                            .offset { IntOffset(coverX.roundToPx(), coverY.roundToPx()) }
-                            .size(coverSize)
-                            .graphicsLayer { shadowElevation = 40f * shadow * density.density; shape = RoundedCornerShape(radius); clip = true }
-                            .pressable({ mode = if (mode == MODE_COVER) MODE_LYRICS else MODE_COVER }, 0.98f),
-                        radius,
-                    )
                 }
                 Controls(clock, mode, onMode = { mode = if (mode == it) MODE_COVER else it })
             }
@@ -224,43 +209,93 @@ private fun Header(mode: Int, onClose: () -> Unit, dismiss: Modifier) {
     }
 }
 
+/** Judul besar rata kiri di atas gambar lagu + tombol kaca bagikan. */
 @Composable
-private fun TitleBlock(track: MusicTrack, compact: Boolean, modifier: Modifier) {
-    val size by animateFloatAsState(if (compact) 17f else 24f, spring(dampingRatio = 0.85f, stiffness = 300f), label = "titleSize")
-    Column(modifier) {
-        BasicText(track.title, style = AppText.title(size.sp, Color.White), maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2500))
-        BasicText(track.artist.ifEmpty { "JKT48" }, style = AppText.body((size * 0.68f).sp, Color.White.copy(alpha = 0.66f), 600), maxLines = 1)
+private fun TitleRow(track: MusicTrack, modifier: Modifier) {
+    val context = LocalContext.current
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            BasicText(track.title, style = AppText.title(27.sp, Color.White), maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2500))
+            BasicText(track.artist.ifEmpty { "JKT48" }.uppercase(), style = AppText.body(13.sp, Color.White.copy(alpha = 0.72f), 700), maxLines = 1)
+        }
+        Spacer(Modifier.width(12.dp))
+        LiquidIconButton(Icons.Rounded.Share, { shareTrack(context, track) }, size = 42.dp, iconSize = 19.dp, iconColor = Color.White, fill = GlassWhite, contentDescription = "Bagikan")
     }
+}
+
+/** Kepala ringkas di mode lirik/antrean: cover kecil, judul, tombol kembali ke tampilan gambar. */
+@Composable
+private fun CompactHead(track: MusicTrack, onCover: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        MusicCover(track, Modifier.size(52.dp).pressable(onCover, 0.95f), 10.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            BasicText(track.title, style = AppText.title(18.sp, Color.White), maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2500))
+            BasicText(track.artist.ifEmpty { "JKT48" }, style = AppText.body(13.sp, Color.White.copy(alpha = 0.66f), 600), maxLines = 1)
+        }
+        LiquidIconButton(Icons.Rounded.Album, onCover, size = 40.dp, iconSize = 20.dp, iconColor = Color.White, fill = GlassWhite, contentDescription = "Tampilkan gambar")
+    }
+}
+
+private fun shareTrack(context: android.content.Context, t: MusicTrack) {
+    val text = "${t.title} – ${t.artist.ifEmpty { "JKT48" }}\nhttps://music.youtube.com/watch?v=${t.id}"
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text)
+    runCatching { context.startActivity(android.content.Intent.createChooser(send, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 @Composable
 private fun Controls(clock: LongState, mode: Int, onMode: (Int) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
         Scrubber(clock, Music.durationMs, onSeek = { Music.seekTo(it) })
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            SmallToggle(Icons.Rounded.Shuffle, Music.shuffle, "Acak") { Music.toggleShuffle() }
-            LiquidIconButton(Icons.Rounded.FastRewind, { Music.previous() }, size = 60.dp, iconSize = 32.dp, iconColor = Color.White, fill = GlassWhite, contentDescription = "Sebelumnya")
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            Glyph(Icons.Rounded.FastRewind, "Sebelumnya") { Music.previous() }
             PlayPause(Music.playing, Music.buffering) { Music.toggle() }
-            LiquidIconButton(Icons.Rounded.FastForward, { Music.next() }, size = 60.dp, iconSize = 32.dp, iconColor = Color.White, fill = GlassWhite, contentDescription = "Berikutnya")
-            SmallToggle(if (Music.repeat == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, Music.repeat != Player.REPEAT_MODE_OFF, "Ulangi") { Music.cycleRepeat() }
+            Glyph(Icons.Rounded.FastForward, "Berikutnya") { Music.next() }
         }
         AnimatedVisibility(mode == MODE_COVER, enter = fadeIn() + androidx.compose.animation.expandVertically(), exit = fadeOut() + androidx.compose.animation.shrinkVertically()) {
-            VolumePill(Modifier.padding(top = 16.dp))
+            VolumePill(Modifier.padding(top = 6.dp))
         }
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            ModeButton(Icons.Rounded.Lyrics, "Lirik", mode == MODE_LYRICS) { onMode(MODE_LYRICS) }
-            ModeButton(Icons.AutoMirrored.Rounded.QueueMusic, "Antrean", mode == MODE_QUEUE) { onMode(MODE_QUEUE) }
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            SmallToggle(Icons.Rounded.Shuffle, Music.shuffle, "Acak") { Music.toggleShuffle() }
+            ModePill(mode, onMode)
+            SmallToggle(if (Music.repeat == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, Music.repeat != Player.REPEAT_MODE_OFF, "Ulangi") { Music.cycleRepeat() }
         }
     }
 }
 
-/** Tombol putar besar: ikon berganti dengan morph (skala + putar + pudar), membal saat ditekan. */
+/** Ikon transport putih besar tanpa lingkaran, mengecil membal saat ditekan. */
+@Composable
+private fun Glyph(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(Modifier.size(68.dp).pressable(onClick, 0.82f), contentAlignment = Alignment.Center) {
+        Image(icon, label, Modifier.size(46.dp), colorFilter = ColorFilter.tint(Color.White))
+    }
+}
+
+/** Pil kaca berisi dua segmen ikon: lirik & antrean. */
+@Composable
+private fun ModePill(mode: Int, onMode: (Int) -> Unit) {
+    val backdrop = LocalBackdrop.current
+    Row(
+        Modifier.height(46.dp).glass(backdrop, Capsule(), GlassWhite, blur = 6.dp, lensHeight = 10.dp, lensAmount = 18.dp, shadow = false).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        listOf(Triple(MODE_LYRICS, Icons.Rounded.Lyrics, "Lirik"), Triple(MODE_QUEUE, Icons.AutoMirrored.Rounded.QueueMusic, "Antrean")).forEach { (m, icon, label) ->
+            val on = mode == m
+            val fill by animateColorAsState(if (on) Color.White.copy(alpha = 0.26f) else Color.Transparent, label = "seg$m")
+            Box(
+                Modifier.size(58.dp, 38.dp).clip(Capsule()).background(fill).pressable({ onMode(m) }, 0.9f),
+                contentAlignment = Alignment.Center,
+            ) { Image(icon, label, Modifier.size(21.dp), colorFilter = ColorFilter.tint(Color.White.copy(alpha = if (on) 1f else 0.75f))) }
+        }
+    }
+}
+
+/** Tombol putar: glyph putih besar yang berganti dengan morph (skala + pudar), cincin berputar saat buffering. */
 @Composable
 private fun PlayPause(playing: Boolean, buffering: Boolean, onClick: () -> Unit) {
-    Box(contentAlignment = Alignment.Center) {
-        LiquidIconButton(Icons.Rounded.PlayArrow, onClick, size = 78.dp, iconSize = 0.dp, iconColor = Color.Transparent, fill = Color.White.copy(alpha = 0.2f), contentDescription = if (playing) "Jeda" else "Putar")
+    Box(Modifier.size(88.dp).pressable(onClick, 0.86f), contentAlignment = Alignment.Center) {
         AnimatedContent(
             targetState = playing,
             transitionSpec = {
@@ -268,11 +303,11 @@ private fun PlayPause(playing: Boolean, buffering: Boolean, onClick: () -> Unit)
             },
             label = "playPause",
         ) { p ->
-            Image(if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, Modifier.size(42.dp), colorFilter = ColorFilter.tint(Color.White))
+            Image(if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (p) "Jeda" else "Putar", Modifier.size(66.dp), colorFilter = ColorFilter.tint(Color.White))
         }
         if (buffering) {
             val spin by rememberInfiniteTransition(label = "buf").animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "spin")
-            Box(Modifier.size(86.dp).graphicsLayer { rotationZ = spin }.drawArcRing())
+            Box(Modifier.size(84.dp).graphicsLayer { rotationZ = spin }.drawArcRing())
         }
     }
 }
@@ -320,7 +355,7 @@ private fun Scrubber(clock: LongState, durationMs: Long, onSeek: (Long) -> Unit)
     var dragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
     val fraction = if (dragging) dragFraction else if (durationMs > 0) (clock.longValue.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val h by animateDpAsState(if (dragging) 16.dp else 8.dp, spring(dampingRatio = 0.6f, stiffness = 500f), label = "scrubH")
+    val h by animateDpAsState(if (dragging) 14.dp else 5.dp, spring(dampingRatio = 0.6f, stiffness = 500f), label = "scrubH")
     Column {
         Box(
             Modifier
@@ -352,9 +387,16 @@ private fun Scrubber(clock: LongState, durationMs: Long, onSeek: (Long) -> Unit)
                 )
             }
         }
-        Row(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val shown = (fraction * durationMs).toLong()
             BasicText(fmtClock(shown), style = AppText.mono(11.sp, Color.White.copy(alpha = 0.65f)))
+            Spacer(Modifier.weight(1f))
+            // Chip format audio di tengah.
+            BasicText(
+                "M4A · AAC",
+                style = AppText.mono(10.sp, Color.White.copy(alpha = 0.75f)),
+                modifier = Modifier.glass(backdrop, Capsule(), GlassWhite, blur = 6.dp, lensHeight = 6.dp, lensAmount = 12.dp, shadow = false).padding(horizontal = 10.dp, vertical = 3.dp),
+            )
             Spacer(Modifier.weight(1f))
             BasicText("-" + fmtClock((durationMs - shown).coerceAtLeast(0)), style = AppText.mono(11.sp, Color.White.copy(alpha = 0.65f)))
         }
@@ -378,6 +420,7 @@ private fun VolumePill(modifier: Modifier = Modifier) {
         }
     }
     val shown by animateFloatAsState(level, spring(dampingRatio = 0.8f, stiffness = 600f), label = "vol")
+    val press by animateFloatAsState(if (dragging) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "volPress")
     fun set(f: Float) {
         level = f.coerceIn(0f, 1f)
         audio.setStreamVolume(AudioManager.STREAM_MUSIC, (level * max).roundToInt(), 0)
@@ -386,7 +429,7 @@ private fun VolumePill(modifier: Modifier = Modifier) {
         modifier
             .fillMaxWidth()
             .height(48.dp)
-            .glass(backdrop, Capsule(), Color.White.copy(alpha = 0.1f), blur = 10.dp, lensHeight = 12.dp, lensAmount = 24.dp, shadow = false)
+            .glass(backdrop, Capsule(), Color.White.copy(alpha = 0.08f), blur = 10.dp, lensHeight = 12.dp, lensAmount = 24.dp, shadow = false)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(onDragStart = { dragging = true }, onDragEnd = { dragging = false }, onDragCancel = { dragging = false }) { change, amount ->
                     change.consume()
@@ -402,9 +445,18 @@ private fun VolumePill(modifier: Modifier = Modifier) {
             Modifier
                 .width(w)
                 .fillMaxHeight()
-                .clip(Capsule())
-                .background(Color.White.copy(alpha = 0.16f))
-                .glassRim(Capsule(), dark = true, strength = 1.6f)
+                // Isi level = lensa liquid glass yang membiaskan gambar lagu di belakangnya; membesar saat diseret.
+                .glass(
+                    backdrop, Capsule(), Color.White.copy(alpha = 0.14f + 0.06f * press),
+                    blur = 3.dp, lensHeight = 14.dp, lensAmount = 28.dp, depth = true, shadow = false,
+                    rim = SideHighlight,
+                    layerBlock = {
+                        val s = 1f + press * 6.dp.toPx() / size.height
+                        scaleX = 1f + press * 4.dp.toPx() / size.width
+                        scaleY = s
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                    },
+                )
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -449,28 +501,46 @@ private fun QueueList(modifier: Modifier) {
  * di atas gradasi warna dominan cover. Di bawah Android 12 (tanpa blur) cukup gradasinya saja.
  */
 @Composable
-private fun LivingArtwork(track: MusicTrack, modifier: Modifier) {
+private fun LivingArtwork(track: MusicTrack, lyricsMode: Boolean, modifier: Modifier) {
     val colors = rememberCoverColors(track)
     val top by animateColorAsState(colors?.first ?: Color(0xFF6E1020), tween(900), label = "bgTop")
     val bottom by animateColorAsState(colors?.second ?: Color(0xFF1A0A0E), tween(900), label = "bgBottom")
-    val bitmap = rememberCover(track, 320)
+    val bitmap = rememberCover(track, 1080)
     val image = remember(bitmap) { bitmap?.asImageBitmap() }
+    val sharp by animateFloatAsState(if (lyricsMode) 0f else 1f, tween(650), label = "sharp")
     val inf = rememberInfiniteTransition(label = "living")
     val rot by inf.animateFloat(0f, 360f, infiniteRepeatable(tween(90_000, easing = LinearEasing)), label = "rot")
-    val drift by inf.animateFloat(-1f, 1f, infiniteRepeatable(tween(16_000), RepeatMode.Reverse), label = "drift")
+    val drift by inf.animateFloat(-1f, 1f, infiniteRepeatable(tween(18_000), RepeatMode.Reverse), label = "drift")
+    val canBlur = Build.VERSION.SDK_INT >= 31
     Box(modifier.background(Brush.verticalGradient(listOf(top, bottom)))) {
-        if (image != null && Build.VERSION.SDK_INT >= 31) {
+        if (image != null) {
+            // Mode gambar: gambar lagu tajam memenuhi layar (zoom pelan). Mode lirik/antrean: memburam & meredup.
             Image(
                 image, null,
-                Modifier.fillMaxSize().graphicsLayer { scaleX = 2.2f; scaleY = 2.2f; rotationZ = rot; translationX = drift * 40.dp.toPx(); alpha = 0.85f }.blur(80.dp, BlurredEdgeTreatment.Unbounded),
+                Modifier.fillMaxSize()
+                    .graphicsLayer { val z = 1.06f + 0.03f * drift; scaleX = z; scaleY = z; translationX = drift * 10.dp.toPx(); alpha = if (canBlur) 1f else 0.35f + 0.65f * sharp }
+                    .then(if (canBlur && sharp < 0.999f) Modifier.blur(44.dp * (1f - sharp), BlurredEdgeTreatment.Rectangle) else Modifier),
                 contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
             )
-            Image(
+            if (canBlur && sharp < 0.999f) Image(
                 image, null,
-                Modifier.fillMaxSize().graphicsLayer { scaleX = 1.8f; scaleY = 1.8f; rotationZ = -rot * 0.7f + 90f; translationY = drift * 60.dp.toPx(); alpha = 0.45f }.blur(90.dp, BlurredEdgeTreatment.Unbounded),
+                Modifier.fillMaxSize().graphicsLayer { scaleX = 2f; scaleY = 2f; rotationZ = rot; alpha = 0.4f * (1f - sharp) }.blur(80.dp, BlurredEdgeTreatment.Unbounded),
                 contentScale = ContentScale.Crop,
             )
         }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.1f), Color.Black.copy(alpha = 0.22f), Color.Black.copy(alpha = 0.5f)))))
+        // Gelap tipis di atas (bilah status & kepala), lalu menyatu ke warna dominan di bawah tempat kontrol berada.
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = 0.38f),
+                    0.16f to Color.Transparent,
+                    0.4f to Color.Transparent,
+                    0.66f to bottom.copy(alpha = 0.82f),
+                    1f to bottom,
+                ),
+            ),
+        )
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.38f * (1f - sharp))))
     }
 }
