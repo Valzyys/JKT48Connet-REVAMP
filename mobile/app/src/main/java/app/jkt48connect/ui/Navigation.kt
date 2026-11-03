@@ -71,7 +71,7 @@ class Nav {
         return true
     }
 
-    /** Tujuan dari notifikasi: "tab:1", "route:birthday", "theater:<id>|<judul>", "news:<id>|<tanggal>|<judul>". */
+    /** Tujuan dari notifikasi: "music", "tab:1", "route:birthday", "theater:<id>|<judul>", "news:<id>|<tanggal>|<judul>". */
     fun open(target: String) {
         val kind = target.substringBefore(':')
         val rest = target.substringAfter(':')
@@ -79,6 +79,11 @@ class Nav {
         stack.clear()
         when (kind) {
             "tab" -> tab = rest.toIntOrNull() ?: 0
+            // Notifikasi media musik diketuk: tab Musik + layar "Sedang diputar".
+            "music" -> {
+                tab = 5
+                app.jkt48connect.core.Music.nowPlayingOpen = app.jkt48connect.core.Music.current != null
+            }
             "route" -> when (rest) {
                 "birthday" -> push(Route.Birthday)
                 "news" -> push(Route.News)

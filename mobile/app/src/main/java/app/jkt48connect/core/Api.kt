@@ -198,6 +198,12 @@ object Api {
     suspend fun videoComments(id: String, cursor: String = "", f: Fetch = Fetch.Normal) =
         VideoComments.from(get("/jkt48_youtube/${enc(id)}/comments" + (if (cursor.isEmpty()) "" else "?cursor=${enc(cursor)}"), 2 * 60_000, f).obj())
 
+    /** Musik: cari lagu (judul, artis, potongan lirik, atau URL Spotify). */
+    suspend fun musicSearch(q: String, f: Fetch = Fetch.Normal) = MusicSearch.from(get("/music/search?q=${enc(q.trim())}", 10 * 60_000, f).obj())
+    /** Audio penuh siap putar (URL bertanda tangan). `Fetch.Force` bila URL lama hampir/sudah kedaluwarsa. */
+    suspend fun music(id: String, f: Fetch = Fetch.Normal) = MusicDetail.from(get("/music/${enc(id)}", 15 * 60_000, f).obj())
+    suspend fun lyrics(id: String, f: Fetch = Fetch.Normal) = Lyrics.from(get("/music/${enc(id)}/lyrics", 24 * 3600_000L, f).obj())
+
     /** Posting member: `platform` = x, tiktok, atau instagram; `before` = cursor halaman berikutnya. */
     suspend fun social(platform: String, member: String = "", before: String = "", limit: Int = 20, f: Fetch = Fetch.Normal): SocialPage {
         val path = when (platform) {

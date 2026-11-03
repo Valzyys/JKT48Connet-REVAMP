@@ -23,6 +23,9 @@ import {
   shapeBirthdays,
   shapeLive,
   shapeShowroomComments,
+  shapeMusicSearch,
+  shapeMusic,
+  shapeLyrics,
   shapeMember,
   shapeMembers,
   shapeNews,
@@ -177,6 +180,24 @@ const ROUTES: Route[] = [
     query: { cursor: token(/^[A-Za-z0-9_.=~-]{1,500}$/) },
     upstream: ([v], q) => `/api/jkt48_youtube/${v}/comments${qs(q)}`,
     shape: shapeVideoComments,
+  },
+  // Musik: pencarian lintas artis, audio penuh (URL bertanda tangan dari domain media), dan lirik LRC.
+  {
+    re: /^\/api\/music\/search$/,
+    ttl: 600,
+    swr: 6 * 3600_000,
+    query: { q: (v) => (v !== null && v.trim().length >= 2 && v.length <= 240 ? v.trim() : null), mode: (v) => (v === null || v === "" ? "" : ["auto", "title", "lyrics"].includes(v) ? v : null) },
+    upstream: (_, q) => `/api/music/search${qs(q)}`,
+    shape: shapeMusicSearch,
+  },
+  // Audio bertiket beberapa jam: salinan lama dibatasi 20 menit supaya URL yang dikirim masih berlaku.
+  { re: /^\/api\/music\/([A-Za-z0-9_-]{6,20})$/, ttl: 1200, swr: 20 * 60_000, upstream: ([id]) => `/api/music/${id}`, shape: (r, [id]) => shapeMusic(r, id) },
+  {
+    re: /^\/api\/music\/([A-Za-z0-9_-]{6,20})\/lyrics$/,
+    ttl: 86400,
+    query: { track: token(/^[^\n\r]{1,200}$/), artist: token(/^[^\n\r]{1,200}$/) },
+    upstream: ([id], q) => `/api/music/${id}/lyrics${qs(q)}`,
+    shape: shapeLyrics,
   },
   // Arsip posting publik member (dibaca dari database upstream; tidak memicu scraping baru).
   { re: /^\/api\/x\/tweets$/, ttl: 60, swr: 15 * 60_000, query: social, upstream: (_, q) => `/api/x/tweets${qs(q)}`, shape: shapeTweets },

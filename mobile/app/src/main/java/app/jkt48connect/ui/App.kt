@@ -1,5 +1,7 @@
 package app.jkt48connect.ui
 
+import androidx.compose.material.icons.rounded.MusicNote
+
 import androidx.compose.ui.graphics.isSpecified
 
 import android.Manifest
@@ -103,6 +105,7 @@ import app.jkt48connect.ui.components.VGap
 import app.jkt48connect.ui.components.Ambient
 import app.jkt48connect.ui.glass.LiquidButton
 import app.jkt48connect.ui.glass.LiquidIconButton
+import app.jkt48connect.core.Music
 import app.jkt48connect.ui.glass.LiquidTabs
 import app.jkt48connect.ui.glass.LocalBackdrop
 import app.jkt48connect.ui.glass.TabItem
@@ -140,6 +143,7 @@ private val TABS = listOf(
     TabItem("Jadwal", Icons.Rounded.CalendarMonth),
     TabItem("Recent", Icons.Rounded.History),
     TabItem("Member", Icons.Rounded.Groups),
+    TabItem("Musik", Icons.Rounded.MusicNote),
 )
 
 @Composable
@@ -150,7 +154,8 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
         val nav = remember { Nav() }
         // Ikon status bar putih saat intro (layar merah) dan penampil cuplikan (layar hitam).
         val immersive = nav.stack.lastOrNull() is Route.Shots
-        LaunchedEffect(dark, showIntro, immersive) { onDarkChanged(dark || showIntro || immersive) }
+        val nowPlaying = Music.nowPlayingOpen && Music.current != null
+        LaunchedEffect(dark, showIntro, immersive, nowPlaying) { onDarkChanged(dark || showIntro || immersive || nowPlaying) }
         LaunchedEffect(openTarget) {
             openTarget?.let {
                 if (it == "update") Updater.dialog = true else nav.open(it)
@@ -176,7 +181,9 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
         val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         // Bilah navigasi ala iOS setinggi 52dp: isi mulai tepat di bawahnya (judul besar ada di dalam isi).
-        val insets = PaddingValues(top = status + 52.dp, bottom = navBar + 100.dp)
+        // Mini player mengapung di atas tab bar: isi diberi ruang tambahan supaya baris terakhir tidak tertutup.
+        val mini = Music.current != null
+        val insets = PaddingValues(top = status + 52.dp, bottom = navBar + 100.dp + if (mini) 74.dp else 0.dp)
         BackHandler(enabled = nav.menuOpen || nav.stack.isNotEmpty() || nav.tab != 0) {
             if (!nav.pop()) nav.tab = 0
         }
@@ -233,6 +240,14 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
                                     back = false,
                                     modifier = Modifier.align(Alignment.TopCenter).padding(top = status),
                                 )
+                                if (mini && !nowPlaying) {
+                                    app.jkt48connect.ui.music.MiniPlayer(
+                                        Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .padding(start = 16.dp, end = 16.dp, bottom = navBar + 12.dp + 62.dp + 10.dp)
+                                            .widthIn(max = 520.dp),
+                                    )
+                                }
                                 LiquidTabs(
                                     items = TABS,
                                     selectedIndex = nav.tab,
@@ -247,11 +262,21 @@ fun App(onDarkChanged: (Boolean) -> Unit, intro: Boolean, openTarget: String?, o
                             } else {
                                 (nav.stack.lastOrNull())?.let { r ->
                                     if (r !is Route.Shots) NavBar(title(r), showTitle = true, back = true, modifier = Modifier.align(Alignment.TopCenter).padding(top = status))
+                                    // Di halaman detail (bukan penampil cuplikan/video penuh) mini player turun ke bawah.
+                                    if (mini && !nowPlaying && r !is Route.Shots && r !is Route.Watch) {
+                                        app.jkt48connect.ui.music.MiniPlayer(
+                                            Modifier
+                                                .align(Alignment.BottomCenter)
+                                                .padding(start = 16.dp, end = 16.dp, bottom = navBar + 12.dp)
+                                                .widthIn(max = 520.dp),
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                     MenuPopover(nav, status)
+                    app.jkt48connect.ui.music.NowPlayingHost()
                     UpdateDialog()
                 }
                 if (showIntro) Intro { showIntro = false }
@@ -303,7 +328,8 @@ private fun Pages(nav: Nav, modifier: Modifier) {
                             1 -> LiveScreen()
                             2 -> ScheduleScreen()
                             3 -> RecentScreen()
-                            else -> MembersScreen()
+                            4 -> MembersScreen()
+                            else -> app.jkt48connect.ui.music.MusicScreen()
                         }
                     }
                 }
@@ -327,7 +353,7 @@ private fun Pages(nav: Nav, modifier: Modifier) {
 }
 
 
-private val TAB_TITLES = listOf("JKT48Connect", "Live", "Jadwal", "Recent", "Member")
+private val TAB_TITLES = listOf("JKT48Connect", "Live", "Jadwal", "Recent", "Member", "Musik")
 
 /**
  * Bilah navigasi seperti aplikasi iPhone (iOS 26): tombol kaca bulat di kiri (kembali, hanya di halaman detail),

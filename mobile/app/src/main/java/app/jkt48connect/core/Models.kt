@@ -280,3 +280,49 @@ data class SocialPage(val items: List<SocialPost>, val cursor: String, val hasMo
         fun from(j: JSONObject) = SocialPage(j.objs("items").map(SocialPost::from).filter { it.id.isNotEmpty() }, j.s("cursor"), j.b("hasMore"))
     }
 }
+
+/* ───────────────────────────── Musik ───────────────────────────── */
+
+data class MusicTrack(val id: String, val title: String, val artist: String, val album: String, val duration: Int?, val cover: String) {
+    /** Cover resolusi tinggi untuk layar pemutar & notifikasi (thumbnail YouTube maxres bila ada). */
+    val coverLarge: String get() = cover.replace("/hqdefault.jpg", "/maxresdefault.jpg")
+
+    companion object {
+        fun from(j: JSONObject) = MusicTrack(j.s("id"), j.s("title"), j.s("artist"), j.s("album"), j.n("duration"), j.s("cover"))
+    }
+}
+
+data class MusicSearch(val query: String, val identified: String, val tracks: List<MusicTrack>) {
+    companion object {
+        fun from(j: JSONObject) = MusicSearch(
+            j.s("query"),
+            j.optJSONObject("identified")?.let { listOf(it.s("track"), it.s("artist")).filter(String::isNotEmpty).joinToString(" · ") } ?: "",
+            j.objs("tracks").map(MusicTrack::from).filter { it.id.isNotEmpty() },
+        )
+    }
+}
+
+/** Audio siap putar: URL bertanda tangan dari domain media JKT48Connect, kedaluwarsa `expiresAt` (detik epoch). */
+data class MusicAudio(val url: String, val mime: String, val expiresAt: Long?)
+
+data class MusicDetail(val track: MusicTrack, val audio: MusicAudio?) {
+    companion object {
+        fun from(j: JSONObject) = MusicDetail(
+            MusicTrack.from(j),
+            j.optJSONObject("audio")?.let { a -> a.s("url").takeIf { it.startsWith("https://") }?.let { MusicAudio(it, a.s("mime").ifEmpty { "audio/mp4" }, a.l("expiresAt")) } },
+        )
+    }
+}
+
+/** Satu baris lirik; `time` detik dari awal lagu (-1 bila lirik tidak bertimestamp). */
+data class LyricLine(val time: Double, val text: String)
+
+data class Lyrics(val synced: Boolean, val lines: List<LyricLine>, val source: String) {
+    companion object {
+        val None = Lyrics(false, emptyList(), "")
+        fun from(j: JSONObject): Lyrics {
+            val lines = j.objs("lines").map { LyricLine(it.optDouble("time", -1.0), it.s("text")) }
+            return Lyrics(j.s("status") == "synced", lines, j.s("source"))
+        }
+    }
+}

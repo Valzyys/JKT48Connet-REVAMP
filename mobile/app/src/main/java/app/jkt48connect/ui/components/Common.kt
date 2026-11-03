@@ -1,5 +1,11 @@
 package app.jkt48connect.ui.components
 
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawOutline
+
 import androidx.compose.foundation.layout.PaddingValues
 
 import androidx.compose.animation.core.Animatable
@@ -253,18 +259,69 @@ fun Modifier.glassCard(radius: Dp = 24.dp, tint: Color = Color.Unspecified): Mod
     val c = LocalColors.current
     val shape = RoundedCornerShape(radius)
     // Nilai diukur dari tangkapan layar aplikasi iPhone (glassEffect iOS 26) di atas latar ambient yang sama:
-    // terang = putih 62% dengan tepi putih 90%, gelap = putih 11% dengan tepi putih 17%.
-    val fill = when {
-        tint.isSpecified -> tint
-        c.dark -> Color.White.copy(alpha = 0.11f)
-        else -> Color.White.copy(alpha = 0.62f)
+    // terang = putih ±62%, gelap = putih ±11%. Badan kaca dibentuk isian bergradasi + pantulan cahaya di dalam
+    // bagian atas + bayangan dalam di bawah; tepinya kilau atas-bawah (glassRim), bukan outline.
+    val fill: Brush = when {
+        tint.isSpecified -> SolidColor(tint)
+        c.dark -> Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.15f), Color.White.copy(alpha = 0.075f)))
+        else -> Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.76f), Color.White.copy(alpha = 0.52f)))
     }
-    val edge = if (c.dark) Color.White.copy(alpha = 0.17f) else Color.White.copy(alpha = 0.9f)
     return this
         .shadow(if (c.dark) 0.dp else 10.dp, shape, ambientColor = Color(0x14000000), spotColor = Color(0x14000000))
         .clip(shape)
         .background(fill)
-        .border(0.7.dp, edge, shape)
+        .glassBody(c.dark)
+        .glassRim(shape, c.dark)
+}
+
+/** Volume kaca: pantulan cahaya lembut di dalam bagian atas (pudar ke samping) dan bayangan dalam tipis di bawah. */
+private fun Modifier.glassBody(dark: Boolean): Modifier = drawWithCache {
+    val glowH = minOf(size.height * 0.55f, 26.dp.toPx())
+    val glow = Brush.verticalGradient(
+        0f to Color.White.copy(alpha = if (dark) 0.14f else 0.5f),
+        1f to Color.Transparent,
+        startY = 0f,
+        endY = glowH,
+    )
+    val shadeH = minOf(size.height * 0.4f, 18.dp.toPx())
+    val shade = Brush.verticalGradient(
+        0f to Color.Transparent,
+        1f to (if (dark) Color.Black.copy(alpha = 0.16f) else Color(0xFF7A4A55).copy(alpha = 0.05f)),
+        startY = size.height - shadeH,
+        endY = size.height,
+    )
+    val sideFade = Brush.horizontalGradient(0f to Color.Transparent, 0.18f to Color.Black, 0.82f to Color.Black, 1f to Color.Transparent)
+    val layer = androidx.compose.ui.graphics.Paint()
+    onDrawWithContent {
+        drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), layer)
+        drawRect(glow, size = androidx.compose.ui.geometry.Size(size.width, glowH))
+        drawRect(sideFade, size = androidx.compose.ui.geometry.Size(size.width, glowH), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+        drawContext.canvas.restore()
+        drawRect(shade, topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - shadeH))
+        drawContent()
+    }
+}
+
+/**
+ * Kilau tepi kaca tanpa outline (ala iOS 26/27): garis cahaya tipis di sisi atas (lebih redup di bawah) yang
+ * memudar blur ke kiri-kanan sebelum pojok. Bukan bingkai penuh dan bukan sorot diagonal di pojok.
+ */
+fun Modifier.glassRim(shape: Shape, dark: Boolean, strength: Float = 1f): Modifier = drawWithCache {
+    val outline = shape.createOutline(size, layoutDirection, this)
+    val w = 1.dp.toPx()
+    val top = Color.White.copy(alpha = ((if (dark) 0.42f else 1f) * strength).coerceAtMost(1f))
+    val bottom = Color.White.copy(alpha = ((if (dark) 0.16f else 0.55f) * strength).coerceAtMost(1f))
+    val vertical = Brush.verticalGradient(0f to top, 0.22f to top.copy(alpha = 0f), 0.78f to bottom.copy(alpha = 0f), 1f to bottom)
+    // Mask horizontal: penuh di bagian tengah, memudar lembut ke kiri-kanan sebelum lengkung pojok.
+    val mask = Brush.horizontalGradient(0f to Color.Transparent, 0.07f to Color.Transparent, 0.3f to Color.Black, 0.7f to Color.Black, 0.93f to Color.Transparent, 1f to Color.Transparent)
+    val layer = androidx.compose.ui.graphics.Paint()
+    onDrawWithContent {
+        drawContent()
+        drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), layer)
+        drawOutline(outline, vertical, style = Stroke(w))
+        drawRect(mask, blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+        drawContext.canvas.restore()
+    }
 }
 
 /**

@@ -242,6 +242,78 @@ export function shapeShowroomComments(raw: Raw): LiveComments {
   };
 }
 
+/* ───────────────────────────── Musik ───────────────────────────── */
+
+/** ID lagu = ID video YouTube sumber audio. */
+export const MUSIC_ID = /^[A-Za-z0-9_-]{6,20}$/;
+
+export type MusicTrack = { id: string; title: string; artist: string; album: string; versionTitle: string; duration: number | null; cover: string };
+export type MusicSearch = { query: string; identified: { track: string; artist: string } | null; tracks: MusicTrack[] };
+/** Audio siap putar (M4A/AAC atau WebM/Opus tanpa video). `audio` null bila belum siap. */
+export type MusicDetail = MusicTrack & { audio: { url: string; mime: string; seekable: boolean; expiresAt: number | null } | null };
+export type LyricLine = { time: number; text: string };
+/** `synced`: baris punya timestamp (detik). `plain`: hanya teks. `none`: lirik tidak ditemukan. */
+export type Lyrics = { status: "synced" | "plain" | "none"; source: string; lines: LyricLine[]; durationDiff: number | null };
+
+function mapTrack(t: Raw): MusicTrack {
+  const id = MUSIC_ID.test(str(t.id)) ? str(t.id) : "";
+  return {
+    id,
+    title: str(t.title, t.version_title),
+    artist: str(t.artist),
+    album: str(t.album),
+    versionTitle: str(t.version_title),
+    duration: num(t.duration),
+    cover: httpUrl(t.cover),
+  };
+}
+
+export function shapeMusicSearch(raw: Raw): MusicSearch {
+  const idf = raw?.identified_song;
+  const seen = new Set<string>();
+  return {
+    query: str(raw?.query),
+    identified: idf && str(idf.track) ? { track: str(idf.track), artist: str(idf.artist) } : null,
+    tracks: list(raw?.tracks)
+      .map(mapTrack)
+      .filter((t) => t.id && t.title && !seen.has(t.id) && seen.add(t.id)),
+  };
+}
+
+/** Audio hanya dari domain media JKT48Connect (URL bertanda tangan, tanpa API key). */
+function musicAudioUrl(v: unknown): string {
+  const u = httpUrl(v);
+  if (!u.startsWith("https://")) return "";
+  const host = new URL(u).hostname;
+  return host === "jkt48connect.app" || host.endsWith(".jkt48connect.app") ? u : "";
+}
+
+export function shapeMusic(raw: Raw, id: string): MusicDetail {
+  const t = mapTrack({ ...raw, id: str(raw?.id, id) });
+  const a: Raw = raw?.audio ?? {};
+  const url = a.status === "ready" ? musicAudioUrl(a.url) : "";
+  return {
+    ...t,
+    audio: url ? { url, mime: str(a.mime_type, "audio/mp4"), seekable: a.seekable !== false, expiresAt: num(a.expires_at) } : null,
+  };
+}
+
+export function shapeLyrics(raw: Raw): Lyrics {
+  const lines = list(raw?.lines)
+    .map((l) => ({ time: num(l.time) ?? -1, text: str(l.text).slice(0, 300) }))
+    .filter((l) => l.time >= 0 || l.text);
+  const plain = str(raw?.plain_lyrics, raw?.plain, raw?.text);
+  const synced = raw?.status === "synced" && lines.some((l) => l.time >= 0);
+  const fromPlain = plain ? plain.split(/\r?\n/).map((text) => ({ time: -1, text: text.slice(0, 300) })) : [];
+  const out = synced ? lines.filter((l) => l.time >= 0).sort((a, b) => a.time - b.time) : lines.length ? lines.map((l) => ({ ...l, time: -1 })) : fromPlain;
+  return {
+    status: synced ? "synced" : out.some((l) => l.text) ? "plain" : "none",
+    source: str(raw?.source),
+    lines: out,
+    durationDiff: num(raw?.duration_difference_seconds),
+  };
+}
+
 /* ───────────────────────────── Theater ───────────────────────────── */
 
 export type ShowMember = { id: string; name: string; img: string };
