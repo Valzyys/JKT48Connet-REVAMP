@@ -55,6 +55,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
@@ -103,6 +105,26 @@ private class PlayerUi {
     var lastTouch by mutableLongStateOf(System.currentTimeMillis())
     var speed by mutableFloatStateOf(1f)
     var fullscreen by mutableStateOf(false)
+    /** Tinggi resolusi video yang tersedia (mis. 1080, 720, 480), resolusi pilihan (0 = otomatis), dan yang sedang tampil. */
+    var qualities by mutableStateOf<List<Int>>(emptyList())
+    var quality by mutableIntStateOf(0)
+    var showing by mutableIntStateOf(0)
+    var qualityMenu by mutableStateOf(false)
+
+    /** Kunci resolusi tertentu, atau 0 untuk kembali ke pemilihan otomatis sesuai kecepatan jaringan. */
+    fun pickQuality(height: Int) {
+        val p = player ?: return
+        val params = p.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+        if (height > 0) {
+            val group = p.currentTracks.groups.firstOrNull { g -> g.type == C.TRACK_TYPE_VIDEO && (0 until g.length).any { g.getTrackFormat(it).height == height } }
+            val index = group?.let { g -> (0 until g.length).first { g.getTrackFormat(it).height == height } }
+            if (group != null && index != null) params.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+        }
+        p.trackSelectionParameters = params.build()
+        quality = height
+        qualityMenu = false
+        wake()
+    }
 
     fun wake() {
         controls = true
@@ -243,7 +265,16 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                if (videoSize.width > 0 && videoSize.height > 0) ui.ratio = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    ui.ratio = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+                    ui.showing = videoSize.height
+                }
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                ui.qualities = tracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }
+                    .flatMap { g -> (0 until g.length).filter { g.isTrackSupported(it) }.map { g.getTrackFormat(it).height } }
+                    .filter { it > 0 }.distinct().sortedDescending()
             }
         })
         exo.setMediaItem(item.build())
@@ -253,7 +284,7 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
         while (true) {
             // Posisi hanya dibaca saat kontrol tampil: tidak ada rekomposisi tiap 250 ms selama menonton.
             if (ui.dragging == null && (ui.controls || !ui.playing)) ui.position = exo.currentPosition
-            if (exo.isPlaying && System.currentTimeMillis() - ui.lastTouch > 3000) ui.controls = false
+            if (exo.isPlaying && !ui.qualityMenu && System.currentTimeMillis() - ui.lastTouch > 3000) ui.controls = false
             delay(250)
         }
     }
@@ -419,10 +450,40 @@ private fun PlayerControls(ui: PlayerUi, src: MediaSource, title: String, label:
                 Txt(title, AppText.body(if (fullscreen) 16.sp else 13.sp, Color.White, 800), maxLines = 1)
                 Txt(label.uppercase(), AppText.micro(Color.White.copy(alpha = 0.6f), 8.5.sp), maxLines = 1)
             }
+            if (ui.qualities.size > 1) {
+                val shown = if (ui.showing > 0) "${ui.showing}p" else "Auto"
+                ControlPill(if (ui.quality == 0) "Auto · $shown" else "${ui.quality}p", small) {
+                    ui.qualityMenu = !ui.qualityMenu
+                    ui.wake()
+                }
+            }
             if (!src.live) ControlPill(if (ui.speed % 1f == 0f) "${ui.speed.toInt()}×" else "${ui.speed}×".replace('.', ','), small) { ui.nextSpeed() }
             RoundButton(if (fullscreen) StreamIcons.FullscreenExit else StreamIcons.Fullscreen, small, if (fullscreen) "Keluar layar penuh" else "Layar penuh") {
                 ui.fullscreen = !ui.fullscreen
                 ui.wake()
+            }
+        }
+        // Pilihan resolusi: Otomatis (sesuai kecepatan jaringan) atau kunci satu resolusi.
+        if (ui.qualityMenu) {
+            Column(
+                Modifier.align(Alignment.TopEnd)
+                    .padding(top = small + if (fullscreen) 26.dp else 16.dp, end = if (fullscreen) 18.dp else 10.dp)
+                    .widthIn(min = 132.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.Black.copy(alpha = 0.85f))
+                    .padding(vertical = 6.dp),
+            ) {
+                Txt("RESOLUSI", AppText.micro(Color.White.copy(alpha = 0.55f), 8.5.sp), Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
+                (listOf(0) + ui.qualities).forEach { h ->
+                    val chosen = ui.quality == h
+                    Row(
+                        Modifier.fillMaxWidth().pressable({ ui.pickQuality(h) }).padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Txt(if (h == 0) "Otomatis" else "${h}p", AppText.body(13.sp, Color.White, if (chosen) 800 else 500), Modifier.weight(1f))
+                        if (chosen) Box(Modifier.size(7.dp).background(Color(0xFFE1243A), CircleShape))
+                    }
+                }
             }
         }
         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (fullscreen) 36.dp else 22.dp)) {
@@ -633,7 +694,8 @@ fun PlayerScreen(item: JSONObject) {
                         poster = item.optString("image"),
                         // Sumber tetap gagal setelah disambung ulang → minta tiket/URL baru (maks. 3 kali).
                         onFatal = {
-                            if (!current.optString("url").startsWith(StreamApi.base + "/")) proxied = true
+                            // Sumber langsung (CDN, atau varian/segmen theater) gagal → minta ulang lewat server Stream.
+                            if (current.optBoolean("direct") || !current.optString("url").startsWith(StreamApi.base + "/")) proxied = true
                             if (attempt < 6) attempt++
                         },
                     )

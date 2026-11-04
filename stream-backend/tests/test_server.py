@@ -206,6 +206,23 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
    self.assertEqual((url,seen),(s.THEATER_BASE+'/stream/live?t='+'a'*40,['https://jkt48connect.app','https://st2.oshigo.web.id']))
    self.assertEqual(s.source_headers(s.THEATER_BASE+'/s/x',{})['Origin'],'https://st2.oshigo.web.id')
   s.SITE_HEADERS=old
+ async def test_theater_master_through_server_children_direct_unless_proxy(self):
+  s.db.execute('insert into entitlements values(?,?,?,?,?,?)',('e','u1','membership','*',0,s.now()+3600))
+  show={'id':'show-1','title':'Pajama Drive','source':'idnplus','isLive':True,'date':'','lineup':[],'image':''}
+  async def shows(fresh=False):return[show]
+  async def live(fresh=False):return'live'
+  async def ticket():return s.THEATER_BASE+'/stream/live?t=abc'
+  master=b'#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1427999,RESOLUTION=852x480\nhttps://st.avonera48.web.id/s/abc480\n#EXT-X-STREAM-INF:BANDWIDTH=630000\n/s/def360\n'
+  with patch.object(s,'shows',shows),patch.object(s,'theater_status',live),patch.object(s,'theater_ticket',ticket):
+   split=(await s.playback('theater','show-1','',self.u))['items'][0]
+   full=(await s.playback('theater','show-1','proxy',self.u))['items'][0]
+  self.assertEqual((split['direct'],full['direct']),(True,False))
+  data=s.reveal(split['url'].rsplit('/',1)[1],self.u)
+  body=s.retarget(master,data['u'],self.u,data).body.decode()
+  self.assertIn('https://st.avonera48.web.id/s/abc480',body);self.assertIn('https://st.avonera48.web.id/s/def360',body)
+  data=s.reveal(full['url'].rsplit('/',1)[1],self.u)
+  body=s.retarget(master,data['u'],self.u,data).body.decode()
+  self.assertNotIn('st.avonera48.web.id/s/',body)
  async def test_duplicate_live_ids_are_listed_once(self):
   raw={'lives':[{'notification_data_id':'idn-1','name':'A','type':'idn'},{'notification_data_id':'idn-1','name':'A','type':'idn'},{'notification_data_id':'sr-2','name':'B','type':'showroom'}]}
   async def upstream(path):return raw
