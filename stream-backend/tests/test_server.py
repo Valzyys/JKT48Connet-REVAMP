@@ -178,7 +178,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   show={'id':'show-1','title':'Pajama Drive','source':'idnplus','isLive':False,'date':'','lineup':[],'image':''}
   async def shows(fresh=False):return[show]
   async def ticket():return s.THEATER_BASE+'/stream/live?t=abc'
-  for state,expect in(('off',409),('error',502)):
+  for state,expect in(('off',409),('error',503)):
    s.cache.clear()
    async def status(fresh=False,state=state):return state
    with patch.object(s,'shows',shows),patch.object(s,'theater_status',status),patch.object(s,'theater_ticket',ticket):
@@ -191,6 +191,21 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((data['u'],data.get('h')),(s.THEATER_BASE+'/stream/live?t=abc',1))
   self.assertEqual(s.source_headers(s.THEATER_BASE+'/x.ts',{'Range':'bytes=0-'})['Origin'],'https://jkt48connect.app')
   self.assertNotIn('Origin',s.source_headers('https://api.jkt48connect.app/x.ts',{}))
+ async def test_theater_ticket_falls_back_to_second_origin(self):
+  seen=[]
+  class R:
+   def __init__(self,code,body):self.status_code=code;self._b=body
+   def json(self):return self._b
+  class Plain:
+   async def get(self,url,headers,**kw):
+    seen.append(headers['Origin'])
+    return R(403,{})if headers['Origin']==s.THEATER_ORIGINS[0]else R(200,{'ticket':'a'*40})
+  old=s.SITE_HEADERS
+  with patch.object(s,'plain_http',Plain()),patch.object(s,'THEATER_ORIGINS',['https://jkt48connect.app','https://st2.oshigo.web.id']):
+   url=await s.theater_ticket()
+   self.assertEqual((url,seen),(s.THEATER_BASE+'/stream/live?t='+'a'*40,['https://jkt48connect.app','https://st2.oshigo.web.id']))
+   self.assertEqual(s.source_headers(s.THEATER_BASE+'/s/x',{})['Origin'],'https://st2.oshigo.web.id')
+  s.SITE_HEADERS=old
  async def test_duplicate_live_ids_are_listed_once(self):
   raw={'lives':[{'notification_data_id':'idn-1','name':'A','type':'idn'},{'notification_data_id':'idn-1','name':'A','type':'idn'},{'notification_data_id':'sr-2','name':'B','type':'showroom'}]}
   async def upstream(path):return raw

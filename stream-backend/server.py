@@ -75,7 +75,7 @@ async def cached(key, ttl, load, stale=0):
 async def upstream(path):
     async def load():
         r = await http.get(UPSTREAM+path, headers={'X-API-Key': os.environ['JKT48CONNECT_API_KEY']}, timeout=20, allow_redirects=False)
-        if r.status_code != 200: error(502, 'Sumber data sedang belum tersedia. Coba lagi sebentar.')
+        if r.status_code != 200: error(503, 'Sumber data sedang belum tersedia. Coba lagi sebentar.')
         return r.json()
     # Detail theater & jadwal jarang berubah: disimpan lebih lama dan diperbarui di latar.
     if path.startswith(('/api/theater/', '/api/next_schedule')): return await cached(path, 600, load, stale=86400)
@@ -153,7 +153,11 @@ def reveal(value, user):
 THEATER_BASE = os.environ.get('STREAM_THEATER_URL', 'https://st.avonera48.web.id').rstrip('/')
 # Client key player theater (publik, sama dengan yang tertanam di iframe player). Akses diizinkan untuk origin jkt48connect.app.
 THEATER_KEY = os.environ.get('STREAM_THEATER_KEY', 'ck_299ba35d1b93e6776bc318a796d52eae')
-SITE_HEADERS = {'Origin': 'https://jkt48connect.app', 'Referer': 'https://jkt48connect.app/'}
+# Origin yang diizinkan sumber theater, dicoba berurutan; yang terakhir berhasil dipakai untuk playlist/segmen.
+THEATER_ORIGINS = [o.strip().rstrip('/') for o in os.environ.get('STREAM_THEATER_ORIGINS', 'https://jkt48connect.app,https://st2.oshigo.web.id').split(',') if o.strip()]
+SITE_HEADERS = {'Origin': THEATER_ORIGINS[0], 'Referer': THEATER_ORIGINS[0] + '/'}
+# Catatan: aplikasi tidak pernah dijawab 502/504. Cloudflare di depan bridge mengganti 502/504 dari origin dengan
+# halaman HTML-nya sendiri sehingga pesan untuk penonton hilang; kegagalan sumber memakai 503.
 
 
 def is_theater(url):
@@ -174,7 +178,7 @@ async def fetch_media(url, headers):
         r = await client.get(url, headers=source_headers(url, headers), stream=True, timeout=30, allow_redirects=False)
         if r.status_code not in (301,302,303,307,308): return r, url
         following = urljoin(url, r.headers.get('Location','')); await r.aclose(); url = following
-    error(502, 'Sumber media sedang bermasalah.')
+    error(503, 'Sumber media sedang bermasalah.')
 
 
 @asynccontextmanager
@@ -589,11 +593,17 @@ async def live_comments(ident:str,after:int=0,wait:int=0,user=Depends(who)):
 
 
 async def theater_ticket():
-    """URL master m3u8 channel live theater dengan tiket baru (tiket dipakai sekali)."""
-    try:r=await plain_http.get(f'{THEATER_BASE}/auth/ticket?key={quote(THEATER_KEY,safe="")}',headers=SITE_HEADERS,timeout=15,allow_redirects=False)
-    except Exception:error(502,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
-    ticket=str((r.json()if r.status_code==200 else{}).get('ticket')or'')
-    if not re.fullmatch(r'[0-9A-Za-z_-]{16,2048}',ticket):error(502,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
+    """URL master m3u8 channel live theater dengan tiket baru (tiket dipakai sekali). Origin dicoba berurutan."""
+    global SITE_HEADERS
+    ticket=''
+    for origin in THEATER_ORIGINS:
+        headers={'Origin':origin,'Referer':origin+'/'}
+        try:r=await plain_http.get(f'{THEATER_BASE}/auth/ticket?key={quote(THEATER_KEY,safe="")}',headers=headers,timeout=15,allow_redirects=False)
+        except Exception:continue
+        if r.status_code==200:
+            ticket=str(r.json().get('ticket')or'');SITE_HEADERS=headers
+            break
+    if not re.fullmatch(r'[0-9A-Za-z_-]{16,2048}',ticket):error(503,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
     return f'{THEATER_BASE}/stream/live?t={ticket}'
 
 
@@ -633,7 +643,7 @@ async def playback(kind:str,ident:str,via:str='',user=Depends(who)):
         # Channel live theater: 404 dari sumber = show belum dimulai.
         status=await theater_status(fresh=True)
         if status=='off':error(409,'Show belum dimulai. Aksesmu tetap tersimpan, buka lagi saat show live.')
-        if status!='live':error(502,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
+        if status!='live':error(503,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
         files=[{'url':await theater_ticket(),'hls':True}];title=show['title']
     elif kind=='recent':
         raw=await upstream('/api/recent/'+quote(ident,safe=''))
@@ -680,7 +690,7 @@ def prefetch(urls):
 def retarget(body,url,user,data):
     """Playlist: setiap URI (variant, segmen, key, map) diganti tiket yang terikat sesi penonton ini.
     Playlist media: urutan segmen dicatat untuk prefetch; live langsung mengambil segmen terbaru."""
-    if not bytes(body).lstrip().startswith(b'#EXTM3U'):error(502,'Playlist siaran belum tersedia.')
+    if not bytes(body).lstrip().startswith(b'#EXTM3U'):error(503,'Playlist siaran belum tersedia.')
     text=bytes(body).decode();out=[]
     shared=bool(data.get('h'))
     for line in text.splitlines():
@@ -737,7 +747,7 @@ async def media(opaque:str,request:Request,user=Depends(who)):
         hit=await shared_media(data['u'])
         if hit is not None:
             _,status,content_type,body,url=hit
-            if status!=200:error(502,'Sumber siaran belum dapat diputar.' if status!=404 else 'Bagian siaran belum tersedia.')
+            if status!=200:error(503,'Sumber siaran belum dapat diputar.' if status!=404 else 'Bagian siaran belum tersedia.')
             if is_playlist(content_type,url):return retarget(body,url,user,data)
             prefetch(following.get(data['u'],()))
             return Response(body,media_type=content_type)
@@ -747,13 +757,13 @@ async def media(opaque:str,request:Request,user=Depends(who)):
         headers['Range']=value
     r,url=await fetch_media(data['u'],headers)
     if r.status_code not in (200,206):
-        status=r.status_code;await r.aclose();error(502,'Sumber siaran belum dapat diputar.' if status!=404 else 'Bagian siaran belum tersedia.')
+        status=r.status_code;await r.aclose();error(503,'Sumber siaran belum dapat diputar.' if status!=404 else 'Bagian siaran belum tersedia.')
     content_type=r.headers.get('Content-Type','application/octet-stream').split(';')[0]
     if is_playlist(content_type,url):
         body=bytearray()
         async for chunk in r.aiter_content():
             body.extend(chunk)
-            if len(body)>2*1024*1024:await r.aclose();error(502,'Playlist terlalu besar.')
+            if len(body)>2*1024*1024:await r.aclose();error(503,'Playlist terlalu besar.')
         await r.aclose()
         return retarget(body,url,user,data)
     out={k:r.headers[k]for k in ('Content-Length','Content-Range','Accept-Ranges')if k in r.headers}
@@ -771,7 +781,7 @@ async def image(ident:str,user=Depends(who)):
     r,_=await fetch_media(row[0],{'Referer':'https://jkt48.com/'})
     content_type=r.headers.get('Content-Type','').split(';')[0]
     if r.status_code!=200 or not content_type.startswith('image/'):
-        await r.aclose();error(502,'Gambar belum tersedia.')
+        await r.aclose();error(503,'Gambar belum tersedia.')
     data=bytearray()
     async for chunk in r.aiter_content():
         data.extend(chunk)
@@ -853,9 +863,9 @@ class Checkout(BaseModel):
 async def gateway(method,path,body=None):
     r=await http.request(method,'https://pg.jkt48connect.app/api/v1/transactions'+path,
                          headers={'X-API-Key':os.environ['STREAM_PG_API_KEY']},json=body,timeout=20,allow_redirects=False)
-    if r.status_code not in (200,201):error(502,'Pembayaran belum dapat diproses. Tagihanmu tetap tersimpan; coba cek status kembali.')
+    if r.status_code not in (200,201):error(503,'Pembayaran belum dapat diproses. Tagihanmu tetap tersimpan; coba cek status kembali.')
     data=r.json().get('data',{})
-    if not isinstance(data,dict):error(502,'Respons pembayaran belum sesuai.')
+    if not isinstance(data,dict):error(503,'Respons pembayaran belum sesuai.')
     return data
 
 
@@ -875,7 +885,7 @@ async def checkout(data:Checkout,user=Depends(who)):
     if not existing:
         db.execute('INSERT INTO payments(id,user_id,plan,target,amount,status,document,created) VALUES(?,?,?,?,?,?,?,?)',(ident,user['id'],data.plan,data.target,amount,'creating','{}',now()));db.commit()
     value=await gateway('POST','',{'amount':amount,'reference':ident,'description':'JKT48Connect Stream · '+PLANS[data.plan][0],'expires_in':900,'return_url':BASE+'/payment/'+ident})
-    if value.get('reference')!=ident or value.get('amount')!=amount:error(502,'Nominal pembayaran belum sesuai.')
+    if value.get('reference')!=ident or value.get('amount')!=amount:error(503,'Nominal pembayaran belum sesuai.')
     db.execute('UPDATE payments SET gateway_id=?,status=?,document=? WHERE id=?',(value['id'],value['status'],json.dumps(value),ident));db.commit()
     return public_payment(db.execute('SELECT * FROM payments WHERE id=?',(ident,)).fetchone())
 
@@ -899,7 +909,7 @@ def legacy_payments(user):
 async def refresh_payment(row):
     if not row['gateway_id']or row['status']not in('pending','creating'):return
     value=await gateway('GET','/'+quote(row['gateway_id'],safe=''))
-    if value.get('id')!=row['gateway_id']or value.get('reference')!=row['id']or value.get('amount')!=row['amount']:error(502,'Verifikasi tagihan belum sesuai.')
+    if value.get('id')!=row['gateway_id']or value.get('reference')!=row['id']or value.get('amount')!=row['amount']:error(503,'Verifikasi tagihan belum sesuai.')
     state=value.get('status')
     if state not in('pending','paid','expired','cancelled'):return
     db.execute('BEGIN IMMEDIATE')
