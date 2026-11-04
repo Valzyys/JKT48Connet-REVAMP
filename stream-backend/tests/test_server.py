@@ -186,7 +186,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
    self.assertEqual(e.exception.status_code,expect)
   async def live(fresh=False):return'live'
   with patch.object(s,'shows',shows),patch.object(s,'theater_status',live),patch.object(s,'theater_ticket',ticket):
-   res=await s.playback('theater','show-1','',self.u)
+   res=await s.playback('theater','show-1','proxy',self.u)
   data=s.reveal(res['items'][0]['url'].rsplit('/',1)[1],self.u)
   self.assertEqual((data['u'],data.get('h')),(s.THEATER_BASE+'/stream/live?t=abc',1))
   self.assertEqual(s.source_headers(s.THEATER_BASE+'/x.ts',{'Range':'bytes=0-'})['Origin'],'https://jkt48connect.app')
@@ -206,23 +206,22 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
    self.assertEqual((url,seen),(s.THEATER_BASE+'/stream/live?t='+'a'*40,['https://jkt48connect.app','https://st2.oshigo.web.id']))
    self.assertEqual(s.source_headers(s.THEATER_BASE+'/s/x',{})['Origin'],'https://st2.oshigo.web.id')
   s.SITE_HEADERS=old
- async def test_theater_master_through_server_children_direct_unless_proxy(self):
+ async def test_theater_app_fetches_its_own_ticket_unless_proxy(self):
   s.db.execute('insert into entitlements values(?,?,?,?,?,?)',('e','u1','membership','*',0,s.now()+3600))
   show={'id':'show-1','title':'Pajama Drive','source':'idnplus','isLive':True,'date':'','lineup':[],'image':''}
   async def shows(fresh=False):return[show]
   async def live(fresh=False):return'live'
   async def ticket():return s.THEATER_BASE+'/stream/live?t=abc'
-  master=b'#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1427999,RESOLUTION=852x480\nhttps://st.avonera48.web.id/s/abc480\n#EXT-X-STREAM-INF:BANDWIDTH=630000\n/s/def360\n'
   with patch.object(s,'shows',shows),patch.object(s,'theater_status',live),patch.object(s,'theater_ticket',ticket):
-   split=(await s.playback('theater','show-1','',self.u))['items'][0]
+   own=(await s.playback('theater','show-1','',self.u))['items'][0]
    full=(await s.playback('theater','show-1','proxy',self.u))['items'][0]
-  self.assertEqual((split['direct'],full['direct']),(True,False))
-  data=s.reveal(split['url'].rsplit('/',1)[1],self.u)
-  body=s.retarget(master,data['u'],self.u,data).body.decode()
-  self.assertIn('https://st.avonera48.web.id/s/abc480',body);self.assertIn('https://st.avonera48.web.id/s/def360',body)
-  data=s.reveal(full['url'].rsplit('/',1)[1],self.u)
-  body=s.retarget(master,data['u'],self.u,data).body.decode()
-  self.assertNotIn('st.avonera48.web.id/s/',body)
+  self.assertEqual((own['url'],own['direct'],own['ticket']['origin']),(s.THEATER_BASE+'/stream/live',True,s.SITE_HEADERS['Origin']))
+  self.assertIn('/auth/ticket?key=',own['ticket']['url'])
+  self.assertEqual((full['direct'],'ticket'in full),(False,False))
+  self.assertEqual(s.reveal(full['url'].rsplit('/',1)[1],self.u)['u'],s.THEATER_BASE+'/stream/live?t=abc')
+  s.db.execute('delete from entitlements')
+  with patch.object(s,'shows',shows),patch.object(s,'theater_status',live),patch.object(s,'theater_ticket',ticket):
+   with self.assertRaises(s.HTTPException):await s.playback('theater','show-1','',self.u)
  async def test_duplicate_live_ids_are_listed_once(self):
   raw={'lives':[{'notification_data_id':'idn-1','name':'A','type':'idn'},{'notification_data_id':'idn-1','name':'A','type':'idn'},{'notification_data_id':'sr-2','name':'B','type':'showroom'}]}
   async def upstream(path):return raw

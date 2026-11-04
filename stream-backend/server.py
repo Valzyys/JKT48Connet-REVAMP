@@ -128,12 +128,10 @@ def authorize(user, kind, target):
     if kind == 'theater' and not access(user, target): error(403, 'Show ini memerlukan tiket atau membership yang aktif.')
 
 
-def ticket(user, url, kind, target, expires=None, shared=False, direct_children=False):
-    """`shared`: playlist/segmen HLS (bukan file utuh dengan Range) yang boleh diambil sekali lalu dibagi antarpenonton.
-    `direct_children`: playlist ini saja yang lewat server; URI di dalamnya (varian, segmen) diambil pemutar langsung."""
+def ticket(user, url, kind, target, expires=None, shared=False):
+    """`shared`: playlist/segmen HLS (bukan file utuh dengan Range) yang boleh diambil sekali lalu dibagi antarpenonton."""
     data = {'u': url, 'user': user['id'], 'sid': user['sid'], 'kind': kind, 'target': target, 'exp': expires or now()+21600}
     if shared: data['h'] = 1
-    if direct_children: data['d'] = 1
     return BASE+'/api/app/media/'+cipher.encrypt(json.dumps(data).encode()).decode()
 
 
@@ -673,10 +671,15 @@ async def playback(kind:str,ident:str,via:str='',user=Depends(who)):
     # supaya cepat mulai dan tidak tersendat. Theater (berbayar) dan replay tetap lewat tiket media.
     # Replay: rekaman sudah publik di CDN api.jkt48connect.app (Cloudflare), jadi juga diputar langsung tanpa singgah.
     direct=kind in('live','recent')and via!='proxy'
-    # Theater: master lewat server (tiket & akses), varian/segmen langsung dari sumber kecuali via=proxy.
-    split=kind=='theater'and via!='proxy'
-    return {'title':title,'kind':kind,'items':[{'url':x['url']if direct else ticket(user,x['url'],kind,ident,shared=x['hls'],direct_children=split),
-                                                'hls':x['hls'],'direct':direct or split,'label':f"Bagian {i+1}"}for i,x in enumerate(files)]}
+    if kind=='theater'and via!='proxy':
+        # Theater langsung dari sumber: tiket sumber terikat ke IP peminta (varian/segmen dari IP lain = 403), jadi
+        # setelah akses diperiksa di sini, aplikasi sendiri yang meminta tiket (client key publik + origin yang
+        # diizinkan) lalu memutar master, varian, dan segmen langsung. Lewat server tiap potongan IVS ±1,5 detik
+        # tertunda ±1 detik dan video terus buffering. Gagal → aplikasi mengulang dengan via=proxy.
+        return {'title':title,'kind':kind,'items':[{'url':f'{THEATER_BASE}/stream/live','hls':True,'direct':True,'label':'Bagian 1',
+                'ticket':{'url':f'{THEATER_BASE}/auth/ticket?key={quote(THEATER_KEY,safe="")}','origin':SITE_HEADERS['Origin']}}]}
+    return {'title':title,'kind':kind,'items':[{'url':x['url']if direct else ticket(user,x['url'],kind,ident,shared=x['hls']),
+                                                'hls':x['hls'],'direct':direct,'label':f"Bagian {i+1}"}for i,x in enumerate(files)]}
 
 
 def is_playlist(content_type,url):
@@ -698,11 +701,6 @@ def retarget(body,url,user,data):
     if not bytes(body).lstrip().startswith(b'#EXTM3U'):error(503,'Playlist siaran belum tersedia.')
     text=bytes(body).decode();out=[]
     shared=bool(data.get('h'))
-    if data.get('d'):
-        # Master theater: tiket & akses sudah diperiksa di sini; varian/segmen (tanpa syarat Origin) diambil pemutar
-        # langsung dari sumber. Lewat server tiap potongan ±1,5 detik tertunda ±1 detik dan video terus buffering.
-        lines=[urljoin(url,l.strip())if l.strip()and not l.startswith('#')else re.sub(r'URI="([^"]+)"',lambda m:'URI="'+urljoin(url,m[1])+'"',l)for l in text.splitlines()]
-        return Response('\n'.join(lines)+'\n',media_type='application/vnd.apple.mpegurl',headers={'Cache-Control':'no-store'})
     for line in text.splitlines():
         if not line.startswith('#')and line.strip():line=ticket(user,urljoin(url,line.strip()),data['kind'],data['target'],data['exp'],shared)
         else:line=re.sub(r'URI="([^"]+)"',lambda m:'URI="'+ticket(user,urljoin(url,m[1]),data['kind'],data['target'],data['exp'],shared)+'"',line)
@@ -1009,8 +1007,8 @@ async def send_chat(room:str,data:Message,user=Depends(who)):
 
 
 # Versi aplikasi terbaru (ikut stream-mobile/app/build.gradle.kts). release.json di state hanya dipakai bila lebih baru.
-RELEASE={'version':'1.0.5','code':6,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.5.apk',
-         'notes':'Theater lebih lancar (video langsung dari sumber) dan pilihan resolusi video.'}
+RELEASE={'version':'1.0.6','code':7,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.6.apk',
+         'notes':'Theater lancar: video diputar langsung dari sumber, plus pilihan resolusi video.'}
 
 
 @app.get('/api/app/update')
