@@ -106,6 +106,19 @@ object StreamApi {
             JSONObject(conn.inputStream.bufferedReader().use { it.readText() }).optString("ticket").ifEmpty { throw Exception("Tiket theater kosong.") }
         } finally { conn.disconnect() }
     }
+    /** Isi playlist sumber (mis. master theater bertiket) dengan origin yang diizinkan; tanpa token sesi Stream. */
+    suspend fun sourceText(url: String, origin: String): String = withContext(Dispatchers.IO) {
+        require(url.startsWith("https://") && origin.startsWith("https://"))
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.connectTimeout = 10_000; conn.readTimeout = 15_000; conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Origin", origin)
+            conn.setRequestProperty("Referer", "$origin/")
+            val status = conn.responseCode
+            if (status != 200) throw Exception(if (status == 404) "Show belum dimulai." else "Siaran theater ditolak ($status).")
+            conn.inputStream.bufferedReader().use { it.readText() }.also { if (!it.trimStart().startsWith("#EXTM3U")) throw Exception("Playlist theater tidak valid.") }
+        } finally { conn.disconnect() }
+    }
     suspend fun bitmap(url: String) = withContext(Dispatchers.IO) {
         images.get(url)?.let { return@withContext it }
         require(url.startsWith("https://"))
