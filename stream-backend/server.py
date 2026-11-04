@@ -32,7 +32,7 @@ PLANS = {'weekly': ('Mingguan', 10000, 7), 'monthly': ('Bulanan', 20000, 30), 'y
 cache = {}; locks = defaultdict(asyncio.Lock); events = defaultdict(asyncio.Event)
 renewing = {}; known_images = set()
 media_cache = OrderedDict(); inflight = {}; relays = {}; following = OrderedDict()
-MEDIA_CACHE_BYTES = 96*1024*1024; MEDIA_ITEM_BYTES = 8*1024*1024
+MEDIA_CACHE_BYTES = 48*1024*1024; MEDIA_ITEM_BYTES = 8*1024*1024
 rates = defaultdict(deque)
 db = None; http = None; cipher = None
 
@@ -402,6 +402,14 @@ def picture(url):
     return image_url(url)or url
 
 
+def public_media(url):
+    """Upstream menulis URL media dengan host internalnya (api.jkt48connect.app:8443) karena server ini memanggilnya
+    lewat port itu; dari ponsel port tersebut tidak terjangkau, jadi dipakai host publik (443)."""
+    p=urlparse(url)
+    if (p.hostname or'').lower()=='api.jkt48connect.app'and p.port==8443:return p._replace(netloc='api.jkt48connect.app').geturl()
+    return url
+
+
 def recordings_of(raw):
     """Rekaman replay yang siap diputar, urut prioritas:
     1. `playback` (format baru: R2 atau HLS YouTube) berstatus ready,
@@ -409,7 +417,9 @@ def recordings_of(raw):
     3. `recordings[]` format lama (MP4 utuh lebih dulu)."""
     files=[];seen=set()
     def add(url,hls):
-        if isinstance(url,str)and url.startswith('https://')and url not in seen:seen.add(url);files.append({'url':url,'hls':hls})
+        if not isinstance(url,str)or not url.startswith('https://'):return
+        url=public_media(url)
+        if url not in seen:seen.add(url);files.append({'url':url,'hls':hls})
     playback=raw.get('playback')if isinstance(raw.get('playback'),dict)else{}
     if playback.get('status')=='ready':add(playback.get('stream_url')or playback.get('url'),True)
     if not files:
@@ -605,7 +615,8 @@ def on_stage(shows_):
 
 
 @app.post('/api/app/playback/{kind}/{ident}')
-async def playback(kind:str,ident:str,user=Depends(who)):
+async def playback(kind:str,ident:str,via:str='',user=Depends(who)):
+    """`via=proxy`: lewat server ini walau sumbernya publik (cadangan bila CDN sumber menolak perangkat/jaringan penonton)."""
     if not re.fullmatch(r'[\w♥-]{1,180}',ident):error(400,'ID siaran tidak valid.')
     authorize(user,kind,ident)
     files=[];title=''
@@ -643,7 +654,7 @@ async def playback(kind:str,ident:str,user=Depends(who)):
     # Live member Showroom/IDN adalah siaran publik: diputar langsung dari CDN-nya (tanpa singgah di server ini)
     # supaya cepat mulai dan tidak tersendat. Theater (berbayar) dan replay tetap lewat tiket media.
     # Replay: rekaman sudah publik di CDN api.jkt48connect.app (Cloudflare), jadi juga diputar langsung tanpa singgah.
-    direct=kind in('live','recent')
+    direct=kind in('live','recent')and via!='proxy'
     return {'title':title,'kind':kind,'items':[{'url':x['url']if direct else ticket(user,x['url'],kind,ident,shared=x['hls']),'hls':x['hls'],'label':f"Bagian {i+1}"}for i,x in enumerate(files)]}
 
 
@@ -701,7 +712,7 @@ async def load_media(url):
 
 async def shared_media(url):
     """HLS bertiket: playlist & segmen diambil sekali dari origin lalu dibagi antarpenonton
-    (playlist live 1 detik, segmen 2 menit, total maks. 96 MB). None = terlalu besar untuk disimpan."""
+    (playlist live 1 detik, segmen 2 menit, total maks. 48 MB supaya service tetap di bawah batas memorinya). None = terlalu besar untuk disimpan."""
     hit=media_cache.get(url)
     if hit and hit[0]>time.monotonic():
         media_cache.move_to_end(url);return hit
@@ -972,8 +983,8 @@ async def send_chat(room:str,data:Message,user=Depends(who)):
 
 
 # Versi aplikasi terbaru (ikut stream-mobile/app/build.gradle.kts). release.json di state hanya dipakai bila lebih baru.
-RELEASE={'version':'1.0.3','code':4,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.3.apk',
-         'notes':'Perbaikan aplikasi tertutup sendiri, pemutar live & replay lebih lancar, replay format baru, dan theater live.'}
+RELEASE={'version':'1.0.4','code':5,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.4.apk',
+         'notes':'Perbaikan video tidak bisa diputar: replay kembali jalan dan live otomatis pindah ke jalur cadangan bila sumber menolak.'}
 
 
 @app.get('/api/app/update')
