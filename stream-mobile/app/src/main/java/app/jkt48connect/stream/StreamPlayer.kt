@@ -78,7 +78,8 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /** Sumber video dari server Stream (URL tiket yang terikat sesi, diputar dengan header Authorization). */
-data class MediaSource(val url: String, val hls: Boolean, val live: Boolean = false, val liveSince: String = "")
+/** `origin`: header Origin/Referer untuk host sumber ini (master theater hanya dilayani untuk origin yang diizinkan). */
+data class MediaSource(val url: String, val hls: Boolean, val live: Boolean = false, val liveSince: String = "", val origin: String = "")
 
 /**
  * Jumlah pemutar yang sedang tampil. Selama ada, kaca bilah atas/tab bar hanya membiaskan latar ambient (diam),
@@ -184,8 +185,13 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
             .setConnectTimeoutMs(10_000)
             .setReadTimeoutMs(15_000)
         // Token sesi hanya dikirim ke server Stream. Live Showroom/IDN diputar langsung dari CDN publiknya tanpa token.
+        val sourceHost = Uri.parse(src.url).host
         val source = ResolvingDataSource.Factory(http) { spec ->
-            if (spec.uri.toString().startsWith(StreamApi.base + "/")) spec.withAdditionalHeaders(mapOf("Authorization" to "Bearer ${StreamApi.token}")) else spec
+            when {
+                spec.uri.toString().startsWith(StreamApi.base + "/") -> spec.withAdditionalHeaders(mapOf("Authorization" to "Bearer ${StreamApi.token}"))
+                src.origin.isNotEmpty() && spec.uri.host == sourceHost -> spec.withAdditionalHeaders(mapOf("Origin" to src.origin, "Referer" to "${src.origin}/"))
+                else -> spec
+            }
         }
         // Mulai setelah 2 detik video. Setelah tersendat tunggu 6 detik cadangan supaya tidak main-berhenti tiap beberapa detik.
         // Replay terus mengisi cadangan sampai 90 detik untuk menutup jaringan yang naik-turun.
@@ -668,6 +674,21 @@ fun PlayerScreen(item: JSONObject) {
     }
     val parts = data?.optJSONArray("items")?.rows().orEmpty()
     val current = parts.getOrNull(part)
+    // Theater langsung: perangkat meminta tiket sumber sendiri (tiket terikat ke IP peminta), lalu memutar langsung.
+    val sourceTicket = current?.optJSONObject("ticket")
+    var ticketFails by remember(id) { mutableIntStateOf(0) }
+    var ticketed by remember(current?.toString()) { mutableStateOf<String?>(null) }
+    LaunchedEffect(current?.toString()) {
+        if (sourceTicket != null) {
+            runCatching { StreamApi.sourceTicket(sourceTicket.optString("url"), sourceTicket.optString("origin")) }
+                .onSuccess { ticketed = current.optString("url") + "?t=" + Uri.encode(it) }
+                .onFailure {
+                    proxied = true
+                    attempt++
+                }
+        }
+    }
+    val playUrl = if (sourceTicket != null) ticketed else current?.optString("url")
     val title = item.optString("title")
     val label = when (kind) {
         "live" -> "Live · ${platformName(platform)}"
@@ -686,16 +707,19 @@ fun PlayerScreen(item: JSONObject) {
     Column(Modifier.fillMaxSize().padding(top = top)) {
         Box(Modifier.padding(horizontal = if (edge) 0.dp else 16.dp, vertical = 6.dp)) {
             when {
-                current != null -> key(current.optString("url")) {
+                current != null && playUrl != null -> key(playUrl) {
                     MediaPlayer(
-                        MediaSource(current.optString("url"), current.optBoolean("hls"), live = edge, liveSince = item.optString("date")),
+                        MediaSource(playUrl, current.optBoolean("hls"), live = edge, liveSince = item.optString("date"), origin = sourceTicket?.optString("origin").orEmpty()),
                         title = title,
                         label = label,
                         poster = item.optString("image"),
                         // Sumber tetap gagal setelah disambung ulang → minta tiket/URL baru (maks. 3 kali).
                         onFatal = {
                             // Sumber langsung (CDN, atau varian/segmen theater) gagal → minta ulang lewat server Stream.
-                            if (current.optBoolean("direct") || !current.optString("url").startsWith(StreamApi.base + "/")) proxied = true
+                            // Theater langsung: sekali gagal coba tiket baru dulu, gagal lagi baru lewat server.
+                            if (sourceTicket != null) {
+                                if (++ticketFails >= 2) proxied = true
+                            } else if (current.optBoolean("direct") || !current.optString("url").startsWith(StreamApi.base + "/")) proxied = true
                             if (attempt < 6) attempt++
                         },
                     )

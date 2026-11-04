@@ -90,6 +90,22 @@ object StreamApi {
     }
     suspend fun logout() { try { request("/auth/logout", "POST") } finally { save("") } }
     private val images = object : LruCache<String, android.graphics.Bitmap>(24 * 1024 * 1024) { override fun sizeOf(key: String, value: android.graphics.Bitmap) = value.byteCount }
+    /**
+     * Tiket sumber theater diminta langsung dari perangkat (tiket terikat ke IP peminta) dengan origin yang diizinkan.
+     * Token sesi Stream tidak pernah dikirim ke sumber.
+     */
+    suspend fun sourceTicket(url: String, origin: String): String = withContext(Dispatchers.IO) {
+        require(url.startsWith("https://") && origin.startsWith("https://"))
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.connectTimeout = 10_000; conn.readTimeout = 15_000; conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Origin", origin)
+            conn.setRequestProperty("Referer", "$origin/")
+            val status = conn.responseCode
+            if (status != 200) throw Exception("Tiket theater ditolak ($status).")
+            JSONObject(conn.inputStream.bufferedReader().use { it.readText() }).optString("ticket").ifEmpty { throw Exception("Tiket theater kosong.") }
+        } finally { conn.disconnect() }
+    }
     suspend fun bitmap(url: String) = withContext(Dispatchers.IO) {
         images.get(url)?.let { return@withContext it }
         require(url.startsWith("https://"))
