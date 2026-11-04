@@ -60,6 +60,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -78,8 +79,21 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /** Sumber video dari server Stream (URL tiket yang terikat sesi, diputar dengan header Authorization). */
-/** `origin`: header Origin/Referer untuk host sumber ini (master theater hanya dilayani untuk origin yang diizinkan). */
-data class MediaSource(val url: String, val hls: Boolean, val live: Boolean = false, val liveSince: String = "", val origin: String = "")
+data class MediaSource(val url: String, val hls: Boolean, val live: Boolean = false, val liveSince: String = "")
+
+/** Pilihan resolusi untuk halaman tonton (ditampilkan di atas judul, bukan di atas video); diisi oleh pemutar. */
+@Stable
+class QualityControl {
+    /** Tinggi resolusi yang tersedia (mis. 1080, 720, 480), pilihan penonton (0 = otomatis), dan yang sedang tampil. */
+    var options by mutableStateOf<List<Int>>(emptyList())
+    var chosen by mutableIntStateOf(0)
+    var showing by mutableIntStateOf(0)
+    internal var apply: (Int) -> Unit = {}
+    fun pick(height: Int) {
+        chosen = height
+        apply(height)
+    }
+}
 
 /**
  * Jumlah pemutar yang sedang tampil. Selama ada, kaca bilah atas/tab bar hanya membiaskan latar ambient (diam),
@@ -110,7 +124,6 @@ private class PlayerUi {
     var qualities by mutableStateOf<List<Int>>(emptyList())
     var quality by mutableIntStateOf(0)
     var showing by mutableIntStateOf(0)
-    var qualityMenu by mutableStateOf(false)
 
     /** Kunci resolusi tertentu, atau 0 untuk kembali ke pemilihan otomatis sesuai kecepatan jaringan. */
     fun pickQuality(height: Int) {
@@ -123,7 +136,6 @@ private class PlayerUi {
         }
         p.trackSelectionParameters = params.build()
         quality = height
-        qualityMenu = false
         wake()
     }
 
@@ -175,9 +187,13 @@ private class PlayerUi {
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifier = Modifier, poster: String = "", onFatal: ((String) -> Unit)? = null) {
+fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifier = Modifier, poster: String = "", quality: QualityControl? = null, onFatal: ((String) -> Unit)? = null) {
     val context = LocalContext.current
     val ui = remember { PlayerUi() }
+    DisposableEffect(quality) {
+        quality?.apply = { ui.pickQuality(it) }
+        onDispose { quality?.apply = {} }
+    }
     LaunchedEffect(Unit) {
         val scope = this
         val http = DefaultHttpDataSource.Factory()
@@ -185,13 +201,8 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
             .setConnectTimeoutMs(10_000)
             .setReadTimeoutMs(15_000)
         // Token sesi hanya dikirim ke server Stream. Live Showroom/IDN diputar langsung dari CDN publiknya tanpa token.
-        val sourceHost = Uri.parse(src.url).host
         val source = ResolvingDataSource.Factory(http) { spec ->
-            when {
-                spec.uri.toString().startsWith(StreamApi.base + "/") -> spec.withAdditionalHeaders(mapOf("Authorization" to "Bearer ${StreamApi.token}"))
-                src.origin.isNotEmpty() && spec.uri.host == sourceHost -> spec.withAdditionalHeaders(mapOf("Origin" to src.origin, "Referer" to "${src.origin}/"))
-                else -> spec
-            }
+            if (spec.uri.toString().startsWith(StreamApi.base + "/")) spec.withAdditionalHeaders(mapOf("Authorization" to "Bearer ${StreamApi.token}")) else spec
         }
         // Mulai setelah 2 detik video. Setelah tersendat tunggu 6 detik cadangan supaya tidak main-berhenti tiap beberapa detik.
         // Replay terus mengisi cadangan sampai 90 detik untuk menutup jaringan yang naik-turun.
@@ -207,7 +218,8 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
             .setTrackSelector(selector)
             .setBandwidthMeter(meter)
             // Segmen/playlist yang gagal dimuat dicoba ulang lebih banyak sebelum dianggap error.
-            .setMediaSourceFactory(DefaultMediaSourceFactory(source).setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(8)))
+            // DefaultDataSource: http(s) lewat `source`, plus `data:` untuk master theater yang sudah diambil aplikasi.
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, source)).setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(8)))
             .setLoadControl(load)
             .setHandleAudioBecomingNoisy(true)
             .build()
@@ -274,6 +286,7 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
                 if (videoSize.width > 0 && videoSize.height > 0) {
                     ui.ratio = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
                     ui.showing = videoSize.height
+                    quality?.showing = videoSize.height
                 }
             }
 
@@ -281,6 +294,7 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
                 ui.qualities = tracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }
                     .flatMap { g -> (0 until g.length).filter { g.isTrackSupported(it) }.map { g.getTrackFormat(it).height } }
                     .filter { it > 0 }.distinct().sortedDescending()
+                quality?.options = ui.qualities
             }
         })
         exo.setMediaItem(item.build())
@@ -290,7 +304,7 @@ fun MediaPlayer(src: MediaSource, title: String, label: String, modifier: Modifi
         while (true) {
             // Posisi hanya dibaca saat kontrol tampil: tidak ada rekomposisi tiap 250 ms selama menonton.
             if (ui.dragging == null && (ui.controls || !ui.playing)) ui.position = exo.currentPosition
-            if (exo.isPlaying && !ui.qualityMenu && System.currentTimeMillis() - ui.lastTouch > 3000) ui.controls = false
+            if (exo.isPlaying && System.currentTimeMillis() - ui.lastTouch > 3000) ui.controls = false
             delay(250)
         }
     }
@@ -456,40 +470,10 @@ private fun PlayerControls(ui: PlayerUi, src: MediaSource, title: String, label:
                 Txt(title, AppText.body(if (fullscreen) 16.sp else 13.sp, Color.White, 800), maxLines = 1)
                 Txt(label.uppercase(), AppText.micro(Color.White.copy(alpha = 0.6f), 8.5.sp), maxLines = 1)
             }
-            if (ui.qualities.size > 1) {
-                val shown = if (ui.showing > 0) "${ui.showing}p" else "Auto"
-                ControlPill(if (ui.quality == 0) "Auto · $shown" else "${ui.quality}p", small) {
-                    ui.qualityMenu = !ui.qualityMenu
-                    ui.wake()
-                }
-            }
             if (!src.live) ControlPill(if (ui.speed % 1f == 0f) "${ui.speed.toInt()}×" else "${ui.speed}×".replace('.', ','), small) { ui.nextSpeed() }
             RoundButton(if (fullscreen) StreamIcons.FullscreenExit else StreamIcons.Fullscreen, small, if (fullscreen) "Keluar layar penuh" else "Layar penuh") {
                 ui.fullscreen = !ui.fullscreen
                 ui.wake()
-            }
-        }
-        // Pilihan resolusi: Otomatis (sesuai kecepatan jaringan) atau kunci satu resolusi.
-        if (ui.qualityMenu) {
-            Column(
-                Modifier.align(Alignment.TopEnd)
-                    .padding(top = small + if (fullscreen) 26.dp else 16.dp, end = if (fullscreen) 18.dp else 10.dp)
-                    .widthIn(min = 132.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.Black.copy(alpha = 0.85f))
-                    .padding(vertical = 6.dp),
-            ) {
-                Txt("RESOLUSI", AppText.micro(Color.White.copy(alpha = 0.55f), 8.5.sp), Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
-                (listOf(0) + ui.qualities).forEach { h ->
-                    val chosen = ui.quality == h
-                    Row(
-                        Modifier.fillMaxWidth().pressable({ ui.pickQuality(h) }).padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Txt(if (h == 0) "Otomatis" else "${h}p", AppText.body(13.sp, Color.White, if (chosen) 800 else 500), Modifier.weight(1f))
-                        if (chosen) Box(Modifier.size(7.dp).background(Color(0xFFE1243A), CircleShape))
-                    }
-                }
             }
         }
         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (fullscreen) 36.dp else 22.dp)) {
@@ -680,8 +664,17 @@ fun PlayerScreen(item: JSONObject) {
     var ticketed by remember(current?.toString()) { mutableStateOf<String?>(null) }
     LaunchedEffect(current?.toString()) {
         if (sourceTicket != null) {
-            runCatching { StreamApi.sourceTicket(sourceTicket.optString("url"), sourceTicket.optString("origin")) }
-                .onSuccess { ticketed = current.optString("url") + "?t=" + Uri.encode(it) }
+            // Tiket sumber hanya berlaku SEKALI (pemakaian kedua 403). Master diambil sekali di sini lalu diputar dari
+            // memori (data:), jadi pemutar bisa menyambung ulang tanpa meminta master lagi; varian & segmen tetap
+            // langsung dari sumber. Dulu tiap sambung ulang memakai tiket yang sama → 403 → pemutar dibuat ulang.
+            runCatching {
+                val origin = sourceTicket.optString("origin")
+                val url = current.optString("url") + "?t=" + Uri.encode(StreamApi.sourceTicket(sourceTicket.optString("url"), origin))
+                val master = StreamApi.sourceText(url, origin)
+                "data:application/vnd.apple.mpegurl;base64," +
+                    android.util.Base64.encodeToString(absolutePlaylist(master, url).toByteArray(), android.util.Base64.NO_WRAP)
+            }
+                .onSuccess { ticketed = it }
                 .onFailure {
                     proxied = true
                     attempt++
@@ -689,6 +682,7 @@ fun PlayerScreen(item: JSONObject) {
         }
     }
     val playUrl = if (sourceTicket != null) ticketed else current?.optString("url")
+    val quality = remember(id) { QualityControl() }
     val title = item.optString("title")
     val label = when (kind) {
         "live" -> "Live · ${platformName(platform)}"
@@ -709,10 +703,11 @@ fun PlayerScreen(item: JSONObject) {
             when {
                 current != null && playUrl != null -> key(playUrl) {
                     MediaPlayer(
-                        MediaSource(playUrl, current.optBoolean("hls"), live = edge, liveSince = item.optString("date"), origin = sourceTicket?.optString("origin").orEmpty()),
+                        MediaSource(playUrl, current.optBoolean("hls"), live = edge, liveSince = item.optString("date")),
                         title = title,
                         label = label,
                         poster = item.optString("image"),
+                        quality = quality,
                         // Sumber tetap gagal setelah disambung ulang → minta tiket/URL baru (maks. 3 kali).
                         onFatal = {
                             // Sumber langsung (CDN, atau varian/segmen theater) gagal → minta ulang lewat server Stream.
@@ -744,11 +739,12 @@ fun PlayerScreen(item: JSONObject) {
             }
         }
         if (kind == "theater") {
-            Chat(id, title, label, item.optJSONArray("lineup")?.rows().orEmpty(), parts.size, part, { part = it }, Modifier.weight(1f), bottom)
+            Chat(id, title, label, item.optJSONArray("lineup")?.rows().orEmpty(), parts.size, part, { part = it }, Modifier.weight(1f), bottom, quality)
         } else if (kind == "live") {
-            LiveRoom(item, label, others, Modifier.weight(1f), bottom)
+            LiveRoom(item, label, others, Modifier.weight(1f), bottom, quality)
         } else {
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = bottom + 24.dp)) {
+                item { QualityPicker(quality, Modifier.padding(top = 10.dp)) }
                 item { NowPlaying(item, label) }
                 if (parts.size > 1) item { PartPicker(parts.size, part) { part = it } }
                 item {
@@ -838,7 +834,7 @@ private fun PartPicker(count: Int, selected: Int, onSelect: (Int) -> Unit) {
  * tampil seketika di semua penonton. Pesan sendiri langsung ditambahkan dari balasan server (tanpa menunggu poll).
  */
 @Composable
-private fun Chat(room: String, title: String, label: String, lineup: List<JSONObject>, parts: Int, part: Int, onPart: (Int) -> Unit, modifier: Modifier, bottom: Dp) {
+private fun Chat(room: String, title: String, label: String, lineup: List<JSONObject>, parts: Int, part: Int, onPart: (Int) -> Unit, modifier: Modifier, bottom: Dp, quality: QualityControl) {
     val c = LocalColors.current
     val nav = LocalNav.current
     var rows by remember(room) { mutableStateOf<List<JSONObject>>(emptyList()) }
@@ -886,6 +882,7 @@ private fun Chat(room: String, title: String, label: String, lineup: List<JSONOb
     }
     Column(modifier) {
         LazyColumn(Modifier.weight(1f), state = state, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item { QualityPicker(quality) }
             item { NowPlaying(JSONObject().put("kind", "theater").put("title", title).put("isLive", true), label) }
             if (parts > 1) item { PartPicker(parts, part, onPart) }
             if (lineup.isNotEmpty()) item {
@@ -927,7 +924,13 @@ private fun Chat(room: String, title: String, label: String, lineup: List<JSONOb
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(Modifier.weight(1f).glassCard(26.dp).padding(horizontal = 16.dp, vertical = 14.dp)) {
+            // Kolom pesan liquid glass (kapsul kaca seperti iOS), tombol kirim kaca merah di sebelahnya.
+            Box(
+                Modifier.weight(1f).height(50.dp)
+                    .glass(LocalBackdrop.current, com.kyant.shapes.Capsule(), glassFill(), blur = 6.dp, lensHeight = 10.dp, lensAmount = 20.dp)
+                    .padding(horizontal = 18.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
                 if (text.isEmpty()) Txt("Tulis pesan…", AppText.body(15.sp, c.inkSoft.copy(alpha = 0.7f)), maxLines = 1)
                 androidx.compose.foundation.text.BasicTextField(
                     value = text,
@@ -938,7 +941,7 @@ private fun Chat(room: String, title: String, label: String, lineup: List<JSONOb
                     cursorBrush = androidx.compose.ui.graphics.SolidColor(c.brand),
                 )
             }
-            LiquidIconButton(StreamIcons.Send, { send() }, size = 50.dp, iconSize = 20.dp, tint = c.brand, contentDescription = "Kirim")
+            LiquidIconButton(StreamIcons.Send, { send() }, size = 50.dp, iconSize = 20.dp, tint = c.brand, iconColor = Color.White, contentDescription = "Kirim")
         }
     }
 }
@@ -948,7 +951,7 @@ private fun Chat(room: String, title: String, label: String, lineup: List<JSONOb
  * Komentar datang dari relay JKT48Connect lewat server Stream (long-poll yang bangun begitu komentar masuk).
  */
 @Composable
-private fun LiveRoom(item: JSONObject, label: String, others: List<JSONObject>, modifier: Modifier, bottom: Dp) {
+private fun LiveRoom(item: JSONObject, label: String, others: List<JSONObject>, modifier: Modifier, bottom: Dp, quality: QualityControl) {
     val c = LocalColors.current
     val nav = LocalNav.current
     val id = item.optString("id")
@@ -984,6 +987,7 @@ private fun LiveRoom(item: JSONObject, label: String, others: List<JSONObject>, 
         if (rows.isNotEmpty() && last >= state.layoutInfo.totalItemsCount - 4) state.animateScrollToItem(rows.size - 1)
     }
     Column(modifier.padding(horizontal = 16.dp)) {
+        QualityPicker(quality, Modifier.padding(top = 8.dp))
         NowPlaying(item, label)
         if (others.isNotEmpty()) {
             VGap(12.dp)
@@ -1061,10 +1065,15 @@ private fun ChatBubble(m: JSONObject) {
     val c = LocalColors.current
     val mine = m.optBoolean("mine")
     val time = m.optLong("created").takeIf { it > 0 }?.let { fmtWib(java.time.Instant.ofEpochSecond(it).toString(), "HH.mm") }.orEmpty()
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Bottom) {
+        // Foto profil penonton (unggahan sendiri); tanpa foto → inisial.
+        if (!mine) {
+            Picture(m.optString("avatar"), Modifier.size(30.dp).clip(CircleShape), fallback = m.optString("name"))
+            Gap(8.dp)
+        }
         Column(
             Modifier
-                .widthIn(max = 300.dp)
+                .widthIn(max = 280.dp)
                 .then(if (mine) Modifier.clip(RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)).background(c.brandGradient) else Modifier.glassCard(20.dp))
                 .padding(horizontal = 14.dp, vertical = 9.dp),
             horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
@@ -1078,6 +1087,42 @@ private fun ChatBubble(m: JSONObject) {
             }
             VGap(2.dp)
             Txt(m.optString("message"), AppText.body(14.5.sp, if (mine) Color.White else c.ink))
+        }
+    }
+}
+
+/** Pilihan resolusi di atas judul: segmented control kaca (Auto + resolusi stream), seperti iOS. */
+@Composable
+private fun QualityPicker(quality: QualityControl, modifier: Modifier = Modifier) {
+    if (quality.options.size < 2) return
+    val c = LocalColors.current
+    val heights = listOf(0) + quality.options
+    Column(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Micro("Resolusi", Modifier.weight(1f), c.inkSoft)
+            if (quality.showing > 0) Micro("Tampil ${quality.showing}p", color = c.brand)
+        }
+        VGap(8.dp)
+        LiquidTabs(
+            items = heights.map { TabItem(if (it == 0) "Auto" else "${it}p") },
+            selectedIndex = heights.indexOf(quality.chosen).coerceAtLeast(0),
+            onSelected = { quality.pick(heights[it]) },
+            height = 40.dp,
+            segmented = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        VGap(6.dp)
+    }
+}
+
+/** URI relatif di playlist dijadikan absolut terhadap `base` (playlist diputar dari memori). */
+internal fun absolutePlaylist(text: String, base: String): String {
+    val root = java.net.URI(base)
+    return text.lines().joinToString("\n") { line ->
+        when {
+            line.isBlank() -> line
+            !line.startsWith("#") -> root.resolve(line.trim()).toString()
+            else -> Regex("URI=\"([^\"]+)\"").replace(line) { "URI=\"" + root.resolve(it.groupValues[1]) + "\"" }
         }
     }
 }

@@ -21,8 +21,8 @@ android {
         applicationId = "app.jkt48connect.stream"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 8
+        versionName = "1.0.7"
         buildConfigField("String", "API_BASE", "\"${apiBase.trimEnd('/')}\"")
         androidResources.localeFilters += listOf("in", "en")
     }

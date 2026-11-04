@@ -981,8 +981,9 @@ async def chat(room:str,after:int=0,wait:int=0,user=Depends(who)):
     authorize(user,'theater',room)
     def messages():
         # Penonton baru (after=0) langsung mendapat 50 pesan terakhir, bukan pesan tertua.
-        if after<=0:rows=reversed(db.execute('SELECT * FROM chat WHERE room=? ORDER BY id DESC LIMIT 50',(room,)).fetchall())
-        else:rows=db.execute('SELECT * FROM chat WHERE room=? AND id>? ORDER BY id LIMIT 100',(room,after))
+        # Foto profil pengirim ikut (users.avatar), supaya obrolan menampilkan foto asli penonton.
+        if after<=0:rows=reversed(db.execute(CHAT_ROWS+' WHERE c.room=? ORDER BY c.id DESC LIMIT 50',(room,)).fetchall())
+        else:rows=db.execute(CHAT_ROWS+' WHERE c.room=? AND c.id>? ORDER BY c.id LIMIT 100',(room,after))
         return [chat_item(r,user)for r in rows]
     event=events[room];event.clear();items=messages()
     if not items and wait:
@@ -990,9 +991,14 @@ async def chat(room:str,after:int=0,wait:int=0,user=Depends(who)):
         except asyncio.TimeoutError:pass
         items=messages()
     return {'items':items}
+CHAT_ROWS='SELECT c.*,u.avatar AS avatar FROM chat c LEFT JOIN users u ON u.id=c.user_id'
+
+
 def chat_item(row,user):
     # user_id tidak dikirim ke klien; cukup penanda apakah pesan ini milik penonton yang meminta.
-    return {'id':row['id'],'name':row['name'],'message':row['message'],'created':row['created'],'mine':row['user_id']==user['id']}
+    avatar=row['avatar']if'avatar'in row.keys()else''
+    return {'id':row['id'],'name':row['name'],'message':row['message'],'created':row['created'],'mine':row['user_id']==user['id'],
+            'avatar':avatar if isinstance(avatar,str)and avatar.startswith('https://')else''}
 @app.post('/api/app/chat/{room}')
 async def send_chat(room:str,data:Message,user=Depends(who)):
     if not re.fullmatch(r'[\w-]{1,180}',room):error(400,'Ruang tidak valid.')
@@ -1002,13 +1008,13 @@ async def send_chat(room:str,data:Message,user=Depends(who)):
     cur=db.execute('INSERT INTO chat(room,user_id,name,message,created) VALUES(?,?,?,?,?)',(room,user['id'],user['name'],text,now()));db.commit()
     # Bangunkan semua long-poll di ruang ini: pesan langsung tampil ke penonton lain.
     events[room].set()
-    row=db.execute('SELECT * FROM chat WHERE id=?',(cur.lastrowid,)).fetchone()
+    row=db.execute(CHAT_ROWS+' WHERE c.id=?',(cur.lastrowid,)).fetchone()
     return {'ok':True,'item':chat_item(row,user)}
 
 
 # Versi aplikasi terbaru (ikut stream-mobile/app/build.gradle.kts). release.json di state hanya dipakai bila lebih baru.
-RELEASE={'version':'1.0.6','code':7,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.6.apk',
-         'notes':'Theater lancar: video diputar langsung dari sumber, plus pilihan resolusi video.'}
+RELEASE={'version':'1.0.7','code':8,'apk':'https://jkt48connect.app/download/JKT48Connect-Stream-V1.0.7.apk',
+         'notes':'Theater tidak lagi putus-sambung, pilihan resolusi di atas judul, foto profil di obrolan, kolom komentar kaca.'}
 
 
 @app.get('/api/app/update')

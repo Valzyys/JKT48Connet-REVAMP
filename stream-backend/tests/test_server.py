@@ -95,6 +95,15 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((sent['item']['message'],sent['item']['mine']),('Halo semua',True))
   self.assertEqual([(m['message'],m['mine'])for m in got['items']],[('Halo semua',False)])
   self.assertNotIn('user_id',got['items'][0])
+ async def test_chat_items_carry_the_sender_profile_photo(self):
+  photo=s.AVATAR_URL+'a'*32
+  s.db.execute("INSERT INTO users(id,email,password_hash,name,avatar) VALUES('u1','a@b.co','','Test',?)",(photo,))
+  s.db.execute('insert into entitlements values(?,?,?,?,?,?)',('e1','u1','membership','*',0,s.now()+3600))
+  sent=await s.send_chat('show',s.Message(message='Halo'),self.u)
+  got=await s.chat('show',0,0,self.u)
+  self.assertEqual((sent['item']['avatar'],got['items'][-1]['avatar']),(photo,photo))
+  s.db.execute("UPDATE users SET avatar='http://tidak-aman/x.jpg' WHERE id='u1'")
+  self.assertEqual((await s.chat('show',0,0,self.u))['items'][-1]['avatar'],'')
  async def test_new_viewer_gets_latest_chat_messages(self):
   for i in range(60):s.db.execute('insert into chat(room,user_id,name,message,created) values(?,?,?,?,?)',('show','u9','X',f'pesan {i}',s.now()))
   s.db.execute('insert into entitlements values(?,?,?,?,?,?)',('e1','u1','membership','*',0,s.now()+3600))
