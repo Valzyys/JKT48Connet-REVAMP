@@ -34,7 +34,7 @@ renewing = {}; known_images = set()
 media_cache = OrderedDict(); inflight = {}; relays = {}; following = OrderedDict()
 MEDIA_CACHE_BYTES = 48*1024*1024; MEDIA_ITEM_BYTES = 8*1024*1024
 rates = defaultdict(deque)
-db = None; http = None; cipher = None
+db = None; http = None; plain_http = None; cipher = None
 
 
 def now(): return int(time.time())
@@ -156,16 +156,22 @@ THEATER_KEY = os.environ.get('STREAM_THEATER_KEY', 'ck_299ba35d1b93e6776bc318a79
 SITE_HEADERS = {'Origin': 'https://jkt48connect.app', 'Referer': 'https://jkt48connect.app/'}
 
 
+def is_theater(url):
+    host = (urlparse(url).hostname or '').lower()
+    return host == 'avonera48.web.id' or host.endswith('.avonera48.web.id')
+
+
 def source_headers(url, headers):
     """Sumber theater hanya melayani permintaan dari origin jkt48connect.app (playlist, segmen, key)."""
-    host = (urlparse(url).hostname or '').lower()
-    return {**SITE_HEADERS, **headers} if host == 'avonera48.web.id' or host.endswith('.avonera48.web.id') else headers
+    return {**SITE_HEADERS, **headers} if is_theater(url) else headers
 
 
 async def fetch_media(url, headers):
     for _ in range(4):
         if not allowed(url): error(403, 'Sumber media tidak diizinkan.')
-        r = await http.get(url, headers=source_headers(url, headers), stream=True, timeout=30, allow_redirects=False)
+        # Sumber theater menolak (403) klien yang meniru Chrome; pakai klien HTTP biasa untuk host itu.
+        client = plain_http if is_theater(url) else http
+        r = await client.get(url, headers=source_headers(url, headers), stream=True, timeout=30, allow_redirects=False)
         if r.status_code not in (301,302,303,307,308): return r, url
         following = urljoin(url, r.headers.get('Location','')); await r.aclose(); url = following
     error(502, 'Sumber media sedang bermasalah.')
@@ -173,7 +179,7 @@ async def fetch_media(url, headers):
 
 @asynccontextmanager
 async def lifespan(app):
-    global db,http,cipher
+    global db,http,plain_http,cipher
     ROOT.mkdir(mode=0o700,parents=True,exist_ok=True)
     db = open_db(ROOT/'stream.sqlite')
     key = ROOT/'media.key'
@@ -182,8 +188,8 @@ async def lifespan(app):
         with os.fdopen(fd,'wb') as f: f.write(Fernet.generate_key())
     cipher = Fernet(key.read_bytes())
     # Banyak penonton = banyak segmen yang dialirkan bersamaan; pool kecil membuat permintaan antre (video lambat mulai).
-    async with AsyncSession(max_clients=64, impersonate='chrome') as client:
-        http = client
+    async with AsyncSession(max_clients=64, impersonate='chrome') as client, AsyncSession(max_clients=32) as plain:
+        http = client; plain_http = plain
         task = asyncio.create_task(payment_loop())
         try: yield
         finally:
@@ -584,7 +590,7 @@ async def live_comments(ident:str,after:int=0,wait:int=0,user=Depends(who)):
 
 async def theater_ticket():
     """URL master m3u8 channel live theater dengan tiket baru (tiket dipakai sekali)."""
-    try:r=await http.get(f'{THEATER_BASE}/auth/ticket?key={quote(THEATER_KEY,safe="")}',headers=SITE_HEADERS,timeout=15,allow_redirects=False)
+    try:r=await plain_http.get(f'{THEATER_BASE}/auth/ticket?key={quote(THEATER_KEY,safe="")}',headers=SITE_HEADERS,timeout=15,allow_redirects=False)
     except Exception:error(502,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
     ticket=str((r.json()if r.status_code==200 else{}).get('ticket')or'')
     if not re.fullmatch(r'[0-9A-Za-z_-]{16,2048}',ticket):error(502,'Sumber theater belum bisa dihubungi. Coba lagi sebentar.')
@@ -595,7 +601,7 @@ async def theater_status(fresh=False):
     """'live' (master m3u8 tersedia), 'off' (404: belum mulai) atau 'error'. Disimpan 15 detik (fresh: 5 detik)."""
     async def load():
         try:
-            r=await http.get(await theater_ticket(),headers=SITE_HEADERS,timeout=15,allow_redirects=False)
+            r=await plain_http.get(await theater_ticket(),headers=SITE_HEADERS,timeout=15,allow_redirects=False)
             return 'live'if r.status_code==200 else'off'if r.status_code==404 else'error'
         except Exception:return'error'
     return await cached('theater-status-fresh'if fresh else'theater-status',5 if fresh else 15,load)
