@@ -77,7 +77,7 @@ object StreamApi {
                 when (status) {
                     400, 422 -> "Data yang dikirim belum lengkap atau tidak valid. Periksa kembali isianmu."
                     429 -> "Terlalu banyak percobaan. Coba beberapa saat lagi."
-                    in 500..599 -> "Server sedang bermasalah. Coba lagi sebentar."
+                    in 500..599 -> "Server sedang bermasalah ($status). Coba lagi sebentar."
                     else -> "Permintaan belum berhasil ($status)."
                 }
             })

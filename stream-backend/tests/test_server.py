@@ -143,7 +143,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   raw={'room_info':{'name':'M'},'recordings':[{'url':'https://api.jkt48connect.app/r/1.mp4','stream_url':'https://api.jkt48connect.app/r/1.m3u8'},{'stream_url':'https://api.jkt48connect.app/r/2.m3u8'}]}
   async def upstream(path):return raw
   with patch.object(s,'upstream',upstream):
-   items=(await s.playback('recent','r1',self.u))['items']
+   items=(await s.playback('recent','r1','',self.u))['items']
   self.assertEqual([(i['url'],i['hls'])for i in items],[('https://api.jkt48connect.app/r/1.mp4',False),('https://api.jkt48connect.app/r/2.m3u8',True)])
  async def test_replay_reads_new_playback_and_youtube_formats(self):
   r2='https://api.jkt48connect.app/media/live/idn-1/recording.m3u8'
@@ -158,9 +158,20 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(s.recordings_of({'playback':{'status':'processing'}}),[])
   async def upstream(path):return new
   with patch.object(s,'upstream',upstream):
-   res=await s.playback('recent','idn-1',self.u)
+   res=await s.playback('recent','idn-1','',self.u)
    detail=await s.recent_detail('idn-1',self.u)
   self.assertEqual((res['title'],res['items'][0]['url'],detail['recordingCount']),('Fahira Putri',r2,1))
+ async def test_replay_urls_on_internal_port_use_public_host_and_proxy_fallback(self):
+  raw={'member':{'name':'Carissa'},'playback':{'status':'ready','stream_url':'https://api.jkt48connect.app:8443/media/live/idn-1/recording.m3u8'}}
+  self.assertEqual(s.recordings_of(raw)[0]['url'],'https://api.jkt48connect.app/media/live/idn-1/recording.m3u8')
+  self.assertEqual(s.public_media('https://cdn.example/x.m3u8'),'https://cdn.example/x.m3u8')
+  async def upstream(path):return raw
+  with patch.object(s,'upstream',upstream):
+   direct=(await s.playback('recent','idn-1','',self.u))['items'][0]['url']
+   proxied=(await s.playback('recent','idn-1','proxy',self.u))['items'][0]['url']
+  self.assertEqual(direct,'https://api.jkt48connect.app/media/live/idn-1/recording.m3u8')
+  data=s.reveal(proxied.rsplit('/',1)[1],self.u)
+  self.assertEqual((data['u'],data.get('h')),(direct,1))
  async def test_theater_not_live_yet_and_live_channel(self):
   s.cache.clear()
   s.db.execute('insert into entitlements values(?,?,?,?,?,?)',('e','u1','membership','*',0,s.now()+3600))
@@ -171,11 +182,11 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
    s.cache.clear()
    async def status(fresh=False,state=state):return state
    with patch.object(s,'shows',shows),patch.object(s,'theater_status',status),patch.object(s,'theater_ticket',ticket):
-    with self.assertRaises(s.HTTPException)as e:await s.playback('theater','show-1',self.u)
+    with self.assertRaises(s.HTTPException)as e:await s.playback('theater','show-1','',self.u)
    self.assertEqual(e.exception.status_code,expect)
   async def live(fresh=False):return'live'
   with patch.object(s,'shows',shows),patch.object(s,'theater_status',live),patch.object(s,'theater_ticket',ticket):
-   res=await s.playback('theater','show-1',self.u)
+   res=await s.playback('theater','show-1','',self.u)
   data=s.reveal(res['items'][0]['url'].rsplit('/',1)[1],self.u)
   self.assertEqual((data['u'],data.get('h')),(s.THEATER_BASE+'/stream/live?t=abc',1))
   self.assertEqual(s.source_headers(s.THEATER_BASE+'/x.ts',{'Range':'bytes=0-'})['Origin'],'https://jkt48connect.app')

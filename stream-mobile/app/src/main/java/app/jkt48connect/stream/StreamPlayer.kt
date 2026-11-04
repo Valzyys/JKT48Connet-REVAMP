@@ -586,10 +586,12 @@ fun PlayerScreen(item: JSONObject) {
     var data by remember(id) { mutableStateOf<JSONObject?>(null) }
     var error by remember(id) { mutableStateOf("") }
     var attempt by remember(id) { mutableIntStateOf(0) }
+    // Sumber publik (CDN live/replay) gagal di perangkat/jaringan ini → minta ulang lewat server Stream.
+    var proxied by remember(id) { mutableStateOf(false) }
     var part by remember(id) { mutableIntStateOf(0) }
     LaunchedEffect(id, attempt) {
         error = ""
-        runCatching { StreamApi.request("/playback/$kind/${Uri.encode(id)}", "POST") }
+        runCatching { StreamApi.request("/playback/$kind/${Uri.encode(id)}" + if (proxied) "?via=proxy" else "", "POST") }
             .onSuccess { data = it }
             .onFailure {
                 data = null
@@ -630,7 +632,10 @@ fun PlayerScreen(item: JSONObject) {
                         label = label,
                         poster = item.optString("image"),
                         // Sumber tetap gagal setelah disambung ulang → minta tiket/URL baru (maks. 3 kali).
-                        onFatal = { if (attempt < 6) attempt++ },
+                        onFatal = {
+                            if (!current.optString("url").startsWith(StreamApi.base + "/")) proxied = true
+                            if (attempt < 6) attempt++
+                        },
                     )
                 }
                 error.isNotEmpty() -> Column(Modifier.padding(horizontal = if (edge) 16.dp else 0.dp).fillMaxWidth().glassCard(22.dp).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
