@@ -28,19 +28,11 @@ const SUGGEST = [
   { icon: Layers, title: "Kartu koleksi", prompt: "Buka pack kartu koleksi holografis 5 member JKT48 untuk hari ini." },
 ];
 
-const LIMITS: [string, string][] = [
-  ["20", "request inferensi / menit"],
-  ["500", "request / hari (UTC)"],
-  ["1 MiB", "ukuran body maksimal"],
-  ["16384", "token output maksimal"],
-  ["300 dtk", "deadline upstream"],
-];
-
 const STATUS: [string, string][] = [
   ["400", "Input atau fitur tidak didukung"],
   ["401", "API key tidak valid atau sudah dicabut"],
   ["413", "Body terlalu besar, ringkas konteks"],
-  ["429", "Batas gateway atau upstream tercapai"],
+  ["429", "Layanan AI sedang sibuk"],
   ["501", "Penghitungan token persis tidak tersedia"],
   ["502", "Upstream gagal atau sesi kedaluwarsa"],
   ["503", "Gateway nonaktif atau belum dikonfigurasi"],
@@ -60,7 +52,7 @@ const TOOL_LABEL: Record<string, string> = {
 
 type ToolStep = { id: string; name: string; args: string; ok?: boolean; summary?: string };
 type Part = { k: "text"; v: string } | { k: "ui"; id: string; blocks: unknown[] } | { k: "canvas"; id: string; title: string; blocks: unknown[] };
-type Assistant = { role: "assistant"; text: string; parts: Part[]; tools: ToolStep[]; done: boolean; error?: { status: number; message: string }; rounds?: number };
+type Assistant = { role: "assistant"; text: string; parts: Part[]; tools: ToolStep[]; done: boolean; status?: string; error?: { status: number; message: string }; rounds?: number };
 type Canvas = { id: string; title: string; blocks: unknown[]; at: number };
 
 /* ───────────────────────────── Memori ───────────────────────────── */
@@ -213,7 +205,7 @@ function useChat(model: ModelId, hooks: ChatHooks) {
               patchLast((t) => {
                 const last = t.parts.at(-1);
                 const parts: Part[] = last?.k === "text" ? [...t.parts.slice(0, -1), { k: "text", v: last.v + v }] : [...t.parts, { k: "text", v }];
-                return { ...t, text: t.text + v, parts };
+                return { ...t, text: t.text + v, parts, status: undefined };
               });
             } else if (ev.t === "ui" && Array.isArray(ev.blocks)) {
               const part: Part = { k: "ui", id: ev.id ?? String(Date.now()), blocks: ev.blocks };
@@ -223,6 +215,7 @@ function useChat(model: ModelId, hooks: ChatHooks) {
               patchLast((t) => ({ ...t, parts: [...t.parts, { k: "canvas", id: c.id, title: c.title, blocks: c.blocks }] }));
               hook.current.onCanvas(c);
             } else if (ev.t === "memory" && ev.fact) hook.current.onMemory(ev.fact);
+            else if (ev.t === "status") patchLast((t) => ({ ...t, status: ev.v }));
             else if (ev.t === "tool") patchLast((t) => ({ ...t, tools: [...t.tools, { id: ev.id!, name: ev.name!, args: ev.args ?? "" }] }));
             else if (ev.t === "tool_result") patchLast((t) => ({ ...t, tools: t.tools.map((s) => (s.id === ev.id ? { ...s, ok: ev.ok, summary: ev.summary } : s)) }));
             else if (ev.t === "error") patchLast((t) => ({ ...t, done: true, error: { status: ev.status ?? 502, message: ev.message ?? "Gagal." } }));
@@ -341,6 +334,21 @@ function speak(text: string, onEnd: () => void) {
   return true;
 }
 
+/** Tombol "Coba lagi"; untuk 429 menunggu sebentar dulu. */
+function RetryButton({ wait, onRetry }: { wait: number; onRetry: () => void }) {
+  const [left, setLeft] = useState(wait);
+  useEffect(() => {
+    if (left <= 0) return;
+    const id = window.setTimeout(() => setLeft(left - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [left]);
+  return (
+    <button type="button" disabled={left > 0} onClick={onRetry} className="mt-2 flex items-center gap-1.5 rounded-full border border-red-500/40 px-3 py-1 text-[12.5px] font-semibold transition hover:bg-red-500/10 disabled:opacity-60">
+      <RefreshCw className="h-3.5 w-3.5" /> {left > 0 ? `Coba lagi dalam ${left} dtk` : "Coba lagi"}
+    </button>
+  );
+}
+
 function CanvasChip({ title, onOpen }: { title: string; onOpen: () => void }) {
   return (
     <button type="button" onClick={onOpen} className="group my-2 flex w-full max-w-sm items-center gap-3 rounded-2xl border border-line bg-card p-3 text-left transition hover:border-brand/50">
@@ -400,7 +408,7 @@ function Message({ turn, last, onRegenerate, onOpenCanvas }: { turn: Turn; last:
       <Avatar />
       <div className="min-w-0 flex-1 pt-1 text-[15px] leading-[1.7] text-ink/90">
         {turn.tools.length > 0 && <ToolSteps steps={turn.tools} running={running && !turn.done} />}
-        {waiting && !running && <Thinking label={turn.tools.length ? "Menyusun jawaban" : "Berpikir"} />}
+        {waiting && !running && <Thinking label={turn.status ?? (turn.tools.length ? "Menyusun jawaban" : "Berpikir")} />}
         {turn.parts.map((p, i) =>
           p.k === "text" ? (
             p.v && (
@@ -417,10 +425,11 @@ function Message({ turn, last, onRegenerate, onOpenCanvas }: { turn: Turn; last:
             <CanvasChip key={i} title={p.title} onOpen={() => onOpenCanvas(p.id)} />
           ),
         )}
-        {!turn.done && turn.parts.length > 0 && lastPart?.k !== "text" && <Thinking label="Melanjutkan" />}
+        {!turn.done && turn.parts.length > 0 && (lastPart?.k !== "text" || turn.status) && <Thinking label={turn.status ?? "Melanjutkan"} />}
         {turn.error && (
           <div className="mt-2 rounded-2xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-[14px] text-red-500">
             <span className="font-mono text-[12px]">[{turn.error.status || "net"}]</span> {turn.error.message}
+            {last && [0, 429, 502, 503].includes(turn.error.status) && <RetryButton wait={turn.error.status === 429 ? 10 : 0} onRetry={onRegenerate} />}
           </div>
         )}
         {turn.done && (
@@ -680,21 +689,9 @@ function InfoPanel({ open, onClose, memory }: { open: boolean; onClose: () => vo
         )}
         <p className="mb-8 text-[12px] text-ink-soft/80">Memori disimpan di browser ini saja dan ikut dikirim bersama pesanmu.</p>
 
-        <p className="micro mb-3 text-ink-soft">Batas pemakaian</p>
-        <div className="grid grid-cols-2 gap-2">
-          {LIMITS.map(([v, k]) => (
-            <div key={k} className="rounded-2xl border border-line p-3">
-              <p className="font-mono text-[20px] font-bold text-brand">{v}</p>
-              <p className="text-[12px] text-ink-soft">{k}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-[13.5px] leading-relaxed text-ink-soft">
-          Batas awal per key: 20 request inferensi per menit dan 500 per hari UTC, body 1 MiB, output maksimal 16384 token, deadline upstream 300 detik. Satu tugas agent bisa memakai
-          beberapa request. Model yang tercantum tidak menjamin kemampuan penalaran setara model lain.
-        </p>
+        <p className="mb-8 text-[13.5px] leading-relaxed text-ink-soft">Satu pertanyaan bisa memakai beberapa langkah (ambil data, lalu menyusun tampilan). Model yang tercantum tidak menjamin kemampuan penalaran setara model lain.</p>
 
-        <p className="micro mb-3 mt-8 text-ink-soft">Privasi</p>
+        <p className="micro mb-3 text-ink-soft">Privasi</p>
         <p className="text-[13.5px] leading-relaxed text-ink-soft">
           Gateway menyimpan statistik penggunaan dan metadata request yang disamarkan untuk key developer, tanpa isi prompt atau kode. Isi request dikirim ke Mistral; aturan retensi
           provider tetap berlaku. Jangan sertakan secret proyek. Sesi upstream dapat kedaluwarsa dan membutuhkan pembaruan oleh pemilik.
@@ -822,7 +819,7 @@ export function AiPage() {
             <PenSquare className="h-4 w-4" />
             <span className="hidden sm:inline">Obrolan baru</span>
           </button>
-          <button type="button" onClick={() => setInfo(true)} className="grid h-9 w-9 place-items-center rounded-xl text-ink-soft transition hover:bg-surface hover:text-ink" aria-label="Info, batas & privasi" title="Info">
+          <button type="button" onClick={() => setInfo(true)} className="grid h-9 w-9 place-items-center rounded-xl text-ink-soft transition hover:bg-surface hover:text-ink" aria-label="Info & privasi" title="Info">
             <Info className="h-4 w-4" />
           </button>
         </div>
@@ -918,7 +915,7 @@ export function AiPage() {
           <p className="mt-2 text-center text-[11.5px] text-ink-soft/80">
             Pip bisa salah. Data dari JKT48Connect · isi pesan diproses Mistral · jangan kirim data rahasia.{" "}
             <button type="button" onClick={() => setInfo(true)} className="underline underline-offset-2 hover:text-ink">
-              Batas & privasi
+              Privasi
             </button>
           </p>
         </form>

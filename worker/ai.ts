@@ -12,15 +12,14 @@
 import { sanitizeBlocks, UI_CATALOG } from "../src/lib/genui";
 import { shapeBirthdays, shapeLive, shapeMember, shapeMembers, shapeMusicSearch, shapeNewsList, shapeRecentList, shapeTheaterList, shapeVideos } from "../src/lib/shape";
 import { fetchUpstream, type ProxyEnv } from "./proxy";
-import type { Limiter } from "./security";
 
 export interface AiEnv extends ProxyEnv {
   /** Secret: `wrangler secret put AI_GATEWAY_KEY` (key gateway AI JKT48Connect). */
   AI_GATEWAY_KEY?: string;
   /** Opsional, default `${API_UPSTREAM}/v1`. */
   AI_GATEWAY_URL?: string;
-  /** Batas per IP untuk /api/ai/chat (wrangler.jsonc → ratelimits). */
-  AI_LIMITER?: Limiter;
+  /** Hanya untuk tes: ganti jeda coba ulang. */
+  RETRY_DELAY?: (ms: number) => Promise<void>;
 }
 
 type Ctx = { waitUntil(p: Promise<unknown>): void };
@@ -31,7 +30,10 @@ export const AI_MODELS = [
   { id: "pip-docs", label: "Pip Docs", desc: "Fokus dokumentasi: menjelaskan endpoint & cara pakai." },
 ] as const;
 
-const MAX_ROUNDS = 6;
+const MAX_ROUNDS = 4;
+/** Jeda sebelum mencoba ulang saat gateway penuh (429) atau upstream gagal sesaat (502/503). */
+const RETRY_MS = [2500, 6000];
+const UI_TOOL_NAMES = new Set(["show_ui", "canvas", "remember"]);
 const MAX_TOKENS = 4096;
 const MAX_MEMORY = 12;
 const MAX_MESSAGES = 24;
@@ -42,7 +44,7 @@ const STATUS_TEXT: Record<number, string> = {
   400: "Input atau fitur tidak didukung.",
   401: "API key gateway tidak valid atau sudah dicabut.",
   413: "Percakapan terlalu panjang, mulai obrolan baru atau ringkas konteks.",
-  429: "Batas pemakaian AI sedang tercapai. Coba lagi sebentar lagi.",
+  429: "Layanan AI sedang sibuk. Coba lagi sebentar lagi.",
   501: "Penghitungan token persis tidak tersedia.",
   502: "Layanan AI sedang gagal atau sesinya kedaluwarsa. Coba lagi nanti.",
   503: "Gateway AI sedang nonaktif atau belum dikonfigurasi.",
@@ -55,7 +57,8 @@ const SYSTEM = [
   "Waktu memakai WIB (Asia/Jakarta). Bila data tidak ditemukan, katakan terus terang.",
   "Jangan pernah meminta atau menampilkan API key, password, atau secret.",
   "UI INTERAKTIF: kamu bisa menampilkan komponen lewat tool show_ui (di dalam chat) dan canvas (panel samping untuk dashboard/mini-app yang bisa diperbarui). Gunakan sesering mungkin bila membantu: kartu member/live/jadwal setelah mengambil data, grafik & tabel untuk angka, tombol & chips untuk langkah lanjutan, kuis/game/tier list/stories/kartu koleksi bila diminta bermain atau rekap. Pakai HANYA gambar, id, dan angka dari hasil tool (jangan mengarang URL gambar). Tautan internal: /member/<id>, /theater/<id>, /news/<id>, /recent/<id>, /watch/<id>, /live.",
-  "Setelah memanggil show_ui, tulis ringkasan singkat saja (jangan mengulang isi komponen). Bila pengguna memberi tahu hal tentang dirinya (oshi, preferensi), simpan dengan tool remember.",
+  "EFISIEN: ambil semua data yang dibutuhkan dalam SATU putaran dengan memanggil beberapa tool sekaligus. Di putaran berikutnya tulis teks singkat lalu panggil show_ui/canvas di respons yang SAMA; setelah show_ui/canvas jawaban dianggap selesai, jadi jangan menunggu putaran lain. Jangan mengulang isi komponen di teks.",
+  "Bila pengguna memberi tahu hal tentang dirinya (oshi, preferensi), simpan dengan tool remember (boleh bersamaan dengan tool lain).",
 ].join(" ");
 
 const UI_TOOLS = [
@@ -320,9 +323,6 @@ export async function handleAi(request: Request, env: AiEnv, ctx: Ctx): Promise<
   // Hanya dari situs sendiri (bukan proxy AI gratis untuk pihak lain).
   const origin = request.headers.get("origin");
   if (origin && origin !== url.origin) return json(403, { error: "Asal permintaan tidak diizinkan." });
-  const ip = request.headers.get("cf-connecting-ip") ?? "local";
-  if (env.AI_LIMITER && !(await env.AI_LIMITER.limit({ key: `ai:${ip}` })).success)
-    return json(429, { error: "Terlalu sering. Tunggu sebentar sebelum bertanya lagi." });
 
   const text = await request.text();
   if (text.length > MAX_BODY) return json(413, { error: STATUS_TEXT[413] });
@@ -352,21 +352,36 @@ export async function handleAi(request: Request, env: AiEnv, ctx: Ctx): Promise<
 async function converse(env: AiEnv, model: string, messages: Msg[], send: (ev: Record<string, unknown>) => Promise<unknown>) {
   const base = (env.AI_GATEWAY_URL || `${(env.API_UPSTREAM || "https://api.jkt48connect.app").replace(/\/+$/, "")}/v1`).replace(/\/+$/, "");
   const doFetch = env.UPSTREAM_FETCH ?? fetch;
+  const wait = env.RETRY_DELAY ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   for (let round = 1; round <= MAX_ROUNDS; round++) {
-    let res: Response;
-    try {
-      res = await doFetch(`${base}/chat/completions`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${env.AI_GATEWAY_KEY}`, "content-type": "application/json", accept: "text/event-stream" },
-        body: JSON.stringify({ model, messages, stream: true, max_tokens: MAX_TOKENS, temperature: 0.4, tools: ALL_TOOLS, tool_choice: round < MAX_ROUNDS ? "auto" : "none" }),
-      });
-    } catch {
-      await send({ t: "error", status: 502, message: STATUS_TEXT[502] });
-      return;
+    const body = JSON.stringify({ model, messages, stream: true, max_tokens: MAX_TOKENS, temperature: 0.4, tools: ALL_TOOLS, tool_choice: round < MAX_ROUNDS ? "auto" : "none" });
+    let res: Response | null = null;
+    let status = 502;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        res = await doFetch(`${base}/chat/completions`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${env.AI_GATEWAY_KEY}`, "content-type": "application/json", accept: "text/event-stream" },
+          body,
+        });
+        status = res.status;
+      } catch {
+        res = null;
+        status = 502;
+      }
+      if (res?.ok && res.body) break;
+      // Gateway penuh / upstream gagal sesaat: tunggu lalu coba lagi (maks. 2 kali), selebihnya laporkan.
+      const retryable = status === 429 || status === 502 || status === 503;
+      if (!retryable || attempt >= RETRY_MS.length) break;
+      const after = Number(res?.headers.get("retry-after"));
+      const ms = Number.isFinite(after) && after > 0 ? Math.min(10_000, after * 1000) : RETRY_MS[attempt];
+      await res?.body?.cancel().catch(() => undefined);
+      await send({ t: "status", v: status === 429 ? `Layanan AI sibuk, mencoba lagi dalam ${Math.ceil(ms / 1000)} dtk…` : "Layanan AI tersendat, mencoba lagi…" });
+      await wait(ms);
     }
-    if (!res.ok || !res.body) {
-      const status = [400, 401, 413, 429, 501, 502, 503].includes(res.status) ? res.status : 502;
-      await send({ t: "error", status, message: STATUS_TEXT[status] });
+    if (!res?.ok || !res.body) {
+      const code = [400, 401, 413, 429, 501, 502, 503].includes(status) ? status : 502;
+      await send({ t: "error", status: code, message: STATUS_TEXT[code] });
       return;
     }
 
@@ -415,9 +430,11 @@ async function converse(env: AiEnv, model: string, messages: Msg[], send: (ev: R
       return;
     }
     messages.push({ role: "assistant", content: content || null, tool_calls: toolCalls });
+    let shown = false;
     for (const call of toolCalls) {
       const ui = await uiTool(call, send);
       if (ui) {
+        if (ui.ok && call.function.name !== "remember") shown = true;
         messages.push({ role: "tool", tool_call_id: call.id, name: call.function.name, content: JSON.stringify(ui) });
         continue;
       }
@@ -425,6 +442,11 @@ async function converse(env: AiEnv, model: string, messages: Msg[], send: (ev: R
       const out = await runTool(call.function.name, call.function.arguments, env).catch(() => ({ ok: false, result: { error: "Tool gagal" }, summary: "Tool gagal" }));
       await send({ t: "tool_result", id: call.id, name: call.function.name, ok: out.ok, summary: out.summary });
       messages.push({ role: "tool", tool_call_id: call.id, name: call.function.name, content: JSON.stringify(out.result).slice(0, 12_000) });
+    }
+    // Hanya tool tampilan & komponen sudah tampil: jawaban selesai, tidak perlu putaran (request) tambahan.
+    if (shown && toolCalls.every((c) => UI_TOOL_NAMES.has(c.function.name))) {
+      await send({ t: "done", model, rounds: round });
+      return;
     }
   }
   await send({ t: "done", model, rounds: MAX_ROUNDS });
