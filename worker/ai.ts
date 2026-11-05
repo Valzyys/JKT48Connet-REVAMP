@@ -12,15 +12,12 @@
 import { sanitizeBlocks, UI_CATALOG } from "../src/lib/genui";
 import { shapeBirthdays, shapeLive, shapeMember, shapeMembers, shapeMusicSearch, shapeNewsList, shapeRecentList, shapeTheaterList, shapeVideos } from "../src/lib/shape";
 import { fetchUpstream, type ProxyEnv } from "./proxy";
-import type { Limiter } from "./security";
 
 export interface AiEnv extends ProxyEnv {
   /** Secret: `wrangler secret put AI_GATEWAY_KEY` (key gateway AI JKT48Connect). */
   AI_GATEWAY_KEY?: string;
   /** Opsional, default `${API_UPSTREAM}/v1`. */
   AI_GATEWAY_URL?: string;
-  /** Batas per IP untuk /api/ai/chat (wrangler.jsonc → ratelimits). */
-  AI_LIMITER?: Limiter;
   /** Hanya untuk tes: ganti jeda coba ulang. */
   RETRY_DELAY?: (ms: number) => Promise<void>;
 }
@@ -47,7 +44,7 @@ const STATUS_TEXT: Record<number, string> = {
   400: "Input atau fitur tidak didukung.",
   401: "API key gateway tidak valid atau sudah dicabut.",
   413: "Percakapan terlalu panjang, mulai obrolan baru atau ringkas konteks.",
-  429: "Kuota AI sedang penuh (dipakai bersama semua pengguna). Tunggu sekitar 1 menit, lalu coba lagi.",
+  429: "Layanan AI sedang sibuk. Coba lagi sebentar lagi.",
   501: "Penghitungan token persis tidak tersedia.",
   502: "Layanan AI sedang gagal atau sesinya kedaluwarsa. Coba lagi nanti.",
   503: "Gateway AI sedang nonaktif atau belum dikonfigurasi.",
@@ -60,7 +57,7 @@ const SYSTEM = [
   "Waktu memakai WIB (Asia/Jakarta). Bila data tidak ditemukan, katakan terus terang.",
   "Jangan pernah meminta atau menampilkan API key, password, atau secret.",
   "UI INTERAKTIF: kamu bisa menampilkan komponen lewat tool show_ui (di dalam chat) dan canvas (panel samping untuk dashboard/mini-app yang bisa diperbarui). Gunakan sesering mungkin bila membantu: kartu member/live/jadwal setelah mengambil data, grafik & tabel untuk angka, tombol & chips untuk langkah lanjutan, kuis/game/tier list/stories/kartu koleksi bila diminta bermain atau rekap. Pakai HANYA gambar, id, dan angka dari hasil tool (jangan mengarang URL gambar). Tautan internal: /member/<id>, /theater/<id>, /news/<id>, /recent/<id>, /watch/<id>, /live.",
-  "HEMAT REQUEST (kuota gateway terbatas): ambil semua data yang dibutuhkan dalam SATU putaran dengan memanggil beberapa tool sekaligus. Di putaran berikutnya tulis teks singkat lalu panggil show_ui/canvas di respons yang SAMA; setelah show_ui/canvas jawaban dianggap selesai, jadi jangan menunggu putaran lain. Jangan mengulang isi komponen di teks.",
+  "EFISIEN: ambil semua data yang dibutuhkan dalam SATU putaran dengan memanggil beberapa tool sekaligus. Di putaran berikutnya tulis teks singkat lalu panggil show_ui/canvas di respons yang SAMA; setelah show_ui/canvas jawaban dianggap selesai, jadi jangan menunggu putaran lain. Jangan mengulang isi komponen di teks.",
   "Bila pengguna memberi tahu hal tentang dirinya (oshi, preferensi), simpan dengan tool remember (boleh bersamaan dengan tool lain).",
 ].join(" ");
 
@@ -326,9 +323,6 @@ export async function handleAi(request: Request, env: AiEnv, ctx: Ctx): Promise<
   // Hanya dari situs sendiri (bukan proxy AI gratis untuk pihak lain).
   const origin = request.headers.get("origin");
   if (origin && origin !== url.origin) return json(403, { error: "Asal permintaan tidak diizinkan." });
-  const ip = request.headers.get("cf-connecting-ip") ?? "local";
-  if (env.AI_LIMITER && !(await env.AI_LIMITER.limit({ key: `ai:${ip}` })).success)
-    return json(429, { error: "Terlalu sering. Tunggu sebentar sebelum bertanya lagi." });
 
   const text = await request.text();
   if (text.length > MAX_BODY) return json(413, { error: STATUS_TEXT[413] });
@@ -382,7 +376,7 @@ async function converse(env: AiEnv, model: string, messages: Msg[], send: (ev: R
       const after = Number(res?.headers.get("retry-after"));
       const ms = Number.isFinite(after) && after > 0 ? Math.min(10_000, after * 1000) : RETRY_MS[attempt];
       await res?.body?.cancel().catch(() => undefined);
-      await send({ t: "status", v: status === 429 ? `Antrean AI penuh, mencoba lagi dalam ${Math.ceil(ms / 1000)} dtk…` : "Layanan AI tersendat, mencoba lagi…" });
+      await send({ t: "status", v: status === 429 ? `Layanan AI sibuk, mencoba lagi dalam ${Math.ceil(ms / 1000)} dtk…` : "Layanan AI tersendat, mencoba lagi…" });
       await wait(ms);
     }
     if (!res?.ok || !res.body) {
