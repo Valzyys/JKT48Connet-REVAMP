@@ -10,5 +10,5 @@
     "noEmit": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["worker", "functions", "src/lib/shape.ts"]
+  "include": ["worker", "functions", "src/lib/shape.ts", "src/lib/genui.ts"]
 }

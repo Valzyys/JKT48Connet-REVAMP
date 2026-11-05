@@ -9,7 +9,8 @@
  * Event SSE ke browser: {t:"text",v} · {t:"tool",id,name,args} · {t:"tool_result",id,name,ok,summary}
  * · {t:"done",model,rounds} · {t:"error",status,message}.
  */
-import { shapeBirthdays, shapeLive, shapeMember, shapeMembers, shapeNewsList, shapeTheaterList } from "../src/lib/shape";
+import { sanitizeBlocks, UI_CATALOG } from "../src/lib/genui";
+import { shapeBirthdays, shapeLive, shapeMember, shapeMembers, shapeMusicSearch, shapeNewsList, shapeRecentList, shapeTheaterList, shapeVideos } from "../src/lib/shape";
 import { fetchUpstream, type ProxyEnv } from "./proxy";
 import type { Limiter } from "./security";
 
@@ -30,8 +31,9 @@ export const AI_MODELS = [
   { id: "pip-docs", label: "Pip Docs", desc: "Fokus dokumentasi: menjelaskan endpoint & cara pakai." },
 ] as const;
 
-const MAX_ROUNDS = 4;
-const MAX_TOKENS = 2048;
+const MAX_ROUNDS = 6;
+const MAX_TOKENS = 4096;
+const MAX_MEMORY = 12;
 const MAX_MESSAGES = 24;
 const MAX_CHARS = 24_000;
 const MAX_BODY = 64 * 1024;
@@ -52,7 +54,36 @@ const SYSTEM = [
   "Untuk data terkini (siapa yang live, jadwal theater, profil member, ulang tahun, berita) SELALU panggil tool yang tersedia; jangan menebak.",
   "Waktu memakai WIB (Asia/Jakarta). Bila data tidak ditemukan, katakan terus terang.",
   "Jangan pernah meminta atau menampilkan API key, password, atau secret.",
+  "UI INTERAKTIF: kamu bisa menampilkan komponen lewat tool show_ui (di dalam chat) dan canvas (panel samping untuk dashboard/mini-app yang bisa diperbarui). Gunakan sesering mungkin bila membantu: kartu member/live/jadwal setelah mengambil data, grafik & tabel untuk angka, tombol & chips untuk langkah lanjutan, kuis/game/tier list/stories/kartu koleksi bila diminta bermain atau rekap. Pakai HANYA gambar, id, dan angka dari hasil tool (jangan mengarang URL gambar). Tautan internal: /member/<id>, /theater/<id>, /news/<id>, /recent/<id>, /watch/<id>, /live.",
+  "Setelah memanggil show_ui, tulis ringkasan singkat saja (jangan mengulang isi komponen). Bila pengguna memberi tahu hal tentang dirinya (oshi, preferensi), simpan dengan tool remember.",
 ].join(" ");
+
+const UI_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "show_ui",
+      description: `Tampilkan komponen UI interaktif di dalam chat. ${UI_CATALOG}`,
+      parameters: { type: "object", properties: { blocks: { type: "array", description: "Daftar blok UI", items: { type: "object" } } }, required: ["blocks"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "canvas",
+      description: "Buat/perbarui Kanvas: panel samping berisi mini-app atau dashboard (blok sama seperti show_ui). Panggil lagi dengan judul sama untuk membuat versi baru.",
+      parameters: { type: "object", properties: { title: { type: "string" }, blocks: { type: "array", items: { type: "object" } } }, required: ["title", "blocks"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "remember",
+      description: "Simpan satu fakta singkat tentang pengguna (mis. oshi, member favorit, preferensi) agar diingat di obrolan berikutnya.",
+      parameters: { type: "object", properties: { fact: { type: "string" } }, required: ["fact"] },
+    },
+  },
+] as const;
 
 const TOOLS = [
   {
@@ -82,12 +113,46 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "recent_lives",
+      description: "Rekap live yang sudah selesai (penonton, durasi, platform, waktu). Bisa disaring nama member. Cocok untuk statistik, grafik, tabel, bar race, Wrapped.",
+      parameters: { type: "object", properties: { member: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 40 } } },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "member_list",
+      description: "Daftar member JKT48 (id, nama, panggilan, foto, status aktif/lulus). Bisa disaring kata kunci & status. Untuk grid member, tier list, kartu koleksi, tebak member, compare.",
+      parameters: { type: "object", properties: { query: { type: "string" }, status: { type: "string", enum: ["aktif", "lulus", "semua"] }, limit: { type: "integer", minimum: 1, maximum: 60 } } },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "music_search",
+      description: "Cari lagu (JKT48 atau lainnya). Hasil berisi id lagu untuk komponen music/karaoke.",
+      parameters: { type: "object", properties: { q: { type: "string" } }, required: ["q"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "youtube_latest",
+      description: "Video terbaru kanal YouTube JKT48 & JKT48 TV (id video untuk komponen youtube).",
+      parameters: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 12 } } },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "latest_news",
       description: "Berita dan pengumuman resmi JKT48 terbaru.",
       parameters: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 10 } } },
     },
   },
 ] as const;
+
+const ALL_TOOLS = [...TOOLS, ...UI_TOOLS];
 
 const wib = (iso: string) => {
   const ms = Date.parse(iso);
@@ -111,14 +176,14 @@ export async function runTool(name: string, rawArgs: string, env: AiEnv): Promis
   if (name === "live_now") {
     const r = await fetchUpstream("/api/now_live?group=jkt48", env);
     if (!r.ok) return fail("Data live tidak bisa diambil");
-    const live = shapeLive(r.data).map((l) => ({ name: l.fullname || l.name, platform: l.platform === "idn" ? "IDN Live" : "Showroom", since: wib(l.startedAt), title: l.title }));
+    const live = shapeLive(r.data).map((l) => ({ id: l.id, name: l.fullname || l.name, platform: l.platform === "idn" ? "idn" : "showroom", room: l.roomId, since: wib(l.startedAt), title: l.title, image: l.img, banner: l.banner, watch: `/watch/${l.id}` }));
     return { ok: true, result: { count: live.length, live }, summary: live.length ? `${live.length} member sedang live` : "Tidak ada yang live" };
   }
   if (name === "theater_schedule") {
     const n = lim(args.limit, 5);
     const r = await fetchUpstream(`/api/theater?page=1&perpage=${n}`, env);
     if (!r.ok) return fail("Jadwal theater tidak bisa diambil");
-    const shows = shapeTheaterList(r.data as never, 1, n).items.map((s) => ({ title: s.title, when: wib(s.date), team: s.team, members: s.members.map((m) => m.name) }));
+    const shows = shapeTheaterList(r.data as never, 1, n).items.map((s) => ({ id: s.id, title: s.title, date: s.date, when: wib(s.date), team: s.team, banner: s.banner || s.poster, members: s.members.map((m) => m.name), page: `/theater/${s.id}` }));
     return { ok: true, result: { shows }, summary: `${shows.length} show theater` };
   }
   if (name === "member_profile") {
@@ -137,8 +202,10 @@ export async function runTool(name: string, rawArgs: string, env: AiEnv): Promis
     return {
       ok: true,
       result: {
+        id: m.id || hit.id,
         name: m.fullname || m.name,
         nickname: m.nickname,
+        image: m.img || hit.img,
         status: m.isGraduate ? "graduated" : "aktif",
         birthdate: m.birthdate,
         height: m.height,
@@ -154,7 +221,7 @@ export async function runTool(name: string, rawArgs: string, env: AiEnv): Promis
   if (name === "upcoming_birthdays") {
     const r = await fetchUpstream("/api/next_birthday", env);
     if (!r.ok) return fail("Data ulang tahun tidak bisa diambil");
-    const list = shapeBirthdays(r.data).slice(0, 8).map((b) => ({ name: b.name, birthdate: b.birthdate }));
+    const list = shapeBirthdays(r.data).slice(0, 8).map((b) => ({ id: b.id, name: b.name, birthdate: b.birthdate, image: b.img }));
     return { ok: true, result: { birthdays: list }, summary: `${list.length} ulang tahun terdekat` };
   }
   if (name === "latest_news") {
@@ -163,6 +230,45 @@ export async function runTool(name: string, rawArgs: string, env: AiEnv): Promis
     if (!r.ok) return fail("Berita tidak bisa diambil");
     const news = shapeNewsList(r.data as never, 1, n).items.map((a) => ({ title: a.title, date: a.date, category: a.category, page: `https://jkt48connect.app/news/${a.id}` }));
     return { ok: true, result: { news }, summary: `${news.length} berita terbaru` };
+  }
+  if (name === "recent_lives") {
+    const n = Math.min(40, Math.max(1, Number(args.limit) || 20));
+    const r = await fetchUpstream("/api/recent?page=1&perpage=40", env);
+    if (!r.ok) return fail("Rekap live tidak bisa diambil");
+    const q = norm(String(args.member ?? ""));
+    const items = shapeRecentList(r.data as never, 1, 40)
+      .items.filter((x) => !q || norm(x.name).includes(q))
+      .slice(0, n)
+      .map((x) => ({ id: x.id, name: x.name, memberId: x.memberId, image: x.img, platform: x.platform, start: x.start, when: wib(x.start), minutes: Math.round(x.durationMs / 60000), viewers: x.viewers, page: `/recent/${x.id}` }));
+    return { ok: true, result: { count: items.length, lives: items }, summary: `${items.length} rekap live` };
+  }
+  if (name === "member_list") {
+    const r = await fetchUpstream("/api/member", env);
+    if (!r.ok) return fail("Daftar member tidak bisa diambil");
+    const q = norm(String(args.query ?? ""));
+    const st = String(args.status ?? "aktif");
+    const n = Math.min(60, Math.max(1, Number(args.limit) || 30));
+    const items = shapeMembers(r.data)
+      .filter((m) => (st === "semua" ? true : st === "lulus" ? m.isGraduate : !m.isGraduate))
+      .filter((m) => !q || norm(m.name).includes(q) || norm(m.nickname ?? "").includes(q))
+      .slice(0, n)
+      .map((m) => ({ id: m.id, name: m.name, nickname: m.nickname, image: m.img, status: m.isGraduate ? "lulus" : "aktif", page: `/member/${m.id}` }));
+    return { ok: true, result: { count: items.length, members: items }, summary: `${items.length} member` };
+  }
+  if (name === "music_search") {
+    const q = String(args.q ?? "").trim().slice(0, 120);
+    if (q.length < 2) return fail("Kata kunci lagu terlalu pendek");
+    const r = await fetchUpstream(`/api/music/search?q=${encodeURIComponent(q)}`, env);
+    if (!r.ok) return fail("Pencarian lagu gagal");
+    const tracks = shapeMusicSearch(r.data as never).tracks.slice(0, 8).map((t) => ({ id: t.id, title: t.title, artist: t.artist, cover: t.cover, duration: t.duration }));
+    return { ok: true, result: { tracks }, summary: `${tracks.length} lagu` };
+  }
+  if (name === "youtube_latest") {
+    const n = lim(args.limit, 6);
+    const r = await fetchUpstream("/api/jkt48_youtube", env);
+    if (!r.ok) return fail("Video tidak bisa diambil");
+    const videos = shapeVideos(r.data).slice(0, n).map((v) => ({ id: v.id, title: v.title, date: v.date, channel: v.channel, thumbnail: v.thumbnail, views: v.views }));
+    return { ok: true, result: { videos }, summary: `${videos.length} video` };
   }
   return fail(`Tool ${name} tidak dikenal`);
 }
@@ -192,6 +298,17 @@ function readMessages(body: unknown): Msg[] | string {
   return out;
 }
 
+/** Memori pengguna (disimpan di browser): maks. 12 fakta pendek, teks saja. */
+function readMemory(body: unknown): string[] {
+  const raw = (body as { memory?: unknown })?.memory;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((m): m is string => typeof m === "string")
+    .map((m) => m.replace(/[\r\n]+/g, " ").trim().slice(0, 200))
+    .filter(Boolean)
+    .slice(0, MAX_MEMORY);
+}
+
 export async function handleAi(request: Request, env: AiEnv, ctx: Ctx): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/api/ai/models" && request.method === "GET") {
@@ -218,12 +335,14 @@ export async function handleAi(request: Request, env: AiEnv, ctx: Ctx): Promise<
   const model = AI_MODELS.find((m) => m.id === (body as { model?: unknown })?.model)?.id ?? "pip";
   const msgs = readMessages(body);
   if (typeof msgs === "string") return json(400, { error: msgs });
+  const memory = readMemory(body);
+  const system = memory.length ? `${SYSTEM} Yang kamu ingat tentang pengguna ini: ${memory.map((m) => `- ${m}`).join(" ")}` : SYSTEM;
 
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
   const writer = writable.getWriter();
   const enc = new TextEncoder();
   const send = (ev: Record<string, unknown>) => writer.write(enc.encode(`data: ${JSON.stringify(ev)}\n\n`)).catch(() => undefined);
-  ctx.waitUntil(converse(env, model, [{ role: "system", content: SYSTEM }, ...msgs], send).finally(() => writer.close().catch(() => undefined)));
+  ctx.waitUntil(converse(env, model, [{ role: "system", content: system }, ...msgs], send).finally(() => writer.close().catch(() => undefined)));
   return new Response(readable, {
     headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" },
   });
@@ -239,7 +358,7 @@ async function converse(env: AiEnv, model: string, messages: Msg[], send: (ev: R
       res = await doFetch(`${base}/chat/completions`, {
         method: "POST",
         headers: { authorization: `Bearer ${env.AI_GATEWAY_KEY}`, "content-type": "application/json", accept: "text/event-stream" },
-        body: JSON.stringify({ model, messages, stream: true, max_tokens: MAX_TOKENS, temperature: 0.4, tools: TOOLS, tool_choice: round < MAX_ROUNDS ? "auto" : "none" }),
+        body: JSON.stringify({ model, messages, stream: true, max_tokens: MAX_TOKENS, temperature: 0.4, tools: ALL_TOOLS, tool_choice: round < MAX_ROUNDS ? "auto" : "none" }),
       });
     } catch {
       await send({ t: "error", status: 502, message: STATUS_TEXT[502] });
@@ -297,6 +416,11 @@ async function converse(env: AiEnv, model: string, messages: Msg[], send: (ev: R
     }
     messages.push({ role: "assistant", content: content || null, tool_calls: toolCalls });
     for (const call of toolCalls) {
+      const ui = await uiTool(call, send);
+      if (ui) {
+        messages.push({ role: "tool", tool_call_id: call.id, name: call.function.name, content: JSON.stringify(ui) });
+        continue;
+      }
       await send({ t: "tool", id: call.id, name: call.function.name, args: call.function.arguments });
       const out = await runTool(call.function.name, call.function.arguments, env).catch(() => ({ ok: false, result: { error: "Tool gagal" }, summary: "Tool gagal" }));
       await send({ t: "tool_result", id: call.id, name: call.function.name, ok: out.ok, summary: out.summary });
@@ -304,4 +428,29 @@ async function converse(env: AiEnv, model: string, messages: Msg[], send: (ev: R
     }
   }
   await send({ t: "done", model, rounds: MAX_ROUNDS });
+}
+
+/** Tool tampilan (show_ui, canvas, remember): dikirim langsung ke browser sebagai event, bukan ke API. */
+async function uiTool(call: ToolCall, send: (ev: Record<string, unknown>) => Promise<unknown>): Promise<Record<string, unknown> | null> {
+  const name = call.function.name;
+  if (name !== "show_ui" && name !== "canvas" && name !== "remember") return null;
+  let args: Record<string, unknown> = {};
+  try {
+    args = JSON.parse(call.function.arguments || "{}");
+  } catch {
+    return { ok: false, error: "Argumen bukan JSON yang valid. Kirim ulang show_ui dengan JSON yang benar." };
+  }
+  if (name === "remember") {
+    const fact = String(args.fact ?? "").replace(/[\r\n]+/g, " ").trim().slice(0, 200);
+    if (!fact) return { ok: false, error: "Fakta kosong." };
+    await send({ t: "memory", fact });
+    return { ok: true, saved: fact };
+  }
+  const { blocks, dropped } = sanitizeBlocks(args.blocks);
+  if (!blocks.length) return { ok: false, error: `Tidak ada blok valid.${dropped.length ? ` Jenis tidak dikenal: ${dropped.join(", ")}.` : ""}` };
+  if (name === "canvas") {
+    const title = String(args.title ?? "Kanvas").slice(0, 80) || "Kanvas";
+    await send({ t: "canvas", id: call.id, title, blocks });
+  } else await send({ t: "ui", id: call.id, blocks });
+  return { ok: true, shown: blocks.length, ...(dropped.length ? { dropped } : {}) };
 }

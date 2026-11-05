@@ -1,7 +1,13 @@
-import { ArrowUp, Cake, Check, ChevronDown, Code2, Copy, Info, Newspaper, PenSquare, Radio, RefreshCw, Sparkles, Square, Ticket, X } from "lucide-react";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  ArrowUp, Brain, Check, ChevronDown, Copy, Download, Gamepad2, Gift, Info, Layers, LayoutDashboard, ListOrdered, Mic, PanelRight, PenSquare, RefreshCw, Share2, Square, ThumbsDown, ThumbsUp, Ticket, Trash2, Volume2, X,
+} from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "@/components/ui";
+import { Blocks } from "@/components/genui/blocks";
+import { downloadPng, GenUi, type GenUiCtx } from "@/components/genui/kit";
+import { Markdown } from "@/components/genui/markdown";
+import { armReminders } from "@/components/genui/practical";
 import { gsap } from "@/lib/gsap";
 
 /* ───────────────────────────── Data ───────────────────────────── */
@@ -14,12 +20,12 @@ const MODELS = [
 type ModelId = (typeof MODELS)[number]["id"];
 
 const SUGGEST = [
-  { icon: Radio, title: "Siapa yang live?", prompt: "Siapa member JKT48 yang sedang live sekarang?" },
-  { icon: Ticket, title: "Jadwal theater", prompt: "Jadwal show theater JKT48 berikutnya apa saja, dan siapa yang tampil?" },
-  { icon: Cake, title: "Ulang tahun terdekat", prompt: "Siapa member JKT48 yang ulang tahun dalam waktu dekat?" },
-  { icon: Newspaper, title: "Berita terbaru", prompt: "Rangkum berita JKT48 terbaru." },
-  { icon: Sparkles, title: "Profil member", prompt: "Ceritakan profil Freya JKT48." },
-  { icon: Code2, title: "Contoh kode API", prompt: "Contoh kode Node.js untuk mengambil data member yang sedang live dari API JKT48Connect." },
+  { icon: LayoutDashboard, title: "Dashboard hari ini", prompt: "Buatkan dashboard JKT48 hari ini di Kanvas: siapa yang live, show theater berikutnya dengan hitung mundur, dan ulang tahun terdekat." },
+  { icon: Ticket, title: "Jadwal theater", prompt: "Tampilkan jadwal show theater JKT48 berikutnya sebagai kalender, lengkap dengan tombol pengingat." },
+  { icon: Gamepad2, title: "Tebak member", prompt: "Ayo main tebak member JKT48 dari foto yang diblur, 5 ronde!" },
+  { icon: ListOrdered, title: "Tier list oshi", prompt: "Buatkan tier list member JKT48 generasi terbaru yang bisa aku susun sendiri." },
+  { icon: Gift, title: "JKT48 Wrapped", prompt: "Buatkan JKT48 Wrapped bulan ini dalam bentuk stories: siapa yang paling sering live dan show theater terbanyak." },
+  { icon: Layers, title: "Kartu koleksi", prompt: "Buka pack kartu koleksi holografis 5 member JKT48 untuk hari ini." },
 ];
 
 const LIMITS: [string, string][] = [
@@ -46,10 +52,50 @@ const TOOL_LABEL: Record<string, string> = {
   member_profile: "Membuka profil member",
   upcoming_birthdays: "Melihat ulang tahun terdekat",
   latest_news: "Membaca berita terbaru",
+  recent_lives: "Melihat riwayat live",
+  member_list: "Mencari member",
+  music_search: "Mencari lagu",
+  youtube_latest: "Membuka video YouTube terbaru",
 };
 
 type ToolStep = { id: string; name: string; args: string; ok?: boolean; summary?: string };
-type Assistant = { role: "assistant"; text: string; tools: ToolStep[]; done: boolean; error?: { status: number; message: string }; rounds?: number };
+type Part = { k: "text"; v: string } | { k: "ui"; id: string; blocks: unknown[] } | { k: "canvas"; id: string; title: string; blocks: unknown[] };
+type Assistant = { role: "assistant"; text: string; parts: Part[]; tools: ToolStep[]; done: boolean; error?: { status: number; message: string }; rounds?: number };
+type Canvas = { id: string; title: string; blocks: unknown[]; at: number };
+
+/* ───────────────────────────── Memori ───────────────────────────── */
+
+const MEM_KEY = "pip:memory";
+const MAX_MEM = 12;
+
+/** Fakta tentang pengguna yang disimpan Pip (hanya di browser ini, dikirim bersama pesan). */
+function useMemory() {
+  const [mem, setMem] = useState<string[]>(() => {
+    try {
+      const v: unknown = JSON.parse(localStorage.getItem(MEM_KEY) || "[]");
+      return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(-MAX_MEM) : [];
+    } catch {
+      return [];
+    }
+  });
+  const update = useCallback((fn: (m: string[]) => string[]) => {
+    setMem((prev) => {
+      const next = fn(prev).slice(-MAX_MEM);
+      try {
+        localStorage.setItem(MEM_KEY, JSON.stringify(next));
+      } catch {
+        /* penyimpanan diblokir: tetap di memori tab */
+      }
+      return next;
+    });
+  }, []);
+  return {
+    mem,
+    add: useCallback((f: string) => update((m) => [...m.filter((x) => x.toLowerCase() !== f.toLowerCase()), f]), [update]),
+    remove: useCallback((i: number) => update((m) => m.filter((_, k) => k !== i)), [update]),
+    clear: useCallback(() => update(() => []), [update]),
+  };
+}
 type Turn = { role: "user"; text: string } | Assistant;
 
 /* ───────────────────────────── ASCII kecil ───────────────────────────── */
@@ -109,94 +155,13 @@ function AsciiMark({ className }: { className?: string }) {
   return <pre ref={ref} aria-hidden className={cx("font-mono font-bold leading-[1.05] text-brand", className)} />;
 }
 
-/* ───────────────────────────── Markdown ringan (tanpa HTML mentah) ───────────────────────────── */
-
-function inline(text: string, key: string): ReactNode[] {
-  const out: ReactNode[] = [];
-  const re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*\s][^*]*\*|\[[^\]]+\]\((https?:\/\/[^)\s]+)\))/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let i = 0;
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    const tok = m[0];
-    if (tok.startsWith("`")) out.push(<code key={`${key}c${i++}`} className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[0.88em]">{tok.slice(1, -1)}</code>);
-    else if (tok.startsWith("**")) out.push(<strong key={`${key}b${i++}`} className="font-semibold text-ink">{tok.slice(2, -2)}</strong>);
-    else if (tok.startsWith("*")) out.push(<em key={`${key}i${i++}`}>{tok.slice(1, -1)}</em>);
-    else {
-      const label = tok.slice(1, tok.indexOf("]"));
-      out.push(<a key={`${key}a${i++}`} href={m[2]} target="_blank" rel="noopener noreferrer" className="text-brand underline underline-offset-2">{label}</a>);
-    }
-    last = m.index + tok.length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out;
-}
-
-function CodeBlock({ lang, code }: { lang: string; code: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="my-3 overflow-hidden rounded-2xl border border-line bg-[#0d0b0c] text-[#f3eee6]">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 font-mono text-[11px] text-white/50">
-        <span>{lang || "kode"}</span>
-        <button
-          type="button"
-          onClick={() => {
-            void navigator.clipboard?.writeText(code);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
-          }}
-          className="flex items-center gap-1.5 hover:text-white"
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? "Tersalin" : "Salin"}
-        </button>
-      </div>
-      <pre className="overflow-x-auto p-4 font-mono text-[12.5px] leading-relaxed">{code}</pre>
-    </div>
-  );
-}
-
-function Markdown({ text }: { text: string }) {
-  const blocks = text.split(/```/);
-  return (
-    <>
-      {blocks.map((b, bi) => {
-        if (bi % 2 === 1) {
-          const nl = b.indexOf("\n");
-          return <CodeBlock key={bi} lang={nl > 0 ? b.slice(0, nl).trim() : ""} code={(nl > 0 ? b.slice(nl + 1) : b).replace(/\n$/, "")} />;
-        }
-        const nodes: ReactNode[] = [];
-        let list: { ordered: boolean; items: ReactNode[] } | null = null;
-        const flush = (k: string) => {
-          if (list) nodes.push(list.ordered ? <ol key={k} className="my-2 list-decimal space-y-1 pl-6">{list.items}</ol> : <ul key={k} className="my-2 list-disc space-y-1 pl-6">{list.items}</ul>);
-          list = null;
-        };
-        b.split("\n").forEach((ln, li) => {
-          const k = `${bi}-${li}`;
-          const item = /^\s*([-*•]|\d+\.)\s+(.*)$/.exec(ln);
-          if (item) {
-            const ordered = /\d/.test(item[1]);
-            if (list && list.ordered !== ordered) flush(`${k}x`);
-            list ??= { ordered, items: [] };
-            list.items.push(<li key={k}>{inline(item[2], k)}</li>);
-            return;
-          }
-          flush(`${k}l`);
-          const h = /^#{1,4}\s+(.*)$/.exec(ln);
-          if (h) nodes.push(<p key={k} className="mb-1 mt-4 font-semibold text-ink">{inline(h[1], k)}</p>);
-          else if (ln.trim()) nodes.push(<p key={k} className="my-2">{inline(ln, k)}</p>);
-        });
-        flush(`${bi}-end`);
-        return <Fragment key={bi}>{nodes}</Fragment>;
-      })}
-    </>
-  );
-}
-
 /* ───────────────────────────── Logika obrolan ───────────────────────────── */
 
-function useChat(model: ModelId) {
+type ChatHooks = { memory: string[]; onMemory: (fact: string) => void; onCanvas: (c: Canvas) => void };
+
+function useChat(model: ModelId, hooks: ChatHooks) {
+  const hook = useRef(hooks);
+  hook.current = hooks;
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const abort = useRef<AbortController | null>(null);
@@ -210,7 +175,7 @@ function useChat(model: ModelId) {
 
   const run = useCallback(
     async (history: Turn[]) => {
-      setTurns([...history, { role: "assistant", text: "", tools: [], done: false }]);
+      setTurns([...history, { role: "assistant", text: "", parts: [], tools: [], done: false }]);
       setBusy(true);
       const ctrl = new AbortController();
       abort.current = ctrl;
@@ -219,7 +184,7 @@ function useChat(model: ModelId) {
           method: "POST",
           headers: { "content-type": "application/json" },
           // Hanya teks percakapan; tool call & hasilnya tidak dikirim ulang dari browser.
-          body: JSON.stringify({ model, messages: history.filter((t) => t.text).slice(-16).map((t) => ({ role: t.role, content: t.text })) }),
+          body: JSON.stringify({ model, memory: hook.current.memory, messages: history.filter((t) => t.text).slice(-16).map((t) => ({ role: t.role, content: t.text })) }),
           signal: ctrl.signal,
         });
         if (!res.ok || !res.body) {
@@ -237,13 +202,27 @@ function useChat(model: ModelId) {
           while ((cut = buf.indexOf("\n\n")) >= 0) {
             const raw = buf.slice(0, cut).replace(/^data:\s*/, "");
             buf = buf.slice(cut + 2);
-            let ev: { t: string; v?: string; id?: string; name?: string; args?: string; ok?: boolean; summary?: string; status?: number; message?: string; rounds?: number };
+            let ev: { t: string; v?: string; id?: string; name?: string; args?: string; ok?: boolean; summary?: string; status?: number; message?: string; rounds?: number; blocks?: unknown[]; title?: string; fact?: string };
             try {
               ev = JSON.parse(raw);
             } catch {
               continue;
             }
-            if (ev.t === "text") patchLast((t) => ({ ...t, text: t.text + (ev.v ?? "") }));
+            if (ev.t === "text") {
+              const v = ev.v ?? "";
+              patchLast((t) => {
+                const last = t.parts.at(-1);
+                const parts: Part[] = last?.k === "text" ? [...t.parts.slice(0, -1), { k: "text", v: last.v + v }] : [...t.parts, { k: "text", v }];
+                return { ...t, text: t.text + v, parts };
+              });
+            } else if (ev.t === "ui" && Array.isArray(ev.blocks)) {
+              const part: Part = { k: "ui", id: ev.id ?? String(Date.now()), blocks: ev.blocks };
+              patchLast((t) => ({ ...t, parts: [...t.parts, part] }));
+            } else if (ev.t === "canvas" && Array.isArray(ev.blocks)) {
+              const c: Canvas = { id: ev.id ?? String(Date.now()), title: ev.title || "Kanvas", blocks: ev.blocks, at: Date.now() };
+              patchLast((t) => ({ ...t, parts: [...t.parts, { k: "canvas", id: c.id, title: c.title, blocks: c.blocks }] }));
+              hook.current.onCanvas(c);
+            } else if (ev.t === "memory" && ev.fact) hook.current.onMemory(ev.fact);
             else if (ev.t === "tool") patchLast((t) => ({ ...t, tools: [...t.tools, { id: ev.id!, name: ev.name!, args: ev.args ?? "" }] }));
             else if (ev.t === "tool_result") patchLast((t) => ({ ...t, tools: t.tools.map((s) => (s.id === ev.id ? { ...s, ok: ev.ok, summary: ev.summary } : s)) }));
             else if (ev.t === "error") patchLast((t) => ({ ...t, done: true, error: { status: ev.status ?? 502, message: ev.message ?? "Gagal." } }));
@@ -252,7 +231,7 @@ function useChat(model: ModelId) {
         }
         patchLast((t) => ({ ...t, done: true }));
       } catch (err) {
-        if ((err as Error).name === "AbortError") patchLast((t) => ({ ...t, done: true, text: t.text || "_Dihentikan._" }));
+        if ((err as Error).name === "AbortError") patchLast((t) => (t.text || t.parts.length ? { ...t, done: true } : { ...t, done: true, text: "_Dihentikan._", parts: [{ k: "text", v: "_Dihentikan._" }] }));
         else patchLast((t) => ({ ...t, done: true, error: { status: 0, message: "Koneksi terputus. Coba lagi." } }));
       } finally {
         setBusy(false);
@@ -336,12 +315,56 @@ function SpinChar() {
   return <>{SPIN[i % SPIN.length]}</>;
 }
 
-function Message({ turn, last, onRegenerate }: { turn: Turn; last: boolean; onRegenerate: () => void }) {
+const iconBtn = "grid h-8 w-8 place-items-center rounded-lg transition hover:bg-surface hover:text-ink";
+
+/** Ubah satu jawaban (teks + blok) menjadi Markdown untuk diekspor. */
+function toMarkdown(turn: Assistant) {
+  return turn.parts
+    .map((p) => (p.k === "text" ? p.v : p.k === "canvas" ? `> 🗂 Kanvas: ${p.title}` : "> [komponen interaktif — buka di jkt48connect.app/ai]"))
+    .join("\n\n")
+    .trim();
+}
+
+function speak(text: string, onEnd: () => void) {
+  const synth = window.speechSynthesis;
+  if (!synth) return false;
+  synth.cancel();
+  const plain = text.replace(/```[\s\S]*?```/g, " ").replace(/[#*_`>|[\]()]/g, " ").replace(/https?:\S+/g, "").replace(/\s+/g, " ").trim().slice(0, 3000);
+  const u = new SpeechSynthesisUtterance(plain);
+  u.lang = "id-ID";
+  u.rate = 1.04;
+  const voice = synth.getVoices().find((v) => v.lang.startsWith("id"));
+  if (voice) u.voice = voice;
+  u.onend = onEnd;
+  u.onerror = onEnd;
+  synth.speak(u);
+  return true;
+}
+
+function CanvasChip({ title, onOpen }: { title: string; onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen} className="group my-2 flex w-full max-w-sm items-center gap-3 rounded-2xl border border-line bg-card p-3 text-left transition hover:border-brand/50">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand">
+        <PanelRight className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-bold">{title}</span>
+        <span className="block text-[12px] text-ink-soft">Kanvas · ketuk untuk membuka</span>
+      </span>
+      <span className="text-[12.5px] font-bold text-brand group-hover:underline">Buka</span>
+    </button>
+  );
+}
+
+function Message({ turn, last, onRegenerate, onOpenCanvas }: { turn: Turn; last: boolean; onRegenerate: () => void; onOpenCanvas: (id: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const [talking, setTalking] = useState(false);
+  const [vote, setVote] = useState<1 | -1 | 0>(0);
   useLayoutEffect(() => {
     if (ref.current) gsap.fromTo(ref.current, { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" });
   }, []);
+  useEffect(() => () => void (talking && window.speechSynthesis?.cancel()), [talking]);
 
   if (turn.role === "user") {
     return (
@@ -352,26 +375,56 @@ function Message({ turn, last, onRegenerate }: { turn: Turn; last: boolean; onRe
   }
 
   const running = turn.tools.some((s) => s.ok === undefined);
-  const waiting = !turn.done && !turn.text;
+  const waiting = !turn.done && !turn.parts.length;
+  const lastPart = turn.parts.at(-1);
+  const exportMd = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([toMarkdown(turn)], { type: "text/markdown" }));
+    a.download = "jawaban-pip.md";
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  const share = async () => {
+    const text = toMarkdown(turn);
+    try {
+      if (navigator.share) return void (await navigator.share({ title: "Jawaban Pip · JKT48Connect", text: text.slice(0, 2000), url: `${location.origin}/ai` }));
+    } catch {
+      return;
+    }
+    void navigator.clipboard?.writeText(text);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
   return (
     <div ref={ref} className="flex gap-3 sm:gap-4">
       <Avatar />
       <div className="min-w-0 flex-1 pt-1 text-[15px] leading-[1.7] text-ink/90">
         {turn.tools.length > 0 && <ToolSteps steps={turn.tools} running={running && !turn.done} />}
         {waiting && !running && <Thinking label={turn.tools.length ? "Menyusun jawaban" : "Berpikir"} />}
-        {turn.text && (
-          <div className="break-words">
-            <Markdown text={turn.text} />
-            {!turn.done && <span className="ml-0.5 inline-block h-[1.1em] w-[0.5em] translate-y-[0.2em] animate-pulse bg-brand" />}
-          </div>
+        {turn.parts.map((p, i) =>
+          p.k === "text" ? (
+            p.v && (
+              <div key={i} className="break-words">
+                <Markdown text={p.v} />
+                {!turn.done && p === lastPart && <span className="ml-0.5 inline-block h-[1.1em] w-[0.5em] translate-y-[0.2em] animate-pulse bg-brand" />}
+              </div>
+            )
+          ) : p.k === "ui" ? (
+            <div key={i} className="my-3 leading-normal">
+              <Blocks blocks={p.blocks} />
+            </div>
+          ) : (
+            <CanvasChip key={i} title={p.title} onOpen={() => onOpenCanvas(p.id)} />
+          ),
         )}
+        {!turn.done && turn.parts.length > 0 && lastPart?.k !== "text" && <Thinking label="Melanjutkan" />}
         {turn.error && (
           <div className="mt-2 rounded-2xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-[14px] text-red-500">
             <span className="font-mono text-[12px]">[{turn.error.status || "net"}]</span> {turn.error.message}
           </div>
         )}
         {turn.done && (
-          <div className="mt-1 flex items-center gap-1 text-ink-soft">
+          <div className="mt-1 flex flex-wrap items-center gap-0.5 text-ink-soft">
             {turn.text && (
               <button
                 type="button"
@@ -380,15 +433,47 @@ function Message({ turn, last, onRegenerate }: { turn: Turn; last: boolean; onRe
                   setCopied(true);
                   window.setTimeout(() => setCopied(false), 1500);
                 }}
-                className="grid h-8 w-8 place-items-center rounded-lg transition hover:bg-surface hover:text-ink"
+                className={iconBtn}
                 aria-label="Salin jawaban"
                 title="Salin"
               >
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </button>
             )}
+            {turn.text && "speechSynthesis" in window && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (talking) {
+                    window.speechSynthesis.cancel();
+                    setTalking(false);
+                  } else if (speak(turn.text, () => setTalking(false))) setTalking(true);
+                }}
+                className={cx(iconBtn, talking && "text-brand")}
+                aria-label={talking ? "Hentikan suara" : "Bacakan"}
+                title={talking ? "Hentikan" : "Bacakan"}
+              >
+                {talking ? <Square className="h-3.5 w-3.5 fill-current" /> : <Volume2 className="h-4 w-4" />}
+              </button>
+            )}
+            <button type="button" onClick={() => setVote(vote === 1 ? 0 : 1)} className={cx(iconBtn, vote === 1 && "text-brand")} aria-label="Jawaban bagus" aria-pressed={vote === 1} title="Bagus">
+              <ThumbsUp className={cx("h-4 w-4", vote === 1 && "fill-current")} />
+            </button>
+            <button type="button" onClick={() => setVote(vote === -1 ? 0 : -1)} className={cx(iconBtn, vote === -1 && "text-brand")} aria-label="Jawaban kurang tepat" aria-pressed={vote === -1} title="Kurang tepat">
+              <ThumbsDown className={cx("h-4 w-4", vote === -1 && "fill-current")} />
+            </button>
+            {turn.parts.length > 0 && (
+              <>
+                <button type="button" onClick={exportMd} className={iconBtn} aria-label="Ekspor Markdown" title="Ekspor .md">
+                  <Download className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => void share()} className={iconBtn} aria-label="Bagikan" title="Bagikan">
+                  <Share2 className="h-4 w-4" />
+                </button>
+              </>
+            )}
             {last && (
-              <button type="button" onClick={onRegenerate} className="grid h-8 w-8 place-items-center rounded-lg transition hover:bg-surface hover:text-ink" aria-label="Ulangi jawaban" title="Ulangi">
+              <button type="button" onClick={onRegenerate} className={iconBtn} aria-label="Ulangi jawaban" title="Ulangi">
                 <RefreshCw className="h-4 w-4" />
               </button>
             )}
@@ -398,6 +483,96 @@ function Message({ turn, last, onRegenerate }: { turn: Turn; last: boolean; onRe
       </div>
     </div>
   );
+}
+
+/* ───────────────────────────── Kanvas ───────────────────────────── */
+
+/** Panel samping (desktop) / lembar penuh (HP) untuk dashboard & mini-app buatan Pip, dengan riwayat versi. */
+function CanvasPanel({ canvases, openId, onPick, onClose }: { canvases: Canvas[]; openId: string | null; onPick: (id: string) => void; onClose: () => void }) {
+  const current = canvases.find((c) => c.id === openId) ?? null;
+  const versions = current ? canvases.filter((c) => c.title === current.title) : [];
+  const body = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  const shown = useRef(false);
+  useLayoutEffect(() => {
+    if (!panel.current) return;
+    if (!shown.current) {
+      gsap.set(panel.current, { xPercent: 105, autoAlpha: 0 });
+      shown.current = true;
+    }
+    gsap.to(panel.current, { xPercent: current ? 0 : 105, autoAlpha: current ? 1 : 0, duration: 0.45, ease: "power3.out" });
+  }, [current]);
+  useEffect(() => {
+    if (!current) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [current, onClose]);
+  return createPortal(
+    <aside ref={panel} aria-hidden={!current} aria-label="Kanvas" className="invisible fixed inset-y-0 right-0 z-[70] flex w-full flex-col border-l border-line bg-bg shadow-[-30px_0_80px_-40px_rgba(0,0,0,0.4)] lg:top-14 lg:w-[min(46vw,640px)]">
+      {current && (
+        <>
+          <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+            <PanelRight className="h-4 w-4 shrink-0 text-brand" />
+            <p className="min-w-0 flex-1 truncate text-[15px] font-bold">{current.title}</p>
+            {versions.length > 1 && (
+              <select value={current.id} onChange={(e) => onPick(e.target.value)} className="rounded-full border border-line bg-card px-2.5 py-1 text-[12px]" aria-label="Versi kanvas">
+                {versions.map((v, i) => (
+                  <option key={v.id} value={v.id}>
+                    v{i + 1} · {new Date(v.at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button type="button" onClick={() => void downloadPng(body, current.title)} className={iconBtn} aria-label="Unduh PNG" title="Unduh PNG">
+              <Download className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={onClose} className={iconBtn} aria-label="Tutup kanvas" title="Tutup">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto pb-28 lg:pb-6">
+            <div ref={body} key={current.id} className="bg-bg p-4 sm:p-5">
+              <Blocks blocks={current.blocks} />
+            </div>
+          </div>
+        </>
+      )}
+    </aside>,
+    document.body,
+  );
+}
+
+/* ───────────────────────────── Input suara ───────────────────────────── */
+
+type Recog = { lang: string; interimResults: boolean; continuous: boolean; start: () => void; stop: () => void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null };
+
+function useVoice(onText: (t: string) => void) {
+  const Ctor = typeof window === "undefined" ? undefined : ((window as unknown as { SpeechRecognition?: new () => Recog; webkitSpeechRecognition?: new () => Recog }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => Recog }).webkitSpeechRecognition);
+  const [on, setOn] = useState(false);
+  const rec = useRef<Recog | null>(null);
+  const cb = useRef(onText);
+  cb.current = onText;
+  const toggle = useCallback(() => {
+    if (!Ctor) return;
+    if (rec.current) {
+      rec.current.stop();
+      return;
+    }
+    const r = new Ctor();
+    r.lang = "id-ID";
+    r.interimResults = true;
+    r.continuous = false;
+    r.onresult = (e) => cb.current(Array.from(e.results, (x) => x[0]?.transcript ?? "").join(""));
+    r.onend = r.onerror = () => {
+      rec.current = null;
+      setOn(false);
+    };
+    rec.current = r;
+    setOn(true);
+    r.start();
+  }, [Ctor]);
+  return { supported: Boolean(Ctor), on, toggle };
 }
 
 /* ───────────────────────────── Pemilih model & panel info ───────────────────────────── */
@@ -445,7 +620,9 @@ function ModelPicker({ value, onChange, disabled }: { value: ModelId; onChange: 
   );
 }
 
-function InfoPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+type Mem = ReturnType<typeof useMemory>;
+
+function InfoPanel({ open, onClose, memory }: { open: boolean; onClose: () => void; memory: Mem }) {
   const panel = useRef<HTMLDivElement>(null);
   const scrim = useRef<HTMLDivElement>(null);
   const first = useRef(true);
@@ -477,6 +654,31 @@ function InfoPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        <div className="mb-3 flex items-center justify-between">
+          <p className="micro text-ink-soft">Yang Pip ingat tentangmu</p>
+          {memory.mem.length > 0 && (
+            <button type="button" onClick={memory.clear} className="text-[12px] font-semibold text-ink-soft hover:text-brand">
+              Hapus semua
+            </button>
+          )}
+        </div>
+        {memory.mem.length ? (
+          <ul className="mb-2 space-y-1.5">
+            {memory.mem.map((m, i) => (
+              <li key={`${i}-${m}`} className="flex items-start gap-2 rounded-2xl border border-line px-3 py-2 text-[13.5px]">
+                <Brain className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+                <span className="flex-1">{m}</span>
+                <button type="button" onClick={() => memory.remove(i)} className="text-ink-soft hover:text-brand" aria-label={`Lupakan: ${m}`}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mb-2 text-[13.5px] text-ink-soft">Belum ada. Bilang misalnya “oshi aku Freya”, Pip akan mengingatnya.</p>
+        )}
+        <p className="mb-8 text-[12px] text-ink-soft/80">Memori disimpan di browser ini saja dan ikut dikirim bersama pesanmu.</p>
 
         <p className="micro mb-3 text-ink-soft">Batas pemakaian</p>
         <div className="grid grid-cols-2 gap-2">
@@ -541,7 +743,28 @@ export function AiPage() {
   const [model, setModel] = useState<ModelId>("pip");
   const [input, setInput] = useState("");
   const [info, setInfo] = useState(false);
-  const { turns, busy, send, regenerate, stop, reset } = useChat(model);
+  const memory = useMemory();
+  const [canvases, setCanvases] = useState<Canvas[]>([]);
+  const [canvasId, setCanvasId] = useState<string | null>(null);
+  const [toast, setToast] = useState("");
+  const { turns, busy, send, regenerate, stop, reset } = useChat(model, {
+    memory: memory.mem,
+    onMemory: (f) => {
+      memory.add(f);
+      setToast(`Pip mengingat: ${f}`);
+    },
+    onCanvas: (c) => {
+      setCanvases((cs) => [...cs.slice(-19), c]);
+      setCanvasId(c.id);
+    },
+  });
+  const voice = useVoice(setInput);
+  useEffect(() => armReminders(), []);
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(""), 3200);
+    return () => window.clearTimeout(id);
+  }, [toast]);
   const scroller = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const welcome = useRef<HTMLDivElement>(null);
@@ -570,16 +793,32 @@ export function AiPage() {
     setInput("");
     area.current?.focus();
   };
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  const ctx = useMemo<GenUiCtx>(() => ({ send: (t) => submitRef.current(t), busy, openCanvas: () => {} }), [busy]);
+  const closeCanvas = useCallback(() => setCanvasId(null), []);
+  const newChat = () => {
+    reset();
+    setCanvases([]);
+    setCanvasId(null);
+  };
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
+    <GenUi.Provider value={ctx}>
+    <div className={cx("flex h-[calc(100dvh-3.5rem)] flex-col transition-[padding] duration-500", canvasId && "lg:pr-[min(46vw,640px)]")}>
       <h1 className="sr-only">Tanya Pip — JKT48Connect AI</h1>
 
       {/* Header obrolan */}
       <div className="flex items-center gap-2 px-3 py-2 sm:px-5">
         <ModelPicker value={model} onChange={setModel} disabled={busy} />
         <div className="ml-auto flex items-center gap-1">
-          <button type="button" onClick={reset} disabled={!turns.length} className="flex h-9 items-center gap-2 rounded-xl px-3 text-[13px] font-semibold text-ink-soft transition hover:bg-surface hover:text-ink disabled:opacity-40" title="Obrolan baru">
+          {canvases.length > 0 && !canvasId && (
+            <button type="button" onClick={() => setCanvasId(canvases.at(-1)!.id)} className="flex h-9 items-center gap-2 rounded-xl px-3 text-[13px] font-semibold text-ink-soft transition hover:bg-surface hover:text-ink" title="Buka kanvas">
+              <PanelRight className="h-4 w-4" />
+              <span className="hidden sm:inline">Kanvas</span>
+            </button>
+          )}
+          <button type="button" onClick={newChat} disabled={!turns.length} className="flex h-9 items-center gap-2 rounded-xl px-3 text-[13px] font-semibold text-ink-soft transition hover:bg-surface hover:text-ink disabled:opacity-40" title="Obrolan baru">
             <PenSquare className="h-4 w-4" />
             <span className="hidden sm:inline">Obrolan baru</span>
           </button>
@@ -605,7 +844,7 @@ export function AiPage() {
             </div>
             <h2 data-in className="text-center text-[clamp(1.6rem,4.5vw,2.4rem)] font-semibold tracking-tight">Halo! Mau tanya apa soal JKT48?</h2>
             <p data-in className="mx-auto mt-2 max-w-lg text-center text-[15px] text-ink-soft">
-              Pip membaca data JKT48Connect secara langsung: siapa yang live, jadwal theater, profil member, ulang tahun, dan berita.
+              Pip membaca data JKT48Connect secara langsung dan bisa membuat tampilan interaktif: dashboard, kalender, kuis, game, tier list, sampai kartu koleksi.
             </p>
             <div className="mt-8 grid grid-cols-2 gap-2.5 lg:grid-cols-3">
               {SUGGEST.map(({ icon: Icon, title, prompt }, i) => (
@@ -629,7 +868,7 @@ export function AiPage() {
         ) : (
           <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6">
             {turns.map((t, i) => (
-              <Message key={i} turn={t} last={i === turns.length - 1} onRegenerate={regenerate} />
+              <Message key={i} turn={t} last={i === turns.length - 1} onRegenerate={regenerate} onOpenCanvas={setCanvasId} />
             ))}
           </div>
         )}
@@ -657,10 +896,15 @@ export function AiPage() {
                   submit();
                 }
               }}
-              placeholder="Kirim pesan ke Pip…"
+              placeholder={voice.on ? "Mendengarkan…" : "Kirim pesan ke Pip…"}
               aria-label="Pesan untuk Pip"
               className="max-h-[200px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[15px] outline-none placeholder:text-ink-soft/70"
             />
+            {voice.supported && !busy && (
+              <button type="button" onClick={voice.toggle} className={cx("grid h-10 w-10 shrink-0 place-items-center rounded-full transition", voice.on ? "animate-pulse bg-brand/15 text-brand" : "text-ink-soft hover:bg-surface hover:text-ink")} aria-label={voice.on ? "Berhenti mendengarkan" : "Bicara"} aria-pressed={voice.on} title="Input suara">
+                <Mic className="h-5 w-5" />
+              </button>
+            )}
             {busy ? (
               <button type="button" onClick={stop} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-bg transition hover:opacity-85" aria-label="Hentikan">
                 <Square className="h-3.5 w-3.5 fill-current" />
@@ -680,7 +924,14 @@ export function AiPage() {
         </form>
       </div>
 
-      <InfoPanel open={info} onClose={() => setInfo(false)} />
+      <InfoPanel open={info} onClose={() => setInfo(false)} memory={memory} />
+      <CanvasPanel canvases={canvases} openId={canvasId} onPick={setCanvasId} onClose={closeCanvas} />
+      {toast && (
+        <div role="status" className="fixed bottom-[calc(env(safe-area-inset-bottom)+170px)] left-1/2 z-[95] flex -translate-x-1/2 animate-[fadein_.3s_ease] items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] text-bg shadow-lg lg:bottom-28">
+          <Brain className="h-4 w-4" /> {toast}
+        </div>
+      )}
     </div>
+    </GenUi.Provider>
   );
 }
