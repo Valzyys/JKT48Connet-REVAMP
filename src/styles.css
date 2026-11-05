@@ -231,3 +231,20 @@ body.is-locked {
 .js [data-reveal] {
   opacity: 0;
 }
+
+/* Teks "berpikir"/proses AI: kilau berjalan seperti aplikasi chat AI (halaman /ai). */
+.shimmer-text {
+  background: linear-gradient(90deg, var(--color-ink-soft) 0%, var(--color-ink-soft) 40%, var(--color-ink) 50%, var(--color-ink-soft) 60%, var(--color-ink-soft) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 1.8s linear infinite;
+}
+@keyframes shimmer-text {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-text { animation: none; color: var(--color-ink-soft); background: none; }
+}

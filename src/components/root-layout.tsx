@@ -23,7 +23,9 @@ function WebsiteLayout() {
   const tap = useRef({ x: 0, y: 0, t: 0 });
   const dest = navFor(path);
   const isPm = path === "/pm" || path.startsWith("/pm/");
-  const isWorkspace = path === "/donasika" || path === "/games" || isPm || path === "/discord" || path.startsWith("/discord/");
+  // Halaman AI berupa layar obrolan penuh (tanpa footer), seperti aplikasi chat AI.
+  const isChat = path === "/ai";
+  const isWorkspace = path === "/donasika" || path === "/games" || isPm || isChat || path === "/discord" || path.startsWith("/discord/");
   const prev = useRef(path);
 
   // Judul halaman statis (detail member/theater/berita mengganti sendiri setelah datanya termuat).
@@ -143,7 +145,7 @@ function WebsiteLayout() {
       <div className="flex min-h-screen transition-[padding] duration-500 ease-[cubic-bezier(0.87,0,0.13,1)] lg:pl-[var(--side-pad)]">
         <div className="relative min-w-0 flex-1">
           <Topbar />
-          <main id="konten" className="relative z-[1] pb-12">
+          <main id="konten" className={`relative z-[1] ${isChat ? "" : "pb-12"}`}>
             <div ref={content} className="relative z-10 bg-bg">
               <Outlet />
             </div>
@@ -165,7 +167,7 @@ function WebsiteLayout() {
               </span>
             </div>
           </main>
-          <Footer />
+          {!isChat && <Footer />}
         </div>
         {!isWorkspace && <Aside />}
       </div>
