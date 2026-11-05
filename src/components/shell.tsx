@@ -322,7 +322,7 @@ export function Topbar() {
   const next = useQuery(q.nextSchedule());
   const lives = live.data ?? [];
   const show = next.data?.find((s) => s.category === "show");
-  const title = useRef<HTMLHeadingElement>(null);
+  const title = useRef<HTMLParagraphElement>(null);
 
   // Judul halaman berganti dengan animasi geser.
   useLayoutEffect(() => {
@@ -337,9 +337,9 @@ export function Topbar() {
           <Logo compact />
         </div>
         <div className="overflow-hidden">
-          <h1 ref={title} className="condensed text-[24px] uppercase leading-none">
+          <p ref={title} className="condensed text-[24px] uppercase leading-none">
             {current.label}
-          </h1>
+          </p>
         </div>
         <Link
           to="/live"
