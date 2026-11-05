@@ -36,6 +36,9 @@ const SECTION: Record<string, { path: string; label: string }> = {
 };
 const PAGE_TTL = 3600;
 const SITEMAP_TTL = 6 * 3600;
+/** Batas tunggu upstream saat menyusun HTML halaman (ms); sitemap boleh menunggu lebih lama. */
+const UPSTREAM_BUDGET_MS = 1200;
+const SITEMAP_BUDGET_MS = 8000;
 const JKT48 = { "@type": "MusicGroup", name: "JKT48", url: "https://jkt48.com" };
 const THEATER_PLACE = {
   "@type": "Place",
@@ -72,6 +75,12 @@ const wib = (iso: string, withTime = true) => {
   if (!Number.isFinite(ms)) return "";
   return new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "long", ...(withTime ? { timeStyle: "short" } : {}) }).format(ms) + (withTime ? " WIB" : "");
 };
+/** "7 Nov 2026" untuk judul (lebih pendek dari tanggal lengkap). */
+const shortDate = (iso: string) => {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return "";
+  return new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", year: "numeric" }).format(ms).replace(".", "");
+};
 const ymd = (iso: string) => {
   const ms = Date.parse(iso);
   return Number.isFinite(ms) ? new Date(ms + 7 * 3600_000).toISOString().slice(0, 10) : "";
@@ -89,14 +98,23 @@ const textOf = (html: string) =>
 const platformLabel = (p: string) => (p === "idn" ? "IDN Live" : p === "showroom" ? "Showroom" : p);
 
 /** JSON upstream lewat cache edge; `missing` = upstream menjawab 404 (halaman tidak ada). */
-async function upstream(env: SeoEnv, ctx: Ctx, origin: string, path: string, ttl = PAGE_TTL): Promise<{ data: unknown; missing: boolean }> {
+async function upstream(env: SeoEnv, ctx: Ctx, origin: string, path: string, ttl = PAGE_TTL, budget = UPSTREAM_BUDGET_MS): Promise<{ data: unknown; missing: boolean }> {
   const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
   const key = new Request(`${origin}/__cache/seo-v1${path}`);
   const hit = await cache?.match(key);
   if (hit) return { data: await hit.json(), missing: false };
-  const got = await fetchUpstream(path, env);
+  const fill = fetchUpstream(path, env).then(async (got) => {
+    if (got.ok && cache) await cache.put(key, new Response(JSON.stringify(got.data), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${ttl}` } }));
+    return got;
+  });
+  // Upstream lambat: jangan tahan HTML (TTFB). Kirim meta umum sekarang; cache diisi di latar untuk permintaan berikutnya.
+  const timeout = new Promise<null>((r) => setTimeout(() => r(null), budget));
+  const got = await Promise.race([fill, timeout]);
+  if (!got) {
+    ctx.waitUntil(fill.catch(() => undefined));
+    return { data: null, missing: false };
+  }
   if (!got.ok) return { data: null, missing: got.status === 404 };
-  if (cache) ctx.waitUntil(cache.put(key, new Response(JSON.stringify(got.data), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${ttl}` } })));
   return { data: got.data, missing: false };
 }
 
@@ -122,14 +140,17 @@ export async function buildMeta(path: string, env: SeoEnv, ctx: Ctx, origin: str
       const { data } = await upstream(env, ctx, origin, "/api/member");
       const list = data ? shapeMembers(data) : [];
       built.body = links(list.map((m) => [`/member/${m.id}`, m.nickname ? `${m.name} (${m.nickname})` : m.name]));
+      built.ld.push(itemList(origin, path, list.map((m) => [`/member/${m.id}`, m.name])));
     } else if (path === "/theater") {
       const { data } = await upstream(env, ctx, origin, "/api/theater?page=1&perpage=24");
       const list = data ? shapeTheaterList(data as never, 1, 24).items : [];
       built.body = links(list.map((s) => [`/theater/${s.id}`, `${s.title} — ${wib(s.date)}`]));
+      built.ld.push(itemList(origin, path, list.map((s) => [`/theater/${s.id}`, s.title])));
     } else if (path === "/news") {
       const { data } = await upstream(env, ctx, origin, "/api/news?page=1&perpage=20");
       const list = data ? shapeNewsList(data as never, 1, 20).items : [];
       built.body = links(list.map((n) => [`/news/${n.id}`, n.title]));
+      built.ld.push(itemList(origin, path, list.map((n) => [`/news/${n.id}`, n.title])));
     }
     return built;
   }
@@ -202,7 +223,7 @@ export async function buildMeta(path: string, env: SeoEnv, ctx: Ctx, origin: str
     const isShow = s.category === "show" || !s.category;
     return {
       status: 200,
-      title: fullTitle(`${s.title}${when ? ` — ${when}` : ""} · Show Theater JKT48`),
+      title: fullTitle(`${s.title}${shortDate(s.date) ? ` — ${shortDate(s.date)}` : ""} · Theater JKT48`),
       description: clip(
         `Show theater JKT48 "${s.title}"${when ? ` pada ${when}` : ""}.${lineup.length ? ` Member tampil: ${lineup.slice(0, 10).join(", ")}${lineup.length > 10 ? ", dan lainnya" : ""}.` : ""}${s.songs.length ? ` Setlist ${s.songs.length} lagu.` : ""}`,
       ),
@@ -240,7 +261,7 @@ export async function buildMeta(path: string, env: SeoEnv, ctx: Ctx, origin: str
     const img = /<img[^>]+(?:data-src|src)="([^"]+)"/i.exec(n.content)?.[1];
     return {
       status: 200,
-      title: fullTitle(`${n.title} — Berita JKT48`),
+      title: fullTitle(n.title.length <= 40 ? `${n.title} — Berita JKT48` : n.title),
       description: clip(text || `${n.category} JKT48: ${n.title}`),
       h1: n.title,
       image: img?.startsWith("http") ? img : undefined,
@@ -250,7 +271,10 @@ export async function buildMeta(path: string, env: SeoEnv, ctx: Ctx, origin: str
           "@context": "https://schema.org",
           "@type": "NewsArticle",
           headline: clip(n.title, 110),
-          ...(Number.isFinite(Date.parse(n.date)) ? { datePublished: new Date(Date.parse(n.date)).toISOString() } : {}),
+          ...(Number.isFinite(Date.parse(n.date))
+            ? { datePublished: new Date(Date.parse(n.date)).toISOString(), dateModified: new Date(Date.parse(n.date)).toISOString() }
+            : {}),
+          image: [img?.startsWith("http") ? img : `${origin}/og.png`],
           author: { "@type": "Organization", name: "JKT48", url: "https://jkt48.com" },
           publisher: { "@type": "Organization", name: SITE_NAME, logo: { "@type": "ImageObject", url: `${origin}/icon-512.png` } },
           mainEntityOfPage: `${origin}${path}`,
@@ -268,15 +292,42 @@ export async function buildMeta(path: string, env: SeoEnv, ctx: Ctx, origin: str
   const when = wib(r.start);
   return {
     status: 200,
-    title: fullTitle(`Rekap Live ${r.name} di ${platformLabel(r.platform)}${when ? ` — ${when}` : ""}`),
+    title: fullTitle(`Live ${r.name} di ${platformLabel(r.platform)}${shortDate(r.start) ? ` — ${shortDate(r.start)}` : ""}`),
     description: clip(
       `${r.name} live di ${platformLabel(r.platform)}${when ? ` pada ${when}` : ""}${r.viewers ? ` dengan ${r.viewers.toLocaleString("id-ID")} penonton` : ""}. Lihat gift, top supporter, cuplikan layar, dan replay.`,
     ),
     h1: `Rekap live ${r.name}`,
     image: r.img,
     ogType: "website",
-    ld: [crumbs(`Live ${r.name}`)],
-    body: r.memberId ? links([[`/member/${r.memberId}`, `Profil ${r.name}`]]) : "",
+    ld: [
+      ...(Number.isFinite(Date.parse(r.start))
+        ? [
+            {
+              "@context": "https://schema.org",
+              "@type": "BroadcastEvent",
+              name: `Live ${r.name} di ${platformLabel(r.platform)}`,
+              isLiveBroadcast: true,
+              startDate: new Date(Date.parse(r.start)).toISOString(),
+              ...(Number.isFinite(Date.parse(r.end)) ? { endDate: new Date(Date.parse(r.end)).toISOString() } : {}),
+              ...(r.img ? { image: r.img } : {}),
+              publishedOn: { "@type": "BroadcastService", name: platformLabel(r.platform) },
+              performer: { "@type": "Person", name: r.name, ...(r.memberId ? { url: `${origin}/member/${r.memberId}` } : {}) },
+            },
+          ]
+        : []),
+      crumbs(`Live ${r.name}`),
+    ],
+    body: `<p>${esc([`${r.name} live di ${platformLabel(r.platform)}`, when && `mulai ${when}`, r.viewers ? `${r.viewers.toLocaleString("id-ID")} penonton` : ""].filter(Boolean).join(", "))}.</p>${r.memberId ? links([[`/member/${r.memberId}`, `Profil ${r.name}`]]) : ""}`,
+  };
+}
+
+function itemList(origin: string, path: string, items: [string, string][]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    url: `${origin}${path}`,
+    numberOfItems: items.length,
+    itemListElement: items.slice(0, 100).map(([href, name], i) => ({ "@type": "ListItem", position: i + 1, url: `${origin}${href}`, name })),
   };
 }
 
@@ -352,8 +403,16 @@ export function handleRobots(request: Request, env: SeoEnv): Response {
 /** Sitemap: halaman statis + semua member + show theater, berita, dan rekap live terbaru. */
 export async function handleSitemap(request: Request, env: SeoEnv, ctx: Ctx): Promise<Response> {
   const origin = siteOrigin(request, env);
-  const entries: { loc: string; lastmod?: string; priority: string }[] = Object.keys(STATIC_PAGES).map((p) => ({
+  const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
+  const cacheKey = new Request(`${origin}/__cache/sitemap-v2.xml`);
+  const hit = await cache?.match(cacheKey);
+  if (hit) return hit;
+  const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+  // Halaman yang isinya berganti setiap hari (live, jadwal, rekap, berita) diberi lastmod hari ini.
+  const DAILY = new Set(["/", "/live", "/theater", "/schedule", "/member", "/recent", "/birthday", "/news", "/video"]);
+  const entries: { loc: string; lastmod?: string; priority: string }[] = ["/", ...Object.keys(STATIC_PAGES).filter((p) => p !== "/")].map((p) => ({
     loc: p,
+    ...(DAILY.has(p) ? { lastmod: today } : {}),
     priority: p === "/" ? "1.0" : ["/disclaimer", "/terms", "/privacy"].includes(p) ? "0.2" : "0.8",
   }));
   const settle = async <T>(p: Promise<T>) => {
@@ -364,10 +423,10 @@ export async function handleSitemap(request: Request, env: SeoEnv, ctx: Ctx): Pr
     }
   };
   const [members, theaters, news, recents] = await Promise.all([
-    settle(upstream(env, ctx, origin, "/api/member", SITEMAP_TTL)),
-    settle(Promise.all([1, 2, 3].map((p) => upstream(env, ctx, origin, `/api/theater?page=${p}&perpage=40`, SITEMAP_TTL)))),
-    settle(Promise.all([1, 2, 3].map((p) => upstream(env, ctx, origin, `/api/news?page=${p}&perpage=40`, SITEMAP_TTL)))),
-    settle(upstream(env, ctx, origin, "/api/recent?page=1&perpage=40", SITEMAP_TTL)),
+    settle(upstream(env, ctx, origin, "/api/member", SITEMAP_TTL, SITEMAP_BUDGET_MS)),
+    settle(Promise.all([1, 2, 3].map((p) => upstream(env, ctx, origin, `/api/theater?page=${p}&perpage=40`, SITEMAP_TTL, SITEMAP_BUDGET_MS)))),
+    settle(Promise.all([1, 2, 3].map((p) => upstream(env, ctx, origin, `/api/news?page=${p}&perpage=40`, SITEMAP_TTL, SITEMAP_BUDGET_MS)))),
+    settle(upstream(env, ctx, origin, "/api/recent?page=1&perpage=40", SITEMAP_TTL, SITEMAP_BUDGET_MS)),
   ]);
   if (members?.data) for (const m of shapeMembers(members.data)) entries.push({ loc: `/member/${m.id}`, priority: m.isGraduate ? "0.5" : "0.7" });
   for (const [i, t] of (theaters ?? []).entries())
@@ -386,5 +445,77 @@ export async function handleSitemap(request: Request, env: SeoEnv, ctx: Ctx): Pr
       .map((e) => `<url><loc>${esc(origin + e.loc)}</loc>${e.lastmod ? `<lastmod>${e.lastmod}</lastmod>` : ""}<priority>${e.priority}</priority></url>`),
     "</urlset>",
   ].join("\n");
-  return new Response(xml, { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" } });
+  const res = new Response(xml, { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" } });
+  if (cache) ctx.waitUntil(cache.put(cacheKey, res.clone()));
+  return res;
+}
+
+/** /llms.txt: ringkasan situs untuk mesin AI (format llmstxt.org). */
+export function handleLlms(request: Request, env: SeoEnv): Response {
+  const origin = siteOrigin(request, env);
+  const pages = Object.entries(STATIC_PAGES).filter(([p]) => !["/disclaimer", "/terms", "/privacy"].includes(p));
+  const body = [
+    `# ${SITE_NAME}`,
+    "",
+    `> ${SITE_DESCRIPTION}`,
+    "",
+    "JKT48Connect adalah proyek komunitas penggemar JKT48 (tidak berafiliasi dengan JKT48 Operation Team). Data live diambil dari IDN Live dan Showroom, jadwal theater dan berita dari jkt48.com, lalu digabung dan diperbarui secara berkala.",
+    "",
+    "## Halaman utama",
+    "",
+    ...pages.map(([p, m]) => `- [${m.title}](${origin}${p === "/" ? "/" : p}): ${m.description}`),
+    "",
+    "## Halaman detail",
+    "",
+    `- Profil member: ${origin}/member/{id} — profil, ulang tahun, sosial media, jadwal theater member.`,
+    `- Show theater: ${origin}/theater/{id} — tanggal, setlist, dan member yang tampil.`,
+    `- Berita: ${origin}/news/{id} — ringkasan berita resmi JKT48 dengan tautan sumber.`,
+    `- Rekap live: ${origin}/recent/{id} — penonton, gift, dan top supporter satu sesi live.`,
+    "",
+    "## Opsional",
+    "",
+    `- [Sitemap](${origin}/sitemap.xml)`,
+    `- [Kebijakan privasi](${origin}/privacy)`,
+    `- [Disclaimer](${origin}/disclaimer)`,
+    "",
+  ].join("\n");
+  return new Response(body, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" } });
+}
+
+/** /.well-known/security.txt (RFC 9116). */
+export function handleSecurityTxt(request: Request, env: SeoEnv): Response {
+  const origin = siteOrigin(request, env);
+  const expires = new Date(Date.now() + 180 * 86400_000).toISOString().slice(0, 10) + "T00:00:00.000Z";
+  const body = [
+    "Contact: https://github.com/Valzyys/JKT48Connet-REVAMP/security/advisories/new",
+    "Contact: https://x.com/JKT48Connect",
+    `Expires: ${expires}`,
+    "Preferred-Languages: id, en",
+    `Canonical: ${origin}/.well-known/security.txt`,
+    `Policy: ${origin}/privacy`,
+    "",
+  ].join("\n");
+  return new Response(body, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=86400" } });
+}
+
+/** Rute SPA yang sah di luar halaman ber-SEO (isPage); selain ini, shell SPA dijawab 404. */
+const SPA_ROUTES = /^\/(watch\/[^/]+|discord(\/[^/]+)?|games|activity|pm(\/.*)?)$/;
+
+export function isSpaRoute(path: string): boolean {
+  return SPA_ROUTES.test(path);
+}
+
+/** Shell SPA untuk URL yang tidak ada: status 404 + noindex (bukan soft 404). */
+export async function handleNotFound(request: Request, env: SeoEnv): Promise<Response> {
+  const shell = await env.ASSETS.fetch(new Request(new URL("/", request.url), { headers: request.headers }));
+  if (!shell.ok || !(shell.headers.get("content-type") ?? "").includes("text/html")) return new Response("Not Found", { status: 404 });
+  const headers = new Headers(shell.headers);
+  headers.delete("etag");
+  headers.delete("content-length");
+  headers.set("cache-control", "no-store");
+  const title = fullTitle("Halaman tidak ditemukan");
+  return new HTMLRewriter()
+    .on("title", { element: (e) => void e.setInnerContent(title) })
+    .on("head", { element: (e) => void e.append(`<meta name="robots" content="noindex">`, { html: true }) })
+    .transform(new Response(shell.body, { status: 404, headers }));
 }

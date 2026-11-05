@@ -60,7 +60,16 @@ export function SectionHead({ title, count, to, label }: { title: string; count?
 }
 
 /** Gambar dengan placeholder bila URL kosong atau gagal dimuat (sesuai saran docs). */
-export function Img({ src, alt, className, eager }: { src?: string; alt: string; className?: string; eager?: boolean }) {
+/**
+ * Gambar dari media JKT48Connect lewat /img (worker/img.ts): diperkecil ke lebar tampilan & WebP/AVIF bila
+ * Cloudflare Image Transformations aktif, gambar asli bila belum. Gambar dari host lain tidak diubah.
+ */
+export function sizedImg(src: string | undefined, width = 640): string | undefined {
+  if (!src || !src.startsWith("https://api.jkt48connect.app/")) return src;
+  return `/img?u=${encodeURIComponent(src)}&w=${width}`;
+}
+
+export function Img({ src, alt, className, eager, width }: { src?: string; alt: string; className?: string; eager?: boolean; width?: number }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) {
     return (
@@ -69,7 +78,7 @@ export function Img({ src, alt, className, eager }: { src?: string; alt: string;
       </div>
     );
   }
-  return <img src={src} alt={alt} loading={eager ? "eager" : "lazy"} decoding="async" onError={() => setFailed(true)} className={className} />;
+  return <img src={sizedImg(src, width)} alt={alt} loading={eager ? "eager" : "lazy"} decoding="async" onError={() => setFailed(true)} className={className} />;
 }
 
 export function Skeleton({ className }: { className?: string }) {

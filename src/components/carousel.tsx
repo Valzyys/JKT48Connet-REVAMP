@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { LiveLink } from "@/components/cards";
 import { PixelCross } from "@/components/logo";
 import { SignalBars } from "@/components/motion";
-import { Skeleton, cx } from "@/components/ui";
+import { Skeleton, cx, sizedImg } from "@/components/ui";
 import { fmtDate, fmtTime } from "@/lib/format";
 import type { LiveSession } from "@/lib/jkt48";
 import { gsap } from "@/lib/gsap";
@@ -133,7 +133,7 @@ export function HeroCarousel() {
           <>
             {s.img ? (
               <>
-                <img src={s.img} alt={s.title} loading={i === 0 ? "eager" : "lazy"} className="h-full w-full object-cover" draggable={false} />
+                <img src={sizedImg(s.img, 1280)} alt={s.title} loading={i === 0 ? "eager" : "lazy"} fetchPriority={i === 0 ? "high" : "auto"} decoding="async" className="h-full w-full object-cover" draggable={false} />
                 {/* Scrim sinematik agar judul terbaca di atas banner. */}
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/90 via-ink/20 to-transparent" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-ink/60 to-transparent" />

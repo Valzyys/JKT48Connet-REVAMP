@@ -1,3 +1,4 @@
+import { HOME_H1 } from "@/lib/seo";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Braces } from "lucide-react";
@@ -50,6 +51,7 @@ export function HomePage() {
   return (
     <Page ready={ready} deps={[live.data, theater.data, recent.data, news.data, videos.data]}>
       <div className="container-x space-y-10 pt-6">
+        <h1 className="sr-only">{HOME_H1}</h1>
         <section data-reveal>
           <HeroCarousel />
         </section>

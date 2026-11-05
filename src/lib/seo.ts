@@ -10,10 +10,13 @@ export const SITE_DESCRIPTION =
 
 export type PageMeta = { title: string; description: string; h1: string };
 
+/** H1 beranda: deskriptif (bukan sekadar nama situs), dipakai di HTML awal dan halaman yang dirender. */
+export const HOME_H1 = "Live member, jadwal theater & berita JKT48";
+
 /** Halaman statis; urutan ini juga dipakai untuk navigasi di HTML awal (membantu Google memilih sitelink). */
 export const STATIC_PAGES: Record<string, PageMeta & { nav?: string }> = {
   "/donasika": { title: "Donasika — Galang Bantuan Karhutla", h1: "Donasi Karhutla", description: "Penggalangan mandiri komunitas JKT48Connect selama 7 hari. Bayar lewat QRIS, pilih anonim, titip pesan, dan pantau total donasi terkonfirmasi." },
-  "/": { title: `${SITE_NAME} — ${SITE_TAGLINE}`, h1: SITE_NAME, description: SITE_DESCRIPTION },
+  "/": { title: `${SITE_NAME} — ${SITE_TAGLINE}`, h1: HOME_H1, description: SITE_DESCRIPTION },
   "/live": {
     nav: "Live",
     title: "Member JKT48 yang Sedang Live di IDN & Showroom",
@@ -48,19 +51,19 @@ export const STATIC_PAGES: Record<string, PageMeta & { nav?: string }> = {
     nav: "Ulang tahun",
     title: "Ulang Tahun Member JKT48",
     h1: "Ulang tahun member",
-    description: "Daftar ulang tahun member JKT48 terdekat beserta hitung mundurnya.",
+    description: "Daftar ulang tahun member JKT48 terdekat lengkap dengan tanggal lahir, umur, dan hitung mundurnya. Jangan lewatkan momen ulang tahun oshi-mu.",
   },
   "/news": {
     nav: "Berita",
     title: "Berita JKT48 Terbaru",
     h1: "Berita JKT48",
-    description: "Kumpulan berita dan pengumuman resmi terbaru dari JKT48.",
+    description: "Berita dan pengumuman resmi terbaru dari JKT48: jadwal event, show theater, handshake, rilis single, dan kabar member, dirangkum setiap hari.",
   },
   "/video": {
     nav: "Video",
     title: "Video JKT48 Terbaru di YouTube",
     h1: "Video JKT48",
-    description: "Video terbaru dari kanal YouTube resmi JKT48.",
+    description: "Video terbaru dari kanal YouTube resmi JKT48 dan JKT48 TV: MV, behind the scenes, variety, dan konten member, dikumpulkan di satu tempat.",
   },
   "/games": {h1:"Games JKT48",title:"Games JKT48 · Solo & Multiplayer",description:"Tebak member, quiz JKT48, memory card, dan tebak lagu. Main solo atau bersama teman di Discord."},
   "/discord": {title:"Dashboard Bot Discord JKT48Connect",h1:"Discord",description:"Tambahkan JKT48Connect ke server Discord dan kelola channel, role mention, serta notifikasi komunitasmu."},
@@ -68,7 +71,7 @@ export const STATIC_PAGES: Record<string, PageMeta & { nav?: string }> = {
     nav: "Aplikasi",
     title: "Aplikasi JKT48Connect Android & iPhone — Unduh & Panduan Pasang",
     h1: "Aplikasi JKT48Connect untuk Android dan iPhone",
-    description: "Unduh aplikasi JKT48Connect untuk Android (APK) dan iPhone (.ipa): notifikasi live IDN & Showroom, jadwal theater, recent & replay, video YouTube, sosmed member JKT48, plus panduan pasang tanpa PC lewat Scarlet, ESign, Feather. Gratis, tanpa iklan.",
+    description: "Unduh aplikasi JKT48Connect gratis untuk Android & iPhone: notifikasi live IDN & Showroom, jadwal theater, replay, musik, dan panduan pasang tanpa PC.",
   },
   "/developer": {
     title: "JKT48Connect API untuk Developer",
@@ -88,7 +91,10 @@ export const STATIC_PAGES: Record<string, PageMeta & { nav?: string }> = {
 
 /** "Judul" → "Judul | JKT48Connect" (beranda sudah memuat nama situs). */
 export function fullTitle(title: string): string {
-  return title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
+  if (title.includes(SITE_NAME)) return title;
+  const full = `${title} | ${SITE_NAME}`;
+  // Google memotong judul ±60 karakter: untuk judul panjang, nama situs tidak ditambahkan supaya isinya utuh.
+  return full.length <= 65 ? full : title;
 }
 
 /** Potong deskripsi di batas kata, maks. ±160 karakter (panjang yang ditampilkan Google). */
