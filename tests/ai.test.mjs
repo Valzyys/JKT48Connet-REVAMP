@@ -84,3 +84,81 @@ test("chat: status gateway diteruskan sebagai event error dengan pesan yang sesu
   assert.equal(ev[0].t, "error");
   assert.equal(ev[0].status, 429);
 });
+
+/** Gateway tiruan yang memanggil tool tampilan pada putaran 1 lalu menjawab teks. */
+function uiEnv(toolCalls) {
+  const calls = [];
+  return {
+    calls,
+    env: {
+      AI_GATEWAY_KEY: "secret-key",
+      JKT48CONNECT_API_KEY: "k",
+      UPSTREAM_FETCH: async (input, init) => {
+        const body = JSON.parse(init.body);
+        calls.push(body);
+        if (calls.length === 1)
+          return sse([{ choices: [{ delta: { tool_calls: toolCalls.map((c, index) => ({ index, id: `u${index}`, function: { name: c.name, arguments: typeof c.args === "string" ? c.args : JSON.stringify(c.args) } })) }, finish_reason: "tool_calls" }] }]);
+        return sse([{ choices: [{ delta: { content: "Sudah." } }] }, { choices: [{ delta: {}, finish_reason: "stop" }] }]);
+      },
+    },
+  };
+}
+
+const chat = (env, extra = {}) =>
+  handleAi(
+    new Request("https://jkt48connect.app/api/ai/chat", { method: "POST", headers: { origin: "https://jkt48connect.app" }, body: JSON.stringify({ model: "pip", messages: [{ role: "user", content: "halo" }], ...extra }) }),
+    env,
+    { waitUntil() {} },
+  );
+
+test("show_ui: blok disanitasi (jenis asing dibuang, gambar/link luar dihapus) lalu dikirim sebagai event ui", async () => {
+  const { env, calls } = uiEnv([
+    {
+      name: "show_ui",
+      args: {
+        blocks: [
+          { type: "card", title: "Freya", image: "https://evil.test/x.png", actions: [{ label: "Profil", url: "/member/freya" }, { label: "Jahat", url: "javascript:alert(1)" }] },
+          { type: "script", code: "alert(1)" },
+          { type: "member_card", name: "Freya", image: "https://jkt48.com/profile/freya.jpg" },
+        ],
+      },
+    },
+  ]);
+  const ev = await events(await chat(env));
+  assert.deepEqual(ev.map((e) => e.t), ["ui", "text", "done"]);
+  const [card, member] = ev[0].blocks;
+  assert.equal(ev[0].blocks.length, 2);
+  assert.equal(card.type, "card");
+  assert.ok(!card.image, "gambar dari host asing dibuang");
+  assert.equal(card.actions[0].url, "/member/freya");
+  assert.ok(!card.actions[1].url, "link javascript: dibuang");
+  assert.equal(member.image, "https://jkt48.com/profile/freya.jpg");
+  // Hasil tool memberi tahu model apa yang dibuang.
+  const toolMsg = JSON.parse(calls[1].messages.at(-1).content);
+  assert.equal(toolMsg.ok, true);
+  assert.deepEqual(toolMsg.dropped, ["script"]);
+});
+
+test("canvas & remember: event canvas/memory terkirim; JSON rusak dikembalikan sebagai error ke model", async () => {
+  const { env, calls } = uiEnv([
+    { name: "canvas", args: { title: "Dashboard", blocks: [{ type: "stats", items: [{ label: "Live", value: 3 }] }] } },
+    { name: "remember", args: { fact: "Oshi pengguna: Freya" } },
+    { name: "show_ui", args: "{rusak" },
+  ]);
+  const ev = await events(await chat(env));
+  assert.deepEqual(ev.map((e) => e.t), ["canvas", "memory", "text", "done"]);
+  assert.equal(ev[0].title, "Dashboard");
+  assert.equal(ev[1].fact, "Oshi pengguna: Freya");
+  const broken = JSON.parse(calls[1].messages.at(-1).content);
+  assert.equal(broken.ok, false);
+});
+
+test("memori dari browser disuntikkan ke prompt sistem (dibatasi & dibersihkan)", async () => {
+  const { env, calls } = uiEnv([]);
+  await events(await chat(env, { memory: ["Oshi: Freya", 42, "x".repeat(500), ...Array.from({ length: 20 }, (_, i) => `f${i}`)] }));
+  const system = calls[0].messages[0].content;
+  assert.match(system, /Oshi: Freya/);
+  assert.ok(!system.includes("x".repeat(201)));
+  const remembered = system.slice(system.indexOf("Yang kamu ingat")).match(/- [^-]/g) ?? [];
+  assert.ok(remembered.length >= 1 && remembered.length <= 12, `maks. 12 fakta, dapat ${remembered.length}`);
+});
