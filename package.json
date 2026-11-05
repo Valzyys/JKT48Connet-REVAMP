@@ -22,6 +22,7 @@
     "test:push": "node --test tests/push.test.mjs",
     "test:donate": "node --test tests/donate.test.mjs",
     "test:seo": "node --test tests/seo.test.mjs",
+    "test:ai": "node --test tests/ai.test.mjs",
     "test:discord": "node --test tests/discord.test.mjs",
     "test:games": "node --test tests/games-*.test.mjs",
     "test:download": "node --test tests/download.test.mjs",

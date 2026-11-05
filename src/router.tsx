@@ -128,6 +128,12 @@ const videoRoute = createRoute({
   component: lazyRouteComponent(() => import("@/pages/video"), "VideoPage"),
 });
 
+const aiRoute = createRoute({
+  getParentRoute: parent,
+  path: "/ai",
+  component: lazyRouteComponent(() => import("@/pages/ai"), "AiPage"),
+});
+
 const developerRoute = createRoute({
   getParentRoute: parent,
   path: "/developer",
@@ -214,6 +220,7 @@ const routeTree = rootRoute.addChildren([
   newsDetailRoute,
   videoRoute,
   developerRoute,
+  aiRoute,
   aboutRoute,
   disclaimerRoute,
   termsRoute,

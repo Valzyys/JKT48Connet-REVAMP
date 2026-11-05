@@ -30,6 +30,8 @@
   // Rate limit /api/* (worker/security.ts). namespace_id bebas, unik per akun.
   "ratelimits": [
     { "name": "GAME_LIMITER", "namespace_id": "4803", "simple": { "limit": 20, "period": 60 } },
+    // Per IP: pertanyaan ke AI (/api/ai/chat). Kuota gateway 20/menit & 500/hari dipakai bersama semua pengunjung.
+    { "name": "AI_LIMITER", "namespace_id": "4805", "simple": { "limit": 6, "period": 60 } },
     // Per sesi: semua permintaan data, gambar, dan potongan video replay.
     { "name": "API_LIMITER", "namespace_id": "4801", "simple": { "limit": 300, "period": 60 } },
     // Per IP: pembuatan sesi baru.

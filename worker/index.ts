@@ -14,8 +14,9 @@ import { handleDonasika, reconcileDonasika } from "./donasika";
 import type { DonasikaEnv } from "./donasika-gateway";
 import { handleLlms, handleNotFound, handlePage, handleRobots, handleSecurityTxt, handleSitemap, isPage, isSpaRoute, siteOrigin, type SeoEnv } from "./seo";
 import { handleImg, IMG_PATH } from "./img";
+import { handleAi, type AiEnv } from "./ai";
 
-interface Env extends ProxyEnv, PmEnv, SeoEnv, DiscordEnv, GamesEnv, DonasikaEnv {
+interface Env extends ProxyEnv, PmEnv, SeoEnv, DiscordEnv, GamesEnv, DonasikaEnv, AiEnv {
   ASSETS: Fetcher;
   PUSH?: DurableObjectNamespace<PushState>;
 }
@@ -30,6 +31,8 @@ export default {
     if (pathname === "/api/donasika" || pathname.startsWith("/api/donasika/")) return handleDonasika(request, env);
     if((request.method==="GET"||request.method==="HEAD")&&(pathname==="/activity"||pathname==="/activity/"||pathname==="/"&&activityUrl.searchParams.has("frame_id")))return activityDocument(request,env.ASSETS,env.DISCORD_CLIENT_ID||"1305141693477027891");
     if (pathname.startsWith("/api/games/")) return handleGames(request,env);
+    // Obrolan AI (worker/ai.ts): key gateway hanya di Worker.
+    if (pathname.startsWith("/api/ai/")) return handleAi(request, env, ctx);
     if (pathname.startsWith("/api/discord/")) return handleDiscord(request, env);
     if (pathname === "/api/pm" || pathname.startsWith("/api/pm/"))
       return handlePm(request, env);
