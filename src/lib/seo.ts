@@ -73,6 +73,12 @@ export const STATIC_PAGES: Record<string, PageMeta & { nav?: string }> = {
     h1: "Aplikasi JKT48Connect untuk Android dan iPhone",
     description: "Unduh aplikasi JKT48Connect gratis untuk Android & iPhone: notifikasi live IDN & Showroom, jadwal theater, replay, musik, dan panduan pasang tanpa PC.",
   },
+  "/ai": {
+    nav: "AI",
+    title: "JKT48Connect AI — Tanya Pip soal Live, Jadwal & Member JKT48",
+    h1: "Tanya Pip",
+    description: "Ngobrol dengan Pip, asisten AI JKT48Connect: cek member yang sedang live, jadwal theater, profil member, ulang tahun, dan berita JKT48 terbaru.",
+  },
   "/developer": {
     title: "JKT48Connect API untuk Developer",
     h1: "JKT48Connect API",
