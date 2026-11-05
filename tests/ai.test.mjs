@@ -77,12 +77,34 @@ test("chat: menolak origin lain, peran system dari browser, body besar, dan gate
   assert.equal(off.status, 503);
 });
 
-test("chat: status gateway diteruskan sebagai event error dengan pesan yang sesuai", async () => {
-  const env = { AI_GATEWAY_KEY: "k", UPSTREAM_FETCH: async () => new Response("limit", { status: 429 }) };
+test("chat: 429 dicoba ulang 2 kali dengan jeda, lalu diteruskan sebagai event error", async () => {
+  let n = 0;
+  const waits = [];
+  const env = { AI_GATEWAY_KEY: "k", RETRY_DELAY: async (ms) => void waits.push(ms), UPSTREAM_FETCH: async () => (n++, new Response("limit", { status: 429 })) };
   const res = await handleAi(new Request("https://jkt48connect.app/api/ai/chat", { method: "POST", body: JSON.stringify({ messages: [{ role: "user", content: "hai" }] }) }), env, { waitUntil() {} });
   const ev = await events(res);
-  assert.equal(ev[0].t, "error");
-  assert.equal(ev[0].status, 429);
+  assert.deepEqual(ev.map((e) => e.t), ["status", "status", "error"]);
+  assert.equal(ev.at(-1).status, 429);
+  assert.equal(n, 3);
+  assert.deepEqual(waits, [2500, 6000]);
+});
+
+test("chat: 429 sesaat lalu berhasil → jawaban tetap sampai; Retry-After dihormati; 401 tidak dicoba ulang", async () => {
+  let n = 0;
+  const waits = [];
+  const env = {
+    AI_GATEWAY_KEY: "k",
+    RETRY_DELAY: async (ms) => void waits.push(ms),
+    UPSTREAM_FETCH: async () => (n++ === 0 ? new Response("limit", { status: 429, headers: { "retry-after": "3" } }) : sse([{ choices: [{ delta: { content: "Halo!" } }] }, { choices: [{ delta: {}, finish_reason: "stop" }] }])),
+  };
+  const ask = (e) => handleAi(new Request("https://jkt48connect.app/api/ai/chat", { method: "POST", body: JSON.stringify({ messages: [{ role: "user", content: "hai" }] }) }), e, { waitUntil() {} });
+  const ev = await events(await ask(env));
+  assert.deepEqual(ev.map((e) => e.t), ["status", "text", "done"]);
+  assert.deepEqual(waits, [3000]);
+  let m = 0;
+  const bad = await events(await ask({ AI_GATEWAY_KEY: "k", RETRY_DELAY: async () => {}, UPSTREAM_FETCH: async () => (m++, new Response("no", { status: 401 })) }));
+  assert.deepEqual(bad.map((e) => e.t), ["error"]);
+  assert.equal(m, 1);
 });
 
 /** Gateway tiruan yang memanggil tool tampilan pada putaran 1 lalu menjawab teks. */
@@ -125,7 +147,9 @@ test("show_ui: blok disanitasi (jenis asing dibuang, gambar/link luar dihapus) l
     },
   ]);
   const ev = await events(await chat(env));
-  assert.deepEqual(ev.map((e) => e.t), ["ui", "text", "done"]);
+  // Hanya tool tampilan → jawaban selesai tanpa request tambahan ke gateway.
+  assert.deepEqual(ev.map((e) => e.t), ["ui", "done"]);
+  assert.equal(calls.length, 1);
   const [card, member] = ev[0].blocks;
   assert.equal(ev[0].blocks.length, 2);
   assert.equal(card.type, "card");
@@ -133,24 +157,23 @@ test("show_ui: blok disanitasi (jenis asing dibuang, gambar/link luar dihapus) l
   assert.equal(card.actions[0].url, "/member/freya");
   assert.ok(!card.actions[1].url, "link javascript: dibuang");
   assert.equal(member.image, "https://jkt48.com/profile/freya.jpg");
-  // Hasil tool memberi tahu model apa yang dibuang.
-  const toolMsg = JSON.parse(calls[1].messages.at(-1).content);
-  assert.equal(toolMsg.ok, true);
-  assert.deepEqual(toolMsg.dropped, ["script"]);
 });
 
-test("canvas & remember: event canvas/memory terkirim; JSON rusak dikembalikan sebagai error ke model", async () => {
+test("canvas & remember: event terkirim tanpa putaran tambahan; JSON rusak dikembalikan sebagai error ke model", async () => {
   const { env, calls } = uiEnv([
     { name: "canvas", args: { title: "Dashboard", blocks: [{ type: "stats", items: [{ label: "Live", value: 3 }] }] } },
     { name: "remember", args: { fact: "Oshi pengguna: Freya" } },
-    { name: "show_ui", args: "{rusak" },
   ]);
   const ev = await events(await chat(env));
-  assert.deepEqual(ev.map((e) => e.t), ["canvas", "memory", "text", "done"]);
+  assert.deepEqual(ev.map((e) => e.t), ["canvas", "memory", "done"]);
   assert.equal(ev[0].title, "Dashboard");
   assert.equal(ev[1].fact, "Oshi pengguna: Freya");
-  const broken = JSON.parse(calls[1].messages.at(-1).content);
-  assert.equal(broken.ok, false);
+  assert.equal(calls.length, 1);
+  // JSON rusak: tidak ada yang tampil → model diberi kesempatan memperbaiki di putaran berikutnya.
+  const broken = uiEnv([{ name: "show_ui", args: "{rusak" }]);
+  const ev2 = await events(await chat(broken.env));
+  assert.deepEqual(ev2.map((e) => e.t), ["text", "done"]);
+  assert.equal(JSON.parse(broken.calls[1].messages.at(-1).content).ok, false);
 });
 
 test("memori dari browser disuntikkan ke prompt sistem (dibatasi & dibersihkan)", async () => {
